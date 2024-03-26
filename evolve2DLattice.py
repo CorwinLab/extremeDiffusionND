@@ -1,6 +1,5 @@
 import numpy as np
 # import npquad
-from matplotlib import pyplot as plt
 import os
 from scipy.ndimage import morphology as m
 import time
@@ -65,6 +64,7 @@ def changeArraySize(array,size,fillval):
     return newArray
 
 # main functions & generators + wrappers
+# change to evolve2DLattice
 def numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng()):
     """
     a generator object
@@ -99,6 +99,7 @@ def numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF, occtype,startT = 1
             print("Time it took: ",time.time()-s)
         yield t, occupancy
 
+#generateFirstArrivalTime
 def generateFirstArrivalTimeAgent(occupancy, maxT,dirichlet,PDF = False, startT =1,):
     """
     Evolves agents in 2DLattice with Dirichlet biases and multinomial sampling
@@ -131,6 +132,7 @@ def generateFirstArrivalTimeAgent(occupancy, maxT,dirichlet,PDF = False, startT 
         tArrival[(occ > 0) & (tArrival == notYetArrived)] = t
     return tArrival, occ
 
+#can maybe delete this now
 #wrapper function for generateFirstArrivalTimeAgent, saves to a path; OLD? ISH?
 def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
     """
@@ -184,6 +186,7 @@ def run2dAgent(occupancy, maxT):
 
 #data analysis functions
 # take a path with files from runFirstArrivals and get mean, var, mask of tArrivals
+# this calculates mean and var by hand when loading in every tArrival will take too much memory
 def getTArrivalMeanAndVar(path):
     filelist = sorted(os.listdir(path))
     #print(filelist)
@@ -239,6 +242,7 @@ def cartToPolar(i,j):
     theta = np.arctan2(j,i)
     return r, theta
 
+#can probably put this in a different file
 def checkIfMeanTCircular(meanTArrival,band):
     """
     Takes an array of meanTArrival, chooses a band of TArrival
@@ -250,6 +254,8 @@ def checkIfMeanTCircular(meanTArrival,band):
         is like (#runs,2L+1,2L+1) array. shape of meanTArrival
         should be (2L+1,2L+1)
     band: [lower,upper] of meanTArrival
+    returns:
+        distance (r) and angle (theta) of
     """
     cond = ((band[0]<meanTArrival) & (meanTArrival<band[1]))
     L = int(((meanTArrival.shape[0])-1)/2)    # this is the stupidest way of extracting L
@@ -257,11 +263,9 @@ def checkIfMeanTCircular(meanTArrival,band):
     # anyway it shifts coords so oriign @ center
     i, j = i-L,j-L
     r, theta = cartToPolar(i,j)
-    fig, ax = plt.subplots()
-    ax.set_xlabel("Theta")
-    ax.set_ylabel("Distance to Center")
-    ax.plot(theta,r,'.')
-    plt.show()
+    return r, theta
+
+#can put in a different file
 def plotVarTvsDistance(varT,powerlaw=0):
     """
     Plots the variance of tArrival as a function of distance from origin
@@ -274,17 +278,19 @@ def plotVarTvsDistance(varT,powerlaw=0):
     i, j = np.meshgrid(range(varT.shape[0]),range(varT.shape[0]))
     i, j = i - L, j - L
     r, theta = cartToPolar(i,j)
-    plt.ion()
-    fig, ax = plt.subplots()
-    ax.set_xlabel("Distance from origin")
-    ax.set_ylabel("Var(TArrival)")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.plot(r.flatten(),varT.flatten(),'.')
-    if powerlaw != 0:
-        x=np.logspace(1,2)
-        ax.plot(x,1e-3*x**powerlaw)
-    plt.show()
+    # plt.ion()
+    # fig, ax = plt.subplots()
+    # ax.set_xlabel("Distance from origin")
+    # ax.set_ylabel("Var(TArrival)")
+    # ax.set_xscale("log")
+    # ax.set_yscale("log")
+    # ax.plot(r.flatten(),varT.flatten(),'.')
+    # if powerlaw != 0:
+    #     x=np.logspace(1,2)
+    #     ax.plot(x,1e-3*x**powerlaw)
+    # plt.show()
+
+#can put in a different file
 def tArrivalPastPlane(tArrival,line,axis):
     """
     Define a plane, and ask for the first tArrival past that plane
@@ -404,7 +410,7 @@ def getRoughnessMeanVar(path):
 
 
 
-
+#can delete since i've implemented PDF in the new function?
 #Not quite old but its the slow PDF evolution
 # evolves the PDF without dynamic scaling or multinomial
 def evolve2DLatticePDF(Length, NParticles, MaxT=None):
@@ -462,73 +468,3 @@ def evolve2DLatticePDF(Length, NParticles, MaxT=None):
         #             occupancy[i, j] = 0
     # return occupancy
 
-
-# OLD FUNCTIONS
-# # agent-based sims without dynamic scaling; OLD
-# def evolve2DLatticeAgent(Length, NParticles, MaxT=None):
-#     """
-#      Create a (2Length+1) square lattice with N particles at the center, and let particles diffuse according to
-#      dirichlet biases in cardinal directions, with particles/agents according to multinomial distribution (agentbased).
-#      WITHOUT DYNAMIC SCALING
-#      Parameters:
-#          Length: distance from origin to side of lattice
-#          NParticles: number of total particles in system
-#          MaxT: automatically set to be the maximum time particles can evolve to, but can set a specific time
-#      """
-#     # automatically tells it the time you can evolve to
-#     if not MaxT:
-#         MaxT = Length + 1
-#     # initialize the array, particles @ origin, and the checkerboard pattern
-#     occupancy = np.zeros((2 * Length + 1, 2 * Length + 1))
-#     origin = (Length, Length)
-#     occupancy[origin] = NParticles
-#     i, j = np.indices(occupancy.shape)
-#     checkerboard = (i + j + 1) % 2
-#     # evolve in time
-#     for t in range(1, MaxT):
-#         # Compute biases for every cell within area we're evolving to
-#         # [[[left,down,right,up]]]
-#         biases = np.random.dirichlet([1] * 4, (2 * t - 1, 2 * t - 1))
-#         # Define interior lattice size to evolve based on timestep
-#         startPoint = Length - t + 1
-#         endPoint = Length + t
-#         # Check each site in lattice and manually move agents to new sites
-#         for i in range(startPoint, endPoint):
-#             #across
-#             for j in range(startPoint, endPoint):
-#                 # Do the calculation if the site and the time have opposite parity
-#                 if (i + j + t) % 2 == 1:
-#                     # map our set of biases to the sites we need
-#                     localBiases = biases[i-startPoint, j-endPoint, :]
-#                     # Use the biases to distribute the agents to the neighboring cells
-#                     agents = np.random.multinomial(occupancy[i,j], localBiases)
-#                     # left
-#                     occupancy[i, j - 1] += agents[0]
-#                     # down
-#                     occupancy[i + 1, j] += agents[1]
-#                     # right
-#                     occupancy[i, j + 1] += agents[2]
-#                     # up
-#                     occupancy[i - 1, j] += agents[3]
-#                     # zero the old one
-#                     occupancy[i, j] = 0
-#         yield t, occupancy
-
-# # OLD VErsION OF generateFirstArrivalTime (without dynamic scaling)
-# def generateFirstArrivalTime(Length,NParticles,MaxT=None):
-#     pass
-# #     """
-# #     evolves agents in 2Dlattice according to dirichlet, w/ agents moving
-# #     according to multinomial distribution
-# #     parameters:
-# #         Length: # sites from origin to side of the array
-# #         NParticles: # particles in system
-# #         MaxT: optional, automatically set to be the Length+1
-# #     """
-# #     # initialize array to fill with 1st arrival time for each site
-# #     tArrival = np.zeros((2*Length+1,2*Length+1))
-# #     tArrival[:] = np.nan
-# #     for t, occ in numpyEvolve2DLattice(Length,NParticles,MaxT):
-# #         tArrival[(occ > 0) & np.isnan(tArrival)] = t
-# #     return tArrival,occ
-#
