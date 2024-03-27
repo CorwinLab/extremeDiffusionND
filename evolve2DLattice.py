@@ -388,18 +388,19 @@ def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
 
     indeces = [getIndecesInsideSphere(occ, r) for r in Rs]
     line_indeces = [getLineIndeces(occ, r) for r in Rs]
-
+    ts = np.unique(np.geomspace(1, tMax, num=2500).astype(int))
     # Need to make sure occ doesn't change size
     for t, occ in evolve2DLattice(occ, tMax, True, True, float, boundary=boundary):
         # Get probabilities inside sphere
-        probs = [1-np.sum(occ[idx]) for idx in indeces]
-        writer.writerow([t, *probs])
-        f.flush()
+        if t in ts: 
+            probs = [1-np.sum(occ[idx]) for idx in indeces]
+            writer.writerow([t, *probs])
+            f.flush()
 
-        # Get probabilities outside line
-        probs = [np.sum(occ[idx]) for idx in line_indeces]
-        writer_line.writerow([t, *probs])
-        f_line.flush()
+            # Get probabilities outside line
+            probs = [np.sum(occ[idx]) for idx in line_indeces]
+            writer_line.writerow([t, *probs])
+            f_line.flush()
 
     f_line.close()
     f.close()
