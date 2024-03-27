@@ -22,6 +22,7 @@ def doubleArray(array,arraytype, fillValue = 0):
     newArray = np.full((2 * newLength + 1, 2 * newLength + 1), fillValue, dtype=arraytype)
     newArray[newLength-length:newLength+length+1, newLength-length:newLength+length+1] = array
     return newArray
+
 def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
     """
     Moves agents in a 2Dlattice according to dirichlet (or SSRW) & multinomial
@@ -53,6 +54,7 @@ def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
     occupancy[i-1,j] += moves[:,3] # up
     occupancy[i,j] = 0 # Remove everything from the original site, as it's moved to new sites
     return occupancy
+
 def changeArraySize(array,size,fillval):
     """
     Takes an existing numpy array and expands it to the size you want to change it to with a fill value
@@ -71,8 +73,7 @@ def changeArraySize(array,size,fillval):
     return newArray
 
 # main functions & generators + wrappers
-# numpyEvovle2DLattice --> evolve2DLattice
-def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng()):
+def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng(), boundary=True):
     """
     a generator object
     evolves agents in a 2Dlattice out to some time MaxT with dynamic scaling.
@@ -82,19 +83,21 @@ def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np
         dirichlet: boolean; if true uses dirichlet biases; if false uses SSRW
         PDF: boolean; if true then multiplies biases; if false then draws multinomial
         occtype: pass through the dtype of the occupancy array (int for agents, float for pdf)
+        boundary: (numpy array) boundary conditions should be same size as occupdancy
         startT: time you want to start at; default 1
         rng: the numpy random number generator obj
     """
     for t in range(startT, maxT):
         # Find the occupied sites
-        i,j = np.where(occupancy != 0)
+        i,j = np.where((occupancy != 0) & boundary)
         # If the occupied sites are at the limits (i.e if min(i,j) = 0 or max(i,j) = size)
         # then we need to enlarge occupancy and create a new array
-        if (np.min([i,j]) <= 0) or (np.max([i,j]) >= np.min(occupancy.shape) -1 ):
+        # print(f'{occupancy.shape}, {np.min([i,j])}, {np.max([i,j])}')
+        if (np.min([i,j]) <= 0) or (np.max([i,j]) >= np.min(occupancy.shape) -1) and not (isinstance(boundary, np.ndarray)):
             occupancy = doubleArray(occupancy,occtype)
             # These next two lines are a waste and we could just do index translation
             sites = (occupancy != 0)
-            i,j = np.where(sites)
+            i,j = np.where(sites & boundary)
         occupancy = executeMoves(occupancy, i, j, rng, dirichlet, PDF)
         yield t, occupancy
 
@@ -172,7 +175,6 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
             np.savez_compressed(f"{statsPath}/{i}.npz", perimeter=perimeter, area=area, time=time, roughness=roughness,
                             avgBoundaryDist=avgDist, avgBoundaryDist2=avgDist2)
         print(i)
-
 
 
 # wrapper for numpyEvolve2DLattice
@@ -290,8 +292,8 @@ def getRoughness(tArrivalArray):
     for i in range(1, np.max(tArrivalArray)):
         # save as np. arary instead?
         p, a, t,d,d2 = getPerimeterAreaTau(tArrivalArray, i)
-        perimeter.append(p);
-        area.append(a);
+        perimeter.append(p)
+        area.append(a)
         time.append(t)
         avgDist.append(d)
         avgDist2.append(d2)
@@ -327,8 +329,43 @@ def getRoughnessMeanVar(path):
     #calculate roughness
     return np.array(PerimeterList),np.array(AreaList),np.array(TimeList), roughMean,roughVar
 
+def measureOnSphere(tMax, L, R):
+    '''
+    Parameters
+    ----------
+    L : int 
+        Radius of size of box
 
+    tMax : int 
+        Maximum time to iterate to
 
+    R : float
+        Radius of circle for circular boundary conditions
+    
+    Example
+    -------
+    from matplotlib import pyplot as plt
+    occ = measureOnSphere(1000, 10, 9)
+    indeces = np.where(occ == 0)
+    occ[indeces] = np.nan
+    fig, ax = plt.subplots()
+    im = ax.imshow(occ, interpolation='none')
+    fig.colorbar(im)
+    fig.savefig("Occ.pdf", bbox_inches='tight')
+    '''
+    
+    # Create occupancy array
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    
+    x = np.arange(-L, L+1)
+    xx, yy = np.meshgrid(x, x)
+    dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+    boundary = dist_to_center <= R
+
+    # Need to make sure occ doesn't change size
+    for t, occ in numpyEvolve2DLatticeAgent(occ, tMax, True, True, float, boundary=boundary):
+        pass
 
 # #can delete since i've implemented PDF in the new function?
 # #Not quite old but its the slow PDF evolution
