@@ -3,20 +3,27 @@ import sys
 import os
 import numpy as np
 
-def runDataAndAnalysis(directoryName,systID,occupancy,MaxT,dirichlet):
+def runDataAndAnalysis(directoryName,systID,occupancy,MaxT,dirichlet,PDF):
     #assume working in extremeDiffusionND
     #ok first check if path exists or create if doesnt; stay in extremeDiffusionND tho
     #also want to create ANOTHER directory to throw statistics into
+    #test prints
+
     path = f"{directoryName}"
     statsPath = f"{directoryName}"+"Statistics"
+    if PDF: #to better label directories
+        path = path + "PDF"
+        statsPath = path + "Statistics"
     # create a folder to throw all runs into, or check that it exists
     if not os.path.exists(path):
         os.mkdir(path)
         os.mkdir(statsPath)
         #os.chdir(path)
-        print(f"{directoryName} and {statsPath} have been created.")
+        print(f"{path} and {statsPath} have been created.")
+
+
     #then generate the tArrival and occupancy array and save it
-    tArrival, occ = ev.generateFirstArrivalTimeAgent(occupancy, MaxT,dirichlet)
+    tArrival, occ = ev.generateFirstArrivalTime(occupancy, MaxT,dirichlet=dirichlet, PDF=PDF)
     #save the tArrival and occ to the directory we created with the systID as the filename
     np.savez_compressed(f"{path}/{systID}.npz", tArrival=tArrival, occ=occ)
 
@@ -27,15 +34,17 @@ def runDataAndAnalysis(directoryName,systID,occupancy,MaxT,dirichlet):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 7:
-        print("Usage: script.py <directoryName> <system ID> <occupancy> <maxT>")
+    if len(sys.argv) != 8:
+        print("Usage: script.py <directoryName> <system ID> <occupancy> <maxT> <dirichlet> <PDF> <number of systems>")
         sys.exit(1)
-    directoryName = sys.argv[1]
-    systID = int(sys.argv[2])
-    occupancy = int(float(sys.argv[3]))
-    MaxT=int(sys.argv[4])
-    numSystems = int(sys.argv[5])
-    dirichlet = sys.argv[6]
+    directoryName = sys.argv[1] # String
+    systID = int(sys.argv[2]) # Integer
+    occupancy = int(float(sys.argv[3])) # Integer, cast from float to allow for scientific notation
+    MaxT=int(sys.argv[4]) # Integer
+    dirichlet = eval(sys.argv[5]) # Bool
+    PDF = eval(sys.argv[6]) # Bool
+    numSystems = int(sys.argv[7]) # Integer
+
 
     for i in range(numSystems):
-        runDataAndAnalysis(directoryName,systID + i, occupancy,MaxT,dirichlet)
+        runDataAndAnalysis(directoryName, systID + i, occupancy, MaxT, dirichlet, PDF)

@@ -25,7 +25,7 @@ def doubleArray(array,arraytype, fillValue = 0):
 
 def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
     """
-    Moves agents in a 2Dlattice according to dirichlet & multinomial
+    Moves agents in a 2Dlattice according to dirichlet (or SSRW) & multinomial
     Parameters:
         occupancy: the array you are working in, with agents
         i, j = sites with agents in them/sites that are occupied
@@ -56,6 +56,13 @@ def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
     return occupancy
 
 def changeArraySize(array,size,fillval):
+    """
+    Takes an existing numpy array and expands it to the size you want to change it to with a fill value
+    :param array: the array you want to change the size of
+    :param size: the new size (as in LxL)
+    :param fillval: what you want to fill the new entries with
+    :return: newArray
+    """
     length = (array.shape[0]) // 2
     newsize = size//2
     if length < size:
@@ -66,12 +73,10 @@ def changeArraySize(array,size,fillval):
     return newArray
 
 # main functions & generators + wrappers
-# change to evolve2DLattice
-def numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng(), boundary=True):
+def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng(), boundary=True):
     """
     a generator object
-    evolves agents in a 2Dlattice out to some time MaxT, according to dirichlet &
-    multinomial, with dynamic scaling.
+    evolves agents in a 2Dlattice out to some time MaxT with dynamic scaling.
     Parameters:
         occupancy: either number (NParticles) or occupancy array
         maxT: timestep you want to go out to
@@ -79,10 +84,9 @@ def numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF, occtype,startT = 1
         PDF: boolean; if true then multiplies biases; if false then draws multinomial
         occtype: pass through the dtype of the occupancy array (int for agents, float for pdf)
         boundary: (numpy array) boundary conditions should be same size as occupdancy
+        startT: time you want to start at; default 1
+        rng: the numpy random number generator obj
     """
-    # Convert a scalar occupancy into a 2d array of size (1,1); commented out because redundant
-    # if np.isscalar(occupancy):
-    #     occupancy = np.array([[occupancy]], dtype=float)
     for t in range(startT, maxT):
         # Find the occupied sites
         i,j = np.where((occupancy != 0) & boundary)
@@ -97,33 +101,34 @@ def numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF, occtype,startT = 1
         occupancy = executeMoves(occupancy, i, j, rng, dirichlet, PDF)
         yield t, occupancy
 
-#generateFirstArrivalTime
-def generateFirstArrivalTimeAgent(occupancy, maxT,dirichlet,PDF = False, startT =1,):
+#generateFirstArrivalTimeAgent --> generateFirstArrivalTime
+def generateFirstArrivalTime(occupancy, maxT, dirichlet, PDF, startT =1,):
     """
-    Evolves agents in 2DLattice with Dirichlet biases and multinomial sampling
+    Evolves a 2DLattice with dynamic scaling
     Returns array of time of first arrivals of each site
-    includes dynamic scaling
     Parameters:
         occupancy: initial occupancy, can be a number (NParticles) or an existing array
         maxT: timestep you want to go out to
         dirichlet: Boolean; if True then uses Dirichlet biases; if false uses SSRW
-        PDF: boolean; if False (default), does agent-based (multinomial); if true; replaces multinomial w/ multiplication of biases
+        PDF: boolean; if False, does agent-based (multinomial); if true; replaces multinomial w/ multiplication of biases
         startT: optional arg, starts at 1
     """
     notYetArrived = -1
-    print("Dirichlet? (genFirstArrival)", dirichlet) #debugging print
-    print("PDF (genFirstArrival): ",PDF) #debugging print
     if PDF and occupancy != 1:
         print("Warning: You are trying to evolve a PDF with N!= 1, so it won't be normalized.")
+    # deal wtih the dtype messiness depending on if you want agents or a PDF
     if PDF:
         occtype = float
     else:
         occtype = int
+    # if given a scalar (ie NParticles or something), initializes array
     if np.isscalar(occupancy):
         occupancy = np.array([[occupancy]],dtype = occtype)
+    # initialize the array to throw in the time of first arrivals
     tArrival = np.copy(occupancy)
     tArrival[:] = notYetArrived
-    for t, occ in numpyEvolve2DLatticeAgent(occupancy, maxT,dirichlet, PDF,occtype):
+    # use evolve2DLattice to evolve; record tArrivals and throw them into array as lattice evolves
+    for t, occ in evolve2DLattice(occupancy, maxT,dirichlet, PDF,occtype):
         if tArrival.shape[0] != occ.shape[0]:
             # Note: this is fragile, we assume that doubling tArrival will always work
             tArrival = doubleArray(tArrival,arraytype=int,fillValue = notYetArrived)
@@ -135,6 +140,8 @@ def generateFirstArrivalTimeAgent(occupancy, maxT,dirichlet,PDF = False, startT 
 def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
     """
     runs iterations of first arrival arrays, saves to a folder thats specified or created
+    Effectively does the same thing as runCopiesOfDataAndAnalysis bash script but in python
+
     :param occupancy: existing occupancy array or a number(ie num. of particles)
     :param MaxT: integer; number of timestseps you want to go out to
     :param dirichlet: boolean; if true uses dirichlet biases; if false uses SSRW
@@ -144,23 +151,22 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
     """
     path = f"{directoryName}"
     statsPath = f"{directoryName}"+"Statistics"
-    if PDF: #just to better label directories
+    if PDF: #to better label directories
         path = path + "PDF"
-        statsPath = statsPath + "PDF"
-    # create a folder to throw all runs into, or check that it exists & move to that folder
+        statsPath = path + "Statistics"
+    # create a folder to throw all runs into, or check that it exists
     if not os.path.exists(path):
         os.mkdir(path)
         os.mkdir(statsPath)
         #os.chdir(path)
-        print(f"{path} and{statsPath} have been created.")
+        print(f"{directoryName} and {statsPath} have been created.")
     else:
         #os.chdir(f"{directoryName}")
         print("folder exists")
 
     #run your iterations and save each tArrival and occ array into the folder created/specified
     for i in range(iterations):
-        print("Dirichlet (runFirstArrivals):", dirichlet)
-        tArrival, occ = generateFirstArrivalTimeAgent(occupancy,MaxT,dirichlet, PDF)
+        tArrival, occ = generateFirstArrivalTime(occupancy,MaxT,dirichlet, PDF)
         np.savez_compressed(f"{path}/{i}.npz",tArrival=tArrival,occ=occ)
 
         if not PDF: #if Agent (ie not PDF) then save stats; otherwise don't save them (for testing)
@@ -169,11 +175,7 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
             np.savez_compressed(f"{statsPath}/{i}.npz", perimeter=perimeter, area=area, time=time, roughness=roughness,
                             avgBoundaryDist=avgDist, avgBoundaryDist2=avgDist2)
         print(i)
-    #move up one directory (back to Documents/code/extremeDiffusionND
 
-    # maybe I should add a running text file that lists the runs I've done
-    # and their directory names, their  initial occupancy, MaxT, and iterations?
-    #os.chdir("..")
 
 # wrapper for numpyEvolve2DLattice
 def run2dAgent(occupancy, maxT):
@@ -182,17 +184,12 @@ def run2dAgent(occupancy, maxT):
     return t, occ
 
 #data analysis functions
-# take a path with files from runFirstArrivals and get mean, var, mask of tArrivals
+# take a path with files from runFirstArrivals and get mean(tArrival), var(tArrival), mask of tArrivals
 # this calculates mean and var by hand when loading in every tArrival will take too much memory
 def getTArrivalMeanAndVar(path):
     filelist = sorted(os.listdir(path))
-    #print(filelist)
-    #print(len(filelist))
     notYetArrived = -1
-    #this is so dumb. all files should be named "number.npz" so
-    #print(filelist)
     # initialize the moments & mask
-    # Can I do:
     #tArrMom1, tArrMom2, goodData = None, None, None
     tArrMom1 = None #moment 1 is just t
     tArrMom2 = None #moment 2 is t**2
@@ -226,7 +223,7 @@ def getTArrivalMeanAndVar(path):
             tArrMom2 += (tArrival*goodData)**2
     finalMom1 = tArrMom1/len(filelist)
     finalMom2 = tArrMom2/len(filelist)
-    # Return the mean and the variance
+    # Return the mean and the variance, and the mask
     return finalMom1, finalMom2 - finalMom1**2,goodData
 
 #goes inside checkIfMeanTCircular, and plotVarTvsDistance
@@ -239,90 +236,22 @@ def cartToPolar(i,j):
     theta = np.arctan2(j,i)
     return r, theta
 
-#can probably put this in a different file
-def checkIfMeanTCircular(meanTArrival,band):
-    """
-    Takes an array of meanTArrival, chooses a band of TArrival
-    and plots the coordinates of the meanTArrivals in the band as
-    polar coords, i.e plots theta, r.
-    If radially symmetric (circularly?) then should get a flat line
-    Parameters
-    meanTArrival: should be like np.mean(tArrival,0) where tArrival
-        is like (#runs,2L+1,2L+1) array. shape of meanTArrival
-        should be (2L+1,2L+1)
-    band: [lower,upper] of meanTArrival
-    returns:
-        distance (r) and angle (theta) of
-    """
-    cond = ((band[0]<meanTArrival) & (meanTArrival<band[1]))
-    L = int(((meanTArrival.shape[0])-1)/2)    # this is the stupidest way of extracting L
-    i,j = np.where(cond)
-    # anyway it shifts coords so oriign @ center
-    i, j = i-L,j-L
-    r, theta = cartToPolar(i,j)
-    return r, theta
-
-#can put in a different file
-def plotVarTvsDistance(varT,powerlaw=0):
-    """
-    Plots the variance of tArrival as a function of distance from origin
-    on a loglog scale
-    Parameters:
-        varT: array (2L+1,2L+1) in size. should come from like np.nanvar(tArrival,0)
-        powerlaw: automatically set to 0, if not 0 then can also plot a guessed powerlaw
-    """
-    L = int(((varT.shape[0])-1)/2)
-    i, j = np.meshgrid(range(varT.shape[0]),range(varT.shape[0]))
-    i, j = i - L, j - L
-    r, theta = cartToPolar(i,j)
-    # plt.ion()
-    # fig, ax = plt.subplots()
-    # ax.set_xlabel("Distance from origin")
-    # ax.set_ylabel("Var(TArrival)")
-    # ax.set_xscale("log")
-    # ax.set_yscale("log")
-    # ax.plot(r.flatten(),varT.flatten(),'.')
-    # if powerlaw != 0:
-    #     x=np.logspace(1,2)
-    #     ax.plot(x,1e-3*x**powerlaw)
-    # plt.show()
-
-#can put in a different file
-def tArrivalPastPlane(tArrival,line,axis):
-    """
-    Define a plane, and ask for the first tArrival past that plane
-    it should be the smallest tArrival *on* the line*
-    Parameters:
-        tArrival: an individual run of generateFirstArrivalTime, and
-            be a (2L+1,2L+1) shape
-        line: idk i need to figure out how to define a line
-        axis: i or j; if i then the line drawn is i=line, if j then line is j=line
-
-    Example to get first crossing past plane as a function of plane location, where
-    tArrival[1] is one instance of generateFirstArrivalTime
-    iset = [i-length for i in range(2*length+1)]
-    plt.loglog(iset,[ev.tArrivalPastPlane(tArrival[1],i,'i') for i in range(401)],'.')
-    plt.plot(x,0.2*x**1.8)
-    """
-    if axis == 'i':
-        # choose all sites with i=line
-        sites = tArrival[line,:]
-    elif axis == 'j':
-        sites = tArrival[:,line]
-    #find the minimum tArrival value in that set of sites
-    firstCrossing = np.nanmin(sites)
-    return firstCrossing
 
 #roughness statistics functions
 #to go inside getRoughness; finds roughness params for a single array at specific tau
 def getPerimeterAreaTau(tArrivalArray,tau):
     """
-    Calculate the surface roughness of tArrivals as a function of time
-    by (number of pixels on boarder)/(total pixels reached)^1/2
+    Calculate the surface roughness of tArrivals as a function of time by
+    (number of pixels on boarder)/(total pixels reached)^1/2
     If perfectly smooth, min roughness is like 2*(pi)^1/2
     Ask how roughness scales with tau? (ie time at which you ask for border)
     :param tArrivalArray: array of tArrivals
-    :return: a number (roughness)
+    :param tau: the time at which you want to measure roughness
+    :return: perimeter: the number of pixels on the boundary
+    :return: area: the number of pixels within the area of the boundary
+    :return: tau: the time at which you've specified to measure roughness
+    :return: boundaryR: the mean distance to origin of the boundary pixels (to calculate moments)
+    :return: boundaryR2: the mean of the square of the distance to origin of boundary pixels (to calculate moments)
     Can be put inside something like:
         plt.plot([i for i in range(0,np.max(newTArrival),50)],[ev.measureRoughness(newTArrival,i) for i in range(0,np.max(newTArrival),50)])
     """
@@ -341,12 +270,16 @@ def getPerimeterAreaTau(tArrivalArray,tau):
     return perimeter,area,tau,boundaryR,boundaryR2
 
 #find roughness stuff (perimeter, area, etc) for a single tArrival array
-#avgdist = <r> avgdist2 = <r^2>
+#avgdist = <r> and avgdist2 = <r^2>
 def getRoughness(tArrivalArray):
     """
-    Takes one tArrival arary and returns arrays of perimeter, area, time, and roughness
+    Takes one tArrival array and returns arrays of perimeter, area, time, and roughness (as function of tau)
     :param tArrivalArray: numpy array generated from generateFirstArrivalTimeAgent
-    :return:
+    :return: perimeter: the array of number of pixels on the boundary
+    :return: area: the array of number of pixels within the area of the boundary
+    :return: tau: the array of time at which you've specified to measure roughness
+    :return: boundaryR: the array of mean distance to origin of the boundary pixels (to calculate moments)
+    :return: boundaryR2: the array of mean of the square of the distance to origin of boundary pixels (to calculate moments)
     """
     perimeter = []
     area = []
@@ -367,13 +300,13 @@ def getRoughness(tArrivalArray):
     roughness = perimeter/np.sqrt(area)
     return  np.array(perimeter), np.array(area), np.array(time), np.array(roughness), np.array(avgDist),np.array(avgDist2)
 
-#find roughness stats for a directory of tArrivals
+# find roughness stats for a directory of tArrivals
 def getRoughnessMeanVar(path):
     """
     Take directory of tArrivals, returns list of perimeters, areas, and also
-    returns roughnessMean and roughnessVar?
+    returns mean(roughness) and var(roughness)?
     :param path: directory name of tArrivals
-    :return: np array of perimeters, areas, and time, mean roughness, var roughness
+    :return: np array of perimeters, areas, and time, and mean(roughness), var(roughness)
     """
     filelist = sorted(os.listdir(path))
     #initialize array of Roughness
@@ -391,68 +324,10 @@ def getRoughnessMeanVar(path):
         RoughnessList.append(tempR)
     #pre-emptively just set t to be what it should, calc mean and var of roughness
     TimeList = np.mean(TimeList,0)
-    rMean = np.mean(RoughnessList,0)
-    rVar = np.var(RoughnessList,0)
+    roughMean = np.mean(RoughnessList,0)
+    roughVar = np.var(RoughnessList,0)
     #calculate roughness
-    return np.array(PerimeterList),np.array(AreaList),np.array(TimeList), rMean,rVar
-
-#can delete since i've implemented PDF in the new function?
-#Not quite old but its the slow PDF evolution
-# evolves the PDF without dynamic scaling or multinomial
-def evolve2DLatticePDF(Length, NParticles, MaxT=None):
-    """
-    Create a (2Length+1) square lattice with N particles at the center, and let particles diffuse according to
-    dirichlet biases in cardinal directions. This evolves the PDF.
-    WITHOUT DYNAMIC SCALING OR MULTINOMIAL
-    Parameters:
-        Length: distance from origin to side of lattice
-        NParticles: number of total particles in system
-        MaxT: automatically set to be the maximum time particles can evolve to, but can set a specific time
-    """
-    # automatically tells it the time you can evolve to
-    if not MaxT:
-        MaxT = Length+1
-    # initialize the array, particles @ origin, and the checkerboard pattern
-    occupancy = np.zeros((2*Length+1, 2*Length+1))
-    origin = (Length, Length)
-    occupancy[origin] = NParticles
-    i,j = np.indices(occupancy.shape)
-    checkerboard = (i+j+1) % 2
-    # evolve in time
-    for t in range(1,MaxT):
-        # Compute biases for every cell within area we're evolving to all at once
-        #[[[left,down,right,up]]]
-        biases = np.random.dirichlet([1]*4, (2*t-1, 2*t-1))
-        # Define interior lattice size to evolve based on timestep
-        startPoint = Length-t+1
-        endPoint = Length+t
-        # save old occupancy, for calculation reasons
-        oldOccupancy = occupancy[startPoint:endPoint, startPoint:endPoint].copy()
-        # fill occupancy + zero out the old ones
-        occupancy[startPoint:endPoint, startPoint-1:endPoint-1] += oldOccupancy * biases[:,:,0]
-        occupancy[startPoint+1:endPoint+1, startPoint:endPoint] += oldOccupancy * biases[:,:,1]
-        occupancy[startPoint:endPoint, startPoint+1:endPoint+1] += oldOccupancy * biases[:,:,2]
-        occupancy[startPoint-1:endPoint-1, startPoint:endPoint] += oldOccupancy * biases[:,:,3]
-        occupancy[checkerboard== (t % 2)] = 0
-        yield t, occupancy
-        # # I'm leaving this code here because it does a better job of explaining what our goal is
-        # for i in range(startPoint, endPoint):
-        #     #across
-        #     for j in range(startPoint, endPoint):
-        #         # Do the calculation if the site and the time have opposite parity
-        #         if (i + j + t) % 2 == 1:
-        #             localBiases = biases[i-startPoint, j-endPoint, :]
-        #             # left
-        #             occupancy[i, j - 1] += occupancy[i, j] * localBiases[0]
-        #             # down
-        #             occupancy[i + 1, j] += occupancy[i, j] * localBiases[1]
-        #             # right
-        #             occupancy[i, j + 1] += occupancy[i, j] * localBiases[2]
-        #             # up
-        #             occupancy[i - 1, j] += occupancy[i, j] * localBiases[3]
-        #             # zero the old one
-        #             occupancy[i, j] = 0
-    # return occupancy
+    return np.array(PerimeterList),np.array(AreaList),np.array(TimeList), roughMean,roughVar
 
 def measureOnSphere(tMax, L, R):
     '''
@@ -491,4 +366,62 @@ def measureOnSphere(tMax, L, R):
     # Need to make sure occ doesn't change size
     for t, occ in numpyEvolve2DLatticeAgent(occ, tMax, True, True, float, boundary=boundary):
         pass
-    return occ
+
+# #can delete since i've implemented PDF in the new function?
+# #Not quite old but its the slow PDF evolution
+# # evolves the PDF without dynamic scaling or multinomial
+# def evolve2DLatticePDF(Length, NParticles=1, MaxT=None):
+#     """
+#     Create a (2Length+1) square lattice with N particles at the center, and let particles diffuse according to
+#     dirichlet biases in cardinal directions. This evolves the PDF.
+#     WITHOUT DYNAMIC SCALING OR MULTINOMIAL
+#     Parameters:
+#         Length: distance from origin to side of lattice
+#         NParticles: number of total particles in system; default set to 1
+#         MaxT: automatically set to be the maximum time particles can evolve to, but can set a specific time
+#     """
+#     # automatically tells it the time you can evolve to
+#     if not MaxT:
+#         MaxT = Length+1
+#     # initialize the array, particles @ origin, and the checkerboard pattern
+#     occupancy = np.zeros((2*Length+1, 2*Length+1))
+#     origin = (Length, Length)
+#     occupancy[origin] = NParticles
+#     i,j = np.indices(occupancy.shape)
+#     checkerboard = (i+j+1) % 2
+#     # evolve in time
+#     for t in range(1,MaxT):
+#         # Compute biases for every cell within area we're evolving to all at once
+#         #[[[left,down,right,up]]]
+#         biases = np.random.dirichlet([1]*4, (2*t-1, 2*t-1))
+#         # Define interior lattice size to evolve based on timestep
+#         startPoint = Length-t+1
+#         endPoint = Length+t
+#         # save old occupancy, for calculation reasons
+#         oldOccupancy = occupancy[startPoint:endPoint, startPoint:endPoint].copy()
+#         # fill occupancy + zero out the old ones
+#         occupancy[startPoint:endPoint, startPoint-1:endPoint-1] += oldOccupancy * biases[:,:,0]
+#         occupancy[startPoint+1:endPoint+1, startPoint:endPoint] += oldOccupancy * biases[:,:,1]
+#         occupancy[startPoint:endPoint, startPoint+1:endPoint+1] += oldOccupancy * biases[:,:,2]
+#         occupancy[startPoint-1:endPoint-1, startPoint:endPoint] += oldOccupancy * biases[:,:,3]
+#         occupancy[checkerboard== (t % 2)] = 0
+#         yield t, occupancy
+#         # # I'm leaving this code here because it does a better job of explaining what our goal is
+#         # for i in range(startPoint, endPoint):
+#         #     #across
+#         #     for j in range(startPoint, endPoint):
+#         #         # Do the calculation if the site and the time have opposite parity
+#         #         if (i + j + t) % 2 == 1:
+#         #             localBiases = biases[i-startPoint, j-endPoint, :]
+#         #             # left
+#         #             occupancy[i, j - 1] += occupancy[i, j] * localBiases[0]
+#         #             # down
+#         #             occupancy[i + 1, j] += occupancy[i, j] * localBiases[1]
+#         #             # right
+#         #             occupancy[i, j + 1] += occupancy[i, j] * localBiases[2]
+#         #             # up
+#         #             occupancy[i - 1, j] += occupancy[i, j] * localBiases[3]
+#         #             # zero the old one
+#         #             occupancy[i, j] = 0
+#     # return occupancy
+#
