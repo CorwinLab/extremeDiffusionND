@@ -1,9 +1,10 @@
 import numpy as np
-# import npquad
 import os
 from scipy.ndimage import morphology as m
 import time
+import csv
 # from numba import jit, njit
+# import npquad
 
 # helper functions
 def doubleArray(array,arraytype, fillValue = 0):
@@ -91,8 +92,8 @@ def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np
         # Find the occupied sites
         i,j = np.where((occupancy != 0) & boundary)
         # If the occupied sites are at the limits (i.e if min(i,j) = 0 or max(i,j) = size)
-        # then we need to enlarge occupancy and create a new array
-        # print(f'{occupancy.shape}, {np.min([i,j])}, {np.max([i,j])}')
+        # then we need to enlarge occupancy and create a new array. Don't resize if 
+        # boundary is specified.
         if (np.min([i,j]) <= 0) or (np.max([i,j]) >= np.min(occupancy.shape) -1) and not (isinstance(boundary, np.ndarray)):
             occupancy = doubleArray(occupancy,occtype)
             # These next two lines are a waste and we could just do index translation
@@ -179,7 +180,7 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
 
 # wrapper for numpyEvolve2DLattice
 def run2dAgent(occupancy, maxT):
-    for t, occ in numpyEvolve2DLatticeAgent(occupancy, maxT):
+    for t, occ in evolve2DLattice(occupancy, maxT):
         pass
     return t, occ
 
@@ -329,7 +330,22 @@ def getRoughnessMeanVar(path):
     #calculate roughness
     return np.array(PerimeterList),np.array(AreaList),np.array(TimeList), roughMean,roughVar
 
-def measureOnSphere(tMax, L, R):
+def getIndecesInsideSphere(occ, r):
+    x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
+    xx, yy = np.meshgrid(x, x)
+
+    dist_from_center = np.sqrt(xx**2 + yy**2)
+    indeces = np.where(dist_from_center < r)
+    return indeces
+
+def getLineIndeces(occ, r):
+    x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
+    xx, yy = np.meshgrid(x, x)
+
+    indeces = np.where(xx >= r)
+    return indeces
+
+def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
     '''
     Parameters
     ----------
@@ -344,16 +360,23 @@ def measureOnSphere(tMax, L, R):
     
     Example
     -------
-    from matplotlib import pyplot as plt
-    occ = measureOnSphere(1000, 10, 9)
-    indeces = np.where(occ == 0)
-    occ[indeces] = np.nan
-    fig, ax = plt.subplots()
-    im = ax.imshow(occ, interpolation='none')
-    fig.colorbar(im)
-    fig.savefig("Occ.pdf", bbox_inches='tight')
+    tMax = 100
+    L = 250
+    R = L-1
+    Rs = [5, 10]
+    savefile = 'PDF.txt'
+    measureOnSphere(tMax, L, R, Rs, savefile, 'Line.txt')   
     '''
     
+    Rs.append(R)
+    f = open(sphereSaveFile, 'a')
+    writer = csv.writer(f)
+    writer.writerow(["Time", *Rs])
+
+    f_line = open(lineSaveFile, 'a')
+    writer_line = csv.writer(f_line)
+    writer_line.writerow(['Time', *Rs])
+
     # Create occupancy array
     occ = np.zeros((2 * L + 1, 2 * L + 1))
     occ[L, L] = 1
@@ -363,65 +386,20 @@ def measureOnSphere(tMax, L, R):
     dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
     boundary = dist_to_center <= R
 
-    # Need to make sure occ doesn't change size
-    for t, occ in numpyEvolve2DLatticeAgent(occ, tMax, True, True, float, boundary=boundary):
-        pass
+    indeces = [getIndecesInsideSphere(occ, r) for r in Rs]
+    line_indeces = [getLineIndeces(occ, r) for r in Rs]
 
-# #can delete since i've implemented PDF in the new function?
-# #Not quite old but its the slow PDF evolution
-# # evolves the PDF without dynamic scaling or multinomial
-# def evolve2DLatticePDF(Length, NParticles=1, MaxT=None):
-#     """
-#     Create a (2Length+1) square lattice with N particles at the center, and let particles diffuse according to
-#     dirichlet biases in cardinal directions. This evolves the PDF.
-#     WITHOUT DYNAMIC SCALING OR MULTINOMIAL
-#     Parameters:
-#         Length: distance from origin to side of lattice
-#         NParticles: number of total particles in system; default set to 1
-#         MaxT: automatically set to be the maximum time particles can evolve to, but can set a specific time
-#     """
-#     # automatically tells it the time you can evolve to
-#     if not MaxT:
-#         MaxT = Length+1
-#     # initialize the array, particles @ origin, and the checkerboard pattern
-#     occupancy = np.zeros((2*Length+1, 2*Length+1))
-#     origin = (Length, Length)
-#     occupancy[origin] = NParticles
-#     i,j = np.indices(occupancy.shape)
-#     checkerboard = (i+j+1) % 2
-#     # evolve in time
-#     for t in range(1,MaxT):
-#         # Compute biases for every cell within area we're evolving to all at once
-#         #[[[left,down,right,up]]]
-#         biases = np.random.dirichlet([1]*4, (2*t-1, 2*t-1))
-#         # Define interior lattice size to evolve based on timestep
-#         startPoint = Length-t+1
-#         endPoint = Length+t
-#         # save old occupancy, for calculation reasons
-#         oldOccupancy = occupancy[startPoint:endPoint, startPoint:endPoint].copy()
-#         # fill occupancy + zero out the old ones
-#         occupancy[startPoint:endPoint, startPoint-1:endPoint-1] += oldOccupancy * biases[:,:,0]
-#         occupancy[startPoint+1:endPoint+1, startPoint:endPoint] += oldOccupancy * biases[:,:,1]
-#         occupancy[startPoint:endPoint, startPoint+1:endPoint+1] += oldOccupancy * biases[:,:,2]
-#         occupancy[startPoint-1:endPoint-1, startPoint:endPoint] += oldOccupancy * biases[:,:,3]
-#         occupancy[checkerboard== (t % 2)] = 0
-#         yield t, occupancy
-#         # # I'm leaving this code here because it does a better job of explaining what our goal is
-#         # for i in range(startPoint, endPoint):
-#         #     #across
-#         #     for j in range(startPoint, endPoint):
-#         #         # Do the calculation if the site and the time have opposite parity
-#         #         if (i + j + t) % 2 == 1:
-#         #             localBiases = biases[i-startPoint, j-endPoint, :]
-#         #             # left
-#         #             occupancy[i, j - 1] += occupancy[i, j] * localBiases[0]
-#         #             # down
-#         #             occupancy[i + 1, j] += occupancy[i, j] * localBiases[1]
-#         #             # right
-#         #             occupancy[i, j + 1] += occupancy[i, j] * localBiases[2]
-#         #             # up
-#         #             occupancy[i - 1, j] += occupancy[i, j] * localBiases[3]
-#         #             # zero the old one
-#         #             occupancy[i, j] = 0
-#     # return occupancy
-#
+    # Need to make sure occ doesn't change size
+    for t, occ in evolve2DLattice(occ, tMax, True, True, float, boundary=boundary):
+        # Get probabilities inside sphere
+        probs = [1-np.sum(occ[idx]) for idx in indeces]
+        writer.writerow([t, *probs])
+        f.flush()
+
+        # Get probabilities outside line
+        probs = [np.sum(occ[idx]) for idx in line_indeces]
+        writer_line.writerow([t, *probs])
+        f_line.flush()
+
+    f_line.close()
+    f.close()
