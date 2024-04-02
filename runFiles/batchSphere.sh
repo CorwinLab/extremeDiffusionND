@@ -12,9 +12,10 @@
 
 TMAX=10000
 L=2000
-TOPDIR=/home/jhass2/jamming/JacobData/SphericalBoundries/
+DISTRIBUTION='dirichlet'
+PARAMS=10
+TOPDIR=/home/jhass2/jamming/JacobData/SphericalBoundries/$DISTRIBUTION
+mkdir -p $TOPDIR
 
-mkdir -p $TOPDIR 
-
-# tMax, L, topDir, sysID = sys.argv[1:]
-python3 measureSphere.py $TMAX $L $TOPDIR $SLURM_ARRAY_TASK_ID
+# tMax, L, topDir, distribution, params, sysID = sys.argv[1:]
+python3 measureSphere.py $TMAX $L $TOPDIR $DISTRIBUTION $PARAMS $SLURM_ARRAY_TASK_ID

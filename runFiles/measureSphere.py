@@ -17,14 +17,18 @@ def saveVars(vars, save_file):
 		json.dump(vars, file)
 
 if __name__ == '__main__': 
-	# tMax, L, topDir, sysID = '100', '10', '.', '0'
-	tMax, L, topDir, sysID = sys.argv[1:]
+	# tMax, L, topDir, distribution, params, sysID = '1000', '100', '.', 'dirichlet', '4', '0'
+	tMax, L, topDir, distribution, params, sysID = sys.argv[1:]
 
 	L = int(L)
 	tMax = int(float(tMax))
 	sphereSaveFile = os.path.join(topDir, f"Sphere{sysID}.txt")
 	lineSaveFile = os.path.join(topDir, f"Line{sysID}.txt")
-	
+	if distribution == 'dirichlet':
+		params = float(params)
+	else:
+		params = None
+
 	R = L - 1
 	Rs = np.unique(np.geomspace(2, R, num=20).astype(int))
 	Rs = [int(r) for r in Rs]
@@ -34,6 +38,8 @@ if __name__ == '__main__':
 		 	"L": L,
 			"R": R,
 			"Rs": Rs,
+			"distribution": distribution,
+			"params": params,
 			"sphereSaveFile": sphereSaveFile, 
 			"lineSaveFile": lineSaveFile}
 	

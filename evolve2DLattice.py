@@ -24,7 +24,17 @@ def doubleArray(array,arraytype, fillValue = 0):
     newArray[newLength-length:newLength+length+1, newLength-length:newLength+length+1] = array
     return newArray
 
-def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
+def getRandVals(distribution, rng, shape, params):
+    ''' Get random values across the lattice '''
+    if distribution == 'uniform':
+        biases = rng.dirichlet([1]*4, shape)
+    elif distribution == 'SSRW':
+        biases = np.full([shape, 4], 1/4)
+    elif distribution == 'dirichlet':
+        biases = rng.dirichlet([params]*4, shape)
+    return biases
+
+def executeMoves(occupancy, i, j, rng, distribution, PDF, params=None):
     """
     Moves agents in a 2Dlattice according to dirichlet (or SSRW) & multinomial
     Parameters:
@@ -34,13 +44,10 @@ def executeMoves(occupancy, i, j, rng, dirichlet, PDF):
         dirichlet: boolean; if true uses dirichlet biases; if false uses SSRW
         PDF: boolean; if true then multiplies biases; if false then draws multinomial
     """
+
     # Generate biases for each site
-    if dirichlet:
-        #print("Dirichlet")
-        biases = rng.dirichlet([1]*4, i.shape[0])
-    else:
-        #print("SSRW!")
-        biases = np.full([i.shape[0],4],1/4)
+    biases = getRandVals(distribution, rng, i.shape[0], params)
+
     # On newer numpy we can vectorize to compute the moves
     if PDF: #if doing PDF then multiply by biases
         moves = occupancy[i,j].reshape(-1,1) * biases #reshape -1 takes the shape of occupancy
@@ -74,7 +81,7 @@ def changeArraySize(array,size,fillval):
     return newArray
 
 # main functions & generators + wrappers
-def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np.random.default_rng(), boundary=True):
+def evolve2DLattice(occupancy, maxT, distribution, PDF, occtype,startT = 1, rng = np.random.default_rng(), boundary=True, params=None):
     """
     a generator object
     evolves agents in a 2Dlattice out to some time MaxT with dynamic scaling.
@@ -99,11 +106,11 @@ def evolve2DLattice(occupancy, maxT,dirichlet, PDF, occtype,startT = 1, rng = np
             # These next two lines are a waste and we could just do index translation
             sites = (occupancy != 0)
             i,j = np.where(sites & boundary)
-        occupancy = executeMoves(occupancy, i, j, rng, dirichlet, PDF)
+        occupancy = executeMoves(occupancy, i, j, rng, distribution, PDF, params)
         yield t, occupancy
 
 #generateFirstArrivalTimeAgent --> generateFirstArrivalTime
-def generateFirstArrivalTime(occupancy, maxT, dirichlet, PDF, startT =1,):
+def generateFirstArrivalTime(occupancy, maxT, distribution, PDF, startT =1, params=None):
     """
     Evolves a 2DLattice with dynamic scaling
     Returns array of time of first arrivals of each site
@@ -129,7 +136,7 @@ def generateFirstArrivalTime(occupancy, maxT, dirichlet, PDF, startT =1,):
     tArrival = np.copy(occupancy)
     tArrival[:] = notYetArrived
     # use evolve2DLattice to evolve; record tArrivals and throw them into array as lattice evolves
-    for t, occ in evolve2DLattice(occupancy, maxT,dirichlet, PDF,occtype):
+    for t, occ in evolve2DLattice(occupancy, maxT, distribution, PDF, occtype, params):
         if tArrival.shape[0] != occ.shape[0]:
             # Note: this is fragile, we assume that doubling tArrival will always work
             tArrival = doubleArray(tArrival,arraytype=int,fillValue = notYetArrived)
@@ -138,7 +145,7 @@ def generateFirstArrivalTime(occupancy, maxT, dirichlet, PDF, startT =1,):
 
 #can maybe delete this now
 #wrapper function for generateFirstArrivalTimeAgent, saves to a path; OLD? ISH?
-def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
+def runFirstArrivals(occupancy, MaxT, distribution, PDF, iterations, directoryName, params=None):
     """
     runs iterations of first arrival arrays, saves to a folder thats specified or created
     Effectively does the same thing as runCopiesOfDataAndAnalysis bash script but in python
@@ -167,7 +174,7 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
 
     #run your iterations and save each tArrival and occ array into the folder created/specified
     for i in range(iterations):
-        tArrival, occ = generateFirstArrivalTime(occupancy,MaxT,dirichlet, PDF)
+        tArrival, occ = generateFirstArrivalTime(occupancy, MaxT, distribution, PDF, params)
         np.savez_compressed(f"{path}/{i}.npz",tArrival=tArrival,occ=occ)
 
         if not PDF: #if Agent (ie not PDF) then save stats; otherwise don't save them (for testing)
@@ -345,7 +352,7 @@ def getLineIndeces(occ, r):
     indeces = np.where(xx >= r)
     return indeces
 
-def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
+def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSaveFile):
     '''
     Parameters
     ----------
@@ -365,7 +372,10 @@ def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
     R = L-1
     Rs = [5, 10]
     savefile = 'PDF.txt'
-    measureOnSphere(tMax, L, R, Rs, savefile, 'Line.txt')   
+    linefile = 'Line.txt'
+    distribution = 'dirichlet'
+    params = 1/10
+    measureOnSphere(tMax, L, R, Rs, distribution, params, savefile, linefile)
     '''
     
     Rs.append(R)
@@ -388,9 +398,9 @@ def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
 
     indeces = [getIndecesInsideSphere(occ, r) for r in Rs]
     line_indeces = [getLineIndeces(occ, r) for r in Rs]
-    ts = np.unique(np.geomspace(1, tMax, num=2500).astype(int))
+    ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, True, True, float, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts: 
             probs = [1-np.sum(occ[idx]) for idx in indeces]
@@ -404,3 +414,4 @@ def measureOnSphere(tMax, L, R, Rs, sphereSaveFile, lineSaveFile):
 
     f_line.close()
     f.close()
+    
