@@ -111,6 +111,9 @@ def generateFirstArrivalTime(occupancy, maxT, dirichlet, PDF, startT =1,):
         startT: optional arg, starts at 1
     """
     notYetArrived = -1
+    print("PDF: ",PDF,type(PDF))
+    print("occ:", occupancy,type(occupancy))
+    print("condition: ", PDF and occupancy != 1)
     if PDF and occupancy != 1:
         print("Warning: You are trying to evolve a PDF with N!= 1, so it won't be normalized.")
     # deal wtih the dtype messiness depending on if you want agents or a PDF
@@ -173,11 +176,9 @@ def runFirstArrivals(occupancy,MaxT,dirichlet,PDF, iterations,directoryName):
                             avgBoundaryDist=avgDist, avgBoundaryDist2=avgDist2)
         print(i)
 
-
-
-# wrapper for numpyEvolve2DLattice
-def run2dAgent(occupancy, maxT):
-    for t, occ in numpyEvolve2DLatticeAgent(occupancy, maxT):
+# wrapper for evolve2DLattice
+def run2dAgent(occupancy, maxT, dirichlet, PDF, occtype):
+    for t, occ in evolve2DLattice(occupancy, maxT, dirichlet, PDF, occtype):
         pass
     return t, occ
 
@@ -233,7 +234,6 @@ def cartToPolar(i,j):
     r = np.sqrt(i**2+j**2)
     theta = np.arctan2(j,i)
     return r, theta
-
 
 #roughness statistics functions
 #to go inside getRoughness; finds roughness params for a single array at specific tau
