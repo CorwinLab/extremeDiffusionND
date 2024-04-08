@@ -45,6 +45,9 @@ if __name__ == "__main__":
     PDF = eval(sys.argv[6]) # Bool
     numSystems = int(sys.argv[7]) # Integer
 
+    print("PDF: ",PDF,type(PDF))
+    print("occ:", occupancy,type(occupancy))
+    print("num systsems: ",numSystems)
 
     for i in range(numSystems):
         runDataAndAnalysis(directoryName, systID + i, occupancy, MaxT, dirichlet, PDF)
