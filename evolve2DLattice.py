@@ -508,3 +508,68 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
     f_line.close()
     f.close()
+
+def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, lineSaveFile):
+    '''
+    Parameters
+    ----------
+    L : int 
+        Radius of size of box
+
+    tMax : int 
+        Maximum time to iterate to
+
+    R : float
+        Radius of circle for circular boundary conditions
+    
+    Example
+    -------
+    tMax = 100
+    L = 250
+    R = L-1
+    Rs = [5, 10]
+    savefile = 'PDF.txt'
+    linefile = 'Line.txt'
+    distribution = 'dirichlet'
+    params = 1/10
+    measureOnSphere(tMax, L, R, Rs, distribution, params, savefile, linefile)
+    '''
+    
+    f = open(sphereSaveFile, 'a')
+    writer = csv.writer(f)
+    writer.writerow(["Time", *alpha])
+
+    f_line = open(lineSaveFile, 'a')
+    writer_line = csv.writer(f_line)
+    writer_line.writerow(['Time', *alpha])
+
+    # Create occupancy array
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    
+    x = np.arange(-L, L+1)
+    xx, yy = np.meshgrid(x, x)
+    dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+    boundary = dist_to_center <= R
+
+    ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+    # Need to make sure occ doesn't change size
+    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+        # Get probabilities inside sphere
+        if t in ts: 
+            Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
+            
+            indeces = [getIndecesInsideSphere(occ, r) for r in Rs]
+            line_indeces = [getLineIndeces(occ, r) for r in Rs]
+
+            probs = [1-np.sum(occ[idx]) for idx in indeces]
+            writer.writerow([t, *probs])
+            f.flush()
+
+            # Get probabilities outside line
+            probs = [np.sum(occ[idx]) for idx in line_indeces]
+            writer_line.writerow([t, *probs])
+            f_line.flush()
+
+    f_line.close()
+    f.close()
