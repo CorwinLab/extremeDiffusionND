@@ -3,19 +3,16 @@ import os
 from scipy.ndimage import morphology as m
 # import time
 import csv
+import npquad
 
 
-# from numba import jit, njit
-# import npquad
-
-# helper functions
 def doubleArray(array, arraytype, fillValue=0):
     """
     Takes an existing numpy array and doubles it, keeping existing vals at center
-    Parameters:
-        array: the array you want to double, assumes square and odd size
-        arraytype: tell the dtype of the array (int, float, etc)
-        fillValue: what do you want to fill the new entries with, automatically set to 0
+    :param array: the array you want to double, assumes square and odd size
+    :param arraytype: tell the dtype of the array (int, float, etc.)
+    :param fillValue: what do you want to fill the new entries with, automatically set to 0
+    :return newArray (the inputted array but doubled)
     """
     length = (array.shape[0]) // 2
     if length == 0:
@@ -42,14 +39,14 @@ def getRandVals(distribution, rng, shape, params):
 
 def executeMoves(occupancy, i, j, rng, distribution, PDF, params=None):
     """
-    Moves agents in a 2Dlattice according to dirichlet (or SSRW) & multinomial
-    Parameters:
-        occupancy: the array you are working in, with agents
-        i, j = sites with agents in them/sites that are occupied
-        rng: numpy random number generator
-        distribution: specify distribution you are using to generate biases
-        PDF: boolean; if true then multiplies biases; if false then draws multinomial\
-        params: the parameters of the distribution
+    Evolves 2Dlattice according to a distribution, with the option to evolve agents or the PDF
+    :param occupancy: the array you are working in or the initial occupancy
+    :param i, j = sites with agents in them/sites that are occupied
+    :param rng: numpy random number generator (should be np.random.default_rng() passed in)
+    :param distribution: string specifying distribution you are using to generate biases
+    :param PDF: boolean; if true then multiplies biases; if false then draws multinomial\
+    :param params: the parameters of the distribution
+    :return occupancy: the new occupancy after moving everything
     """
     # Generate biases for each site
     biases = getRandVals(distribution, rng, i.shape[0], params)
@@ -59,7 +56,6 @@ def executeMoves(occupancy, i, j, rng, distribution, PDF, params=None):
         moves = occupancy[i, j].reshape(-1, 1) * biases  # reshape -1 takes the shape of occupancy
     else:
         moves = rng.multinomial(occupancy[i, j], biases)
-
     # Note that we can use the same array because we're doing checkerboard moves
     # If we want to use a more general jump kernel we need to use a new (empty) copy of the space
     occupancy[i, j - 1] += moves[:, 0]  # left
@@ -76,7 +72,7 @@ def changeArraySize(array, size, fillval):
     :param array: the array you want to change the size of
     :param size: the new size (as in LxL)
     :param fillval: what you want to fill the new entries with
-    :return: newArray
+    :return: newArray: the old array but expanded to the specified size, with the new entried filled
     """
     length = (array.shape[0]) // 2
     newsize = size // 2
@@ -89,20 +85,22 @@ def changeArraySize(array, size, fillval):
 
 
 # main functions & generators + wrappers
-def evolve2DLattice(occupancy, maxT, distribution, PDF, occtype, startT=1, rng=np.random.default_rng(), boundary=True,
-                    params=None):
+def evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype, startT=1,
+                    rng=np.random.default_rng(), boundary=True):
     """
-    generator; evolves agents in a 2Dlattice out to some time MaxT with dynamic scaling.
-    Parameters:
-        occupancy: either number (NParticles) or occupancy array
-        maxT: timestep you want to go out to
-        distribution: specify the distribution of biases
-        PDF: boolean; if true then multiplies biases; if false then evolves agents
-        occtype: pass through the dtype of the occupancy array (int for agents, float for pdf)
-        boundary: (numpy array) boundary conditions should be same size as occupdancy
-        startT: time you want to start at; default 1
-        rng: the numpy random number generator obj
-        params: parameters of distribution
+    generator; evolves agents in a 2D lattice out to some time maxT with dynamic scaling.
+    :param occupancy: either number (NParticles) or occupancy array
+    :param maxT: timestep you want to go out to
+    :param distribution: string, specify the distribution of biases
+    :param params: parameters of distribution
+    :param PDF: boolean; if true then multiplies biases; if false then evolves agents
+    :param occtype: the dtype of the occupancy array (int for agents, float for pdf)
+    :param startT: optional; time you want to start at; default 1
+    :param rng: the numpy random number generator obj(default np.random.default_rng() )
+    :param boundary: (numpy array) boundary conditions should be same size as occupancy
+
+    :return t: yield tArrival array
+    :return occupancy: yield occupancy array
     """
     for t in range(startT, maxT):
         # Find the occupied sites
@@ -114,106 +112,73 @@ def evolve2DLattice(occupancy, maxT, distribution, PDF, occtype, startT=1, rng=n
                 or (np.max([i, j]) >= np.min(occupancy.shape) - 1)
                 and not (isinstance(boundary, np.ndarray))):
             occupancy = doubleArray(occupancy, occtype)
-            # These next two lines are a waste and we could just do index translation
+            # These next two lines are a waste; we could just do index translation
             sites = (occupancy != 0)
             i, j = np.where(sites & boundary)
         occupancy = executeMoves(occupancy, i, j, rng, distribution, PDF, params)
         yield t, occupancy
 
 
-# generateFirstArrivalTimeAgent --> generateFirstArrivalTime
-def generateFirstArrivalTime(occupancy, maxT, distribution, PDF, startT=1, params=None):
+def generateFirstArrivalTime(occupancy, maxT, distribution, params, PDF, startT=1):
     """
-    Evolves a 2DLattice with dynamic scaling
-    Returns array of time of first arrivals of each site
-    Parameters:
-        occupancy: initial occupancy, can be a number (NParticles) or an existing array
-        maxT: timestep you want to go out to
-        distribution: specify distribution from which biases pulled
-        PDF: boolean; if true, evolves PDF, if false, uses multinomial to evolve agents
-        startT: optional arg, starts at 1
-        params: the parameters of the specified distribution
+    Evolves a 2DLattice with dynamic scaling.
+    :param occupancy: initial occupancy, can be a number (NParticles) or an existing array
+    :param maxT: timestep you want to go out to (integer)
+    :param distribution: string; specify distribution from which biases pulled
+    :param params: the parameters of the specified distribution
+    :param PDF: boolean; if true, evolves PDF, if false, uses multinomial to evolve agents
+    :param startT: optional arg, starts at 1
+    :return occ: the final evolved occupancy array
+    :return tArrival: the array with the time of first arrival for every site in the occupancy array
     """
     notYetArrived = -1
-    print("PDF: ", PDF, type(PDF))
-    print("occ:", occupancy, type(occupancy))
-    print("condition: ", PDF and occupancy != 1)
     if PDF and occupancy != 1:
         print("Warning: You are trying to evolve a PDF with N!= 1, so it won't be normalized.")
-    # deal wtih the dtype messiness depending on if you want agents or a PDF
+    # deal with the dtype messiness depending on if you want agents or a PDF
     if PDF:
         occtype = float
     else:
         occtype = int
     # if given a scalar (ie NParticles or something), initializes array
+    if distribution == 'dirichlet':
+        params = float(params)
+    else:
+        params = None
     if np.isscalar(occupancy):
         occupancy = np.array([[occupancy]], dtype=occtype)
     # initialize the array to throw in the time of first arrivals
     tArrival = np.copy(occupancy)
     tArrival[:] = notYetArrived
     # use evolve2DLattice to evolve; record tArrivals and throw them into array as lattice evolves
-    for t, occ in evolve2DLattice(occupancy, maxT, distribution, PDF, occtype, params):
+    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype):
         if tArrival.shape[0] != occ.shape[0]:
             # Note: this is fragile, we assume that doubling tArrival will always work
             tArrival = doubleArray(tArrival, arraytype=int, fillValue=notYetArrived)
         tArrival[(occ > 0) & (tArrival == notYetArrived)] = t
+        # if t % 1000 == 0:
+        #     np.savez_compressed(f"testData3/t{t}.npz", tArrival=tArrival, occ=occ)
     return tArrival, occ
 
 
-# can maybe delete this now
-# wrapper function for generateFirstArrivalTimeAgent, saves to a path; OLD? ISH?
-def runFirstArrivals(occupancy, MaxT, distribution, PDF, iterations, directoryName, params=None):
-    """
-    runs iterations of first arrival arrays, saves to a folder thats specified or created
-    Effectively does the same thing as runCopiesOfDataAndAnalysis bash script but in python
-
-    :param occupancy: existing occupancy array or a number(ie num. of particles)
-    :param MaxT: integer; number of timestseps you want to go out to
-    :param distribution: specify distribution from which biases are pulled
-    :param PDF: boolean; if true then multiplies biases; if false then draws multinomial
-    :param iterations: integer, number of iterations you want to run
-    :param directoryName: string, the path  name you want to create to save tArrivals to
-    :param params: parameters of the specified distribution
-    """
-    path = f"{directoryName}"
-    statsPath = f"{directoryName}" + "Statistics"
-    if PDF:  # to better label directories
-        path = path + "PDF"
-        statsPath = path + "Statistics"
-    # create a folder to throw all runs into, or check that it exists
-    if not os.path.exists(path):
-        os.mkdir(path)
-        os.mkdir(statsPath)
-        # os.chdir(path)
-        print(f"{directoryName} and {statsPath} have been created.")
-    else:
-        # os.chdir(f"{directoryName}")
-        print("folder exists")
-
-    # run your iterations and save each tArrival and occ array into the folder created/specified
-    for i in range(iterations):
-        tArrival, occ = generateFirstArrivalTime(occupancy, MaxT, distribution, PDF, params)
-        np.savez_compressed(f"{path}/{i}.npz", tArrival=tArrival, occ=occ)
-
-        if not PDF:  # if Agent (ie not PDF) then save stats; otherwise don't save them (for testing)
-            perimeter, area, time, roughness, avgDist, avgDist2 = getRoughness(tArrival)
-            # and save the analysis quantities to statspath/systid.npz
-            np.savez_compressed(f"{statsPath}/{i}.npz", perimeter=perimeter, area=area, time=time, roughness=roughness,
-                                avgBoundaryDist=avgDist, avgBoundaryDist2=avgDist2)
-        print(i)
-
-
 # wrapper for evolve2DLattice
-def run2dAgent(occupancy, maxT, dirichlet, PDF, occtype):
-    for t, occ in evolve2DLattice(occupancy, maxT, dirichlet, PDF, occtype):
+def run2dAgent(occupancy, maxT, distribution, params, PDF, occtype):
+    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype):
         pass
     return t, occ
 
 
 # data analysis functions
+
 # take a path with files from runFirstArrivals and get mean(tArrival), var(tArrival), mask of tArrivals
 # this calculates mean and var by hand when loading in every tArrival will take too much memory
 def getTArrivalMeanAndVar(path):
+    """
+    Takes a directory filled with tArrival arrays and finds the mean and variance of tArrivals
+    :param path: the path of the directory
+    :return: finalMom1: the first moment (mean) of tArrivals
+    :return finalMom2 - finalMom1**2: the variance of the tArrivals
+    :return goodData: the mask, so you only look at the stuff where every agent has gotten to
+    """
     filelist = sorted(os.listdir(path))
     notYetArrived = -1
     # initialize the moments & mask
@@ -254,11 +219,13 @@ def getTArrivalMeanAndVar(path):
     return finalMom1, finalMom2 - finalMom1 ** 2, goodData
 
 
-# goes inside checkIfMeanTCircular, and plotVarTvsDistance
 def cartToPolar(i, j):
     """
     Can take indices (i,j) and turn them into polar coords. r, theta
     Note: indices need to be already shifted so origin is at center appropriately
+    :param i: the (down? vertical?) index in cartesian coordinates
+    :param j: the (horizontal? across?) index in cartesian coordinates
+    :return r, theta: the polar coords of indices i,j
     """
     r = np.sqrt(i ** 2 + j ** 2)
     theta = np.arctan2(j, i)
@@ -266,23 +233,16 @@ def cartToPolar(i, j):
 
 
 # roughness statistics functions
-# to go inside getRoughness; finds roughness params for a single array at specific tau
 def getPerimeterAreaTau(tArrivalArray, tau):
     """
-    Calculate the surface roughness of tArrivals as a function of time by
-    (number of pixels on boarder)/(total pixels reached)^1/2
-    If perfectly smooth, min roughness is like 2*(pi)^1/2
-    Ask how roughness scales with tau? (ie time at which you ask for border)
+    Goes inside getRoughness. Finds Roughness parameters for a single array at specific time tau
     :param tArrivalArray: array of tArrivals
-    :param tau: the time at which you want to measure roughness
-    :return: perimeter: the number of pixels on the boundary
-    :return: area: the number of pixels within the area of the boundary
+    :param tau: the time at which you want to measure roughness (int)
+    :return: perimeter: the number of pixels on the boundary at time tau
+    :return: area: the number of pixels within the area of the boundary at tau
     :return: tau: the time at which you've specified to measure roughness
-    :return: boundaryR: the mean distance to origin of the boundary pixels (to calculate moments)
-    :return: boundaryR2: the mean of the square of the distance to origin of boundary pixels (to calculate moments)
-    Can be put inside something like:
-        plt.plot([i for i in range(0,np.max(newTArrival),50)],
-        [ev.measureRoughness(newTArrival,i) for i in range(0,np.max(newTArrival),50)])
+    :return: boundaryDist: the <(distance to origin of boundary)> (to calculate moments) at time tau
+    :return: boundaryDist2: the <(dist to origin of boundary)**2> (to calculate moments) at time tau
     """
     notYetArrived = -1
     mask = ((tArrivalArray <= tau) & (tArrivalArray > notYetArrived))
@@ -292,78 +252,62 @@ def getPerimeterAreaTau(tArrivalArray, tau):
     L = tArrivalArray.shape[0] // 2
     i, j = i - L, j - L
     r, theta = cartToPolar(i, j)
-    boundaryR = np.mean(r)
-    boundaryR2 = np.mean(np.square(r))
+    boundaryDist = np.mean(r)
+    boundaryDist2 = np.mean(np.square(r))
     perimeter = np.sum(boundary)
     area = np.sum(mask)
-    return perimeter, area, tau, boundaryR, boundaryR2
+    roughness = perimeter/np.sqrt(area)
+    return perimeter, area, roughness, boundaryDist, boundaryDist2, tau
 
 
-# find roughness stuff (perimeter, area, etc) for a single tArrival array
+# 9 April getRoughnessNew --> getRoughness
 # avgdist = <r> and avgdist2 = <r^2>
 def getRoughness(tArrivalArray):
     """
-    Takes one tArrival array and returns arrays of perimeter, area, time, and roughness (as function of tau)
-    :param tArrivalArray: numpy array generated from generateFirstArrivalTimeAgent
-    :return: perimeter: the array of number of pixels on the boundary
-    :return: area: the array of number of pixels within the area of the boundary
-    :return: tau: the array of time at which you've specified to measure roughness
-    :return: boundaryR: array of mean distance to origin of the boundary pixels (to calculate moments)
-    :return: boundaryR2: array of mean of (distance)^2 to origin of boundary pixels (to calculate moments)
+    Calculate the surface roughness of tArrivals as a function of time by
+    (#boundary pixels)/(total pixels reached)^1/2
+    If perfectly smooth, min roughness is like 2*(pi)^1/2.
+    Takes one tArrival array and roughness stats. as function of tau
+    :param tArrivalArray: the tArrival array, going out to max time tau
+    :return stats: numpy array of shape (tau, 5);
+        stats[:,0] returns perimeter, [:,1] area, [:,2]  roughness
+        [:,3]  avg. dist to boundary, [:,4] returns (avg dist to boundary)^2,
+        [:5] returns tau
     """
-    perimeter = []
-    area = []
-    time = []
-    avgDist = []
-    avgDist2 = []
-    # for each file, pull out their perimeter, area, and time and append
-    # note that I think this assumes that the diffused particles
-    # aren't touching the edge
-    for i in range(1, np.max(tArrivalArray)):
-        # save as np. arary instead?
-        p, a, t, d, d2 = getPerimeterAreaTau(tArrivalArray, i)
-        perimeter.append(p)
-        area.append(a)
-        time.append(t)
-        avgDist.append(d)
-        avgDist2.append(d2)
-    roughness = perimeter / np.sqrt(area)
-    return np.array(perimeter), np.array(area), np.array(time), np.array(roughness), np.array(avgDist), np.array(
-        avgDist2)
+    # initialize stats with the tau = 1 (since startT = 1 in generateFirstArrivals)
+    stats = getPerimeterAreaTau(tArrivalArray, 1)  # p,a,r,d,d2,t
+    # add the rest of the stats using vstack
+    for i in range(2, np.max(tArrivalArray)):
+        tempstats = getPerimeterAreaTau(tArrivalArray, i)
+        stats = np.vstack((stats, tempstats))
+    return stats
 
 
-# find roughness stats for a directory of tArrivals
+# 9 April getRoughnessMeanVarNew --> getRoughnessMeanVar
 def getRoughnessMeanVar(path):
     """
-    Take directory of tArrivals, returns list of perimeters, areas, and also
-    returns mean(roughness) and var(roughness)?
-    :param path: directory name of tArrivals
-    :return: np array of perimeters, areas, and time, and mean(roughness), var(roughness)
+    Take directory of tArrivals statistics (from np.save (getRoughness())), and calculates
+    mean, 2nd moment, + var of each stat. Uses npquad for precision
+    :param path: directory name of tArrival stats (from getRoughness saved as npy)
+    :return: mean: the list of means of each stat (as function of tau)
+    :return moment2: the list of second moments of each stat (as function of tau)
+    :return: var: the list of variances of each stat (as function of tau)
     """
     filelist = sorted(os.listdir(path))
-    # initialize array of Roughness
-    PerimeterList = []
-    AreaList = []
-    TimeList = []
-    RoughnessList = []
-    dist = []
-    dist2 = []
-    for file in filelist:
-        tArrival = np.load(f'{path}/{file}')['tArrival']
-        tempP, tempA, tempT, tempR, tempD, tempD2 = getRoughness(tArrival)
-        # for each file append the arrays of p,a,t to the list
-        PerimeterList.append(tempP)
-        AreaList.append(tempA)
-        TimeList.append(tempT)
-        RoughnessList.append(tempR)
-        dist.append(tempD)
-        dist2.append(tempD2)
-    # pre-emptively just set t to be what it should, calc mean and var of roughness
-    TimeList = np.mean(TimeList, 0)
-    roughMean = np.mean(RoughnessList, 0)
-    roughVar = np.var(RoughnessList, 0)
-    # calculate roughness
-    return np.array(PerimeterList), np.array(AreaList), np.array(TimeList), roughMean, roughVar, dist, dist2
+    # initialize array
+    firstStats = np.load(f'{path}/{filelist[0]}').astype(np.quad)
+    mean = firstStats
+    moment2 = firstStats ** 2
+    # cumulatively calculate mean, second moment
+    for file in filelist[1:]:
+        tempStats = np.load(f'{path}/{file}').astype(np.quad)
+        # cumulatively add to the mean and second moment
+        mean += tempStats
+        moment2 += tempStats**2
+    mean = mean / len(filelist)  # normalize
+    moment2 = moment2 / len(filelist)
+    var = moment2 - mean**2
+    return mean, moment2, var
 
 
 def getIndecesInsideSphere(occ, r):
@@ -445,3 +389,114 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 
     f_line.close()
     f.close()
+
+
+
+
+# # OLD ROUGHNESS FUNCTIONS
+#
+
+# can maybe delete this now
+# wrapper function for generateFirstArrivalTimeAgent, saves to a path; OLD? ISH?
+# def runFirstArrivals(occupancy, MaxT, distribution, PDF, iterations, directoryName, params=None):
+#     """
+#     runs iterations of first arrival arrays, saves to a folder thats specified or created
+#     Effectively does the same thing as runCopiesOfDataAndAnalysis bash script but in python
+#
+#     :param occupancy: existing occupancy array or a number(ie num. of particles)
+#     :param MaxT: integer; number of timestseps you want to go out to
+#     :param distribution: specify distribution from which biases are pulled
+#     :param PDF: boolean; if true then multiplies biases; if false then draws multinomial
+#     :param iterations: integer, number of iterations you want to run
+#     :param directoryName: string, the path  name you want to create to save tArrivals to
+#     :param params: parameters of the specified distribution
+#     """
+#     path = f"{directoryName}"
+#     statsPath = f"{directoryName}" + "Statistics"
+#     if PDF:  # to better label directories
+#         path = path + "PDF"
+#         statsPath = path + "Statistics"
+#     # create a folder to throw all runs into, or check that it exists
+#     if not os.path.exists(path):
+#         os.mkdir(path)
+#         os.mkdir(statsPath)
+#         # os.chdir(path)
+#         print(f"{directoryName} and {statsPath} have been created.")
+#     else:
+#         # os.chdir(f"{directoryName}")
+#         print("folder exists")
+#
+#     # run your iterations and save each tArrival and occ array into the folder created/specified
+#     for i in range(iterations):
+#         tArrival, occ = generateFirstArrivalTime(occupancy, MaxT, distribution, PDF, params)
+#         np.savez_compressed(f"{path}/{i}.npz", tArrival=tArrival, occ=occ)
+#
+#         if not PDF:  # if Agent (ie not PDF) then save stats; otherwise don't save them (for testing)
+#             perimeter, area, time, roughness, avgDist, avgDist2 = getRoughness(tArrival)
+#             # and save the analysis quantities to statspath/systid.npz
+#             np.savez_compressed(f"{statsPath}/{i}.npz", perimeter=perimeter, area=area, time=time, roughness=roughness,
+#                                 avgBoundaryDist=avgDist, avgBoundaryDist2=avgDist2)
+#         print(i)
+
+
+# def getRoughnessOld(tArrivalArray):
+#     """
+#     Takes one tArrival array and returns arrays of perimeter, area, time, and roughness (as function of tau)
+#     :param tArrivalArray: numpy array generated from generateFirstArrivalTimeAgent
+#     :return: perimeter: the array of number of pixels on the boundary
+#     :return: area: the array of number of pixels within the area of the boundary
+#     :return: tau: the array of time at which you've specified to measure roughness
+#     :return: boundaryR: array of mean distance to origin of the boundary pixels (to calculate moments)
+#     :return: boundaryR2: array of mean of (distance)^2 to origin of boundary pixels (to calculate moments)
+#     """
+#     # old way
+#     perimeter = []
+#     area = []
+#     time = []
+#     avgDist = []
+#     avgDist2 = []
+#     #for each file, pull out their perimeter, area, and time and append
+#     #note that I think this assumes that the diffused particles aren't touching the edge
+#     for i in range(1, np.max(tArrivalArray)):
+#         # save as np. array instead?
+#         p, a, r, d, d2, t = getPerimeterAreaTau(tArrivalArray, i) #p, a, d, d2, t
+#         perimeter.append(p)
+#         area.append(a)
+#         time.append(t)
+#         avgDist.append(d)
+#         avgDist2.append(d2)
+#     roughness = perimeter / np.sqrt(area)
+#     return np.array(perimeter), np.array(area), np.array(roughness), np.array(avgDist), np.array(
+#         avgDist2), np.array(time)
+#
+# def getRoughnessMeanVarOld(path):
+#     """
+#     Take directory of tArrivals, returns list of perimeters, areas, and also
+#     returns mean(roughness) and var(roughness)?
+#     :param path: directory name of statistics of tArrivals
+#     :return: np array of perimeters, areas, and time, and mean(roughness), var(roughness)
+#     """
+#     filelist = sorted(os.listdir(path))
+#     # initialize array of Roughness
+#     PerimeterList = []
+#     AreaList = []
+#     TimeList = []
+#     RoughnessList = []
+#     dist = []
+#     dist2 = []
+#     for file in filelist:
+#         tArrival = np.load(f'{path}/{file}')['tArrival']
+#         tempP, tempA, tempR, tempD, tempD2, tempT = getRoughnessOld(tArrival) #p, a, r, d, d2, t
+#         # for each file append the arrays of p,a,t to the list
+#         PerimeterList.append(tempP)
+#         AreaList.append(tempA)
+#         TimeList.append(tempT)
+#         RoughnessList.append(tempR)
+#         dist.append(tempD)
+#         dist2.append(tempD2)
+#     # pre-emptively just set t to be what it should, calc mean and var of roughness
+#     TimeList = np.mean(TimeList, 0)
+#     roughMean = np.mean(RoughnessList, 0)
+#     roughVar = np.var(RoughnessList, 0)
+#     # calculate roughness
+#     return np.array(PerimeterList), np.array(AreaList), roughMean, roughVar, dist, dist2, np.array(TimeList)
