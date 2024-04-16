@@ -3,7 +3,6 @@ import os
 from scipy.ndimage import morphology as m
 # import time
 import csv
-import npquad
 
 
 def doubleArray(array, arraytype, fillValue=0):
@@ -375,7 +374,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
     line_indeces = [getLineIndeces(occ, r) for r in Rs]
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts:
             probs = [1 - np.sum(occ[idx]) for idx in indeces]
@@ -436,7 +435,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts: 
             Rs = list(np.array(vs * t).astype(int))
@@ -497,13 +496,22 @@ def measureLineProb(tMax, L, R, vs, distribution, params, lineSaveFile):
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     vs = np.array(vs)
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts:
-            Rs = list(np.array(vs * t).astype(int))
-            print(Rs)
-            # Get probabilities outside line
-            probs = [np.sum(occ[xx >= r]) for r in Rs]
+            Rs = np.array(vs * t).astype(int)
+            # You might want to flip things to get the tail cdf, but it shouldn't matter
+            xCDF = np.flip(np.cumsum(np.sum(occ, axis=1)))
+            
+            indeces = Rs + L
+            indeces_outside_array = indeces >= len(xCDF)
+            indeces[indeces_outside_array] = 0
+
+            probs = xCDF[indeces]
+            probs[indeces_outside_array] = 0
+            
+            # Don't do this line
+            # probs = [np.sum(occ[xx >= r]) for r in Rs]
             writer_line.writerow([t, *probs])
             f_line.flush()
 
@@ -555,7 +563,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts: 
             Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
