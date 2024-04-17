@@ -50,12 +50,14 @@ def executeMoves(occupancy, i, j, rng, distribution, PDF, params=None):
     """
     # Generate biases for each site
     biases = getRandVals(distribution, rng, i.shape[0], params)
-
     # On newer numpy we can vectorize to compute the moves
     if PDF:  # if doing PDF then multiply by biases
+        occupancy = occupancy.astype(np.float)  # since the PDF requires floats but the agents require ints, cast correctly
         moves = occupancy[i, j].reshape(-1, 1) * biases  # reshape -1 takes the shape of occupancy
     else:
+        occupancy = occupancy.astype(int) # since the PDF requires floats but the agents require ints, cast correctly
         moves = rng.multinomial(occupancy[i, j], biases)
+    print("Occupancy dtype (execute moves): ",occupancy.dtype)
     # Note that we can use the same array because we're doing checkerboard moves
     # If we want to use a more general jump kernel we need to use a new (empty) copy of the space
     occupancy[i, j - 1] += moves[:, 0]  # left
@@ -77,7 +79,7 @@ def changeArraySize(array, size, fillval):
     length = (array.shape[0]) // 2
     newsize = size // 2
     if length < size:
-        newArray = np.full((2 * newsize + 1, 2 * newsize + 1), fillval, dtype=int)
+        newArray = np.full((2 * newsize + 1, 2 * newsize + 1), fillval, dtype=array.dtype)
         newArray[newsize - length:newsize + length + 1, newsize - length:newsize + length + 1] = array
     else:
         newArray = array
@@ -85,7 +87,7 @@ def changeArraySize(array, size, fillval):
 
 
 # main functions & generators + wrappers
-def evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype, startT=1,
+def evolve2DLattice(occupancy, maxT, distribution, params, PDF, startT=1,
                     rng=np.random.default_rng(), boundary=True):
     """
     generator; evolves agents in a 2D lattice out to some time maxT with dynamic scaling.
@@ -94,7 +96,6 @@ def evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype, startT=
     :param distribution: string, specify the distribution of biases
     :param params: parameters of distribution
     :param PDF: boolean; if true then multiplies biases; if false then evolves agents
-    :param occtype: the dtype of the occupancy array (int for agents, float for pdf)
     :param startT: optional; time you want to start at; default 1
     :param rng: the numpy random number generator obj(default np.random.default_rng() )
     :param boundary: (numpy array) boundary conditions should be same size as occupancy
@@ -111,11 +112,14 @@ def evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype, startT=
         if ((np.min([i, j]) <= 0)
                 or (np.max([i, j]) >= np.min(occupancy.shape) - 1)
                 and not (isinstance(boundary, np.ndarray))):
-            occupancy = doubleArray(occupancy, occtype)
+            occupancy = doubleArray(occupancy, occupancy.dtype)
             # These next two lines are a waste; we could just do index translation
             sites = (occupancy != 0)
             i, j = np.where(sites & boundary)
+        print("Occupancy dtype (before executeMoves in evolve2DLattice: ",occupancy.dtype)
         occupancy = executeMoves(occupancy, i, j, rng, distribution, PDF, params)
+        occupancy = occupancy.astype(np.quad)
+        print("Occupancy dtype (after executeMoves in evolve2DLattice: ",occupancy.dtype)
         yield t, occupancy
 
 
@@ -131,38 +135,35 @@ def generateFirstArrivalTime(occupancy, maxT, distribution, params, PDF, startT=
     :return occ: the final evolved occupancy array
     :return tArrival: the array with the time of first arrival for every site in the occupancy array
     """
-    notYetArrived = -1
+    notYetArrived = np.nan
     if PDF and occupancy != 1:
         print("Warning: You are trying to evolve a PDF with N!= 1, so it won't be normalized.")
     # deal with the dtype messiness depending on if you want agents or a PDF
-    if PDF:
-        occtype = float
-    else:
-        occtype = int
     # if given a scalar (ie NParticles or something), initializes array
     if distribution == 'dirichlet':
         params = float(params)
     else:
         params = None
     if np.isscalar(occupancy):
-        occupancy = np.array([[occupancy]], dtype=occtype)
+        occupancy = np.array([[occupancy]], dtype=np.quad) #set the dtype as npquad for occ
     # initialize the array to throw in the time of first arrivals
-    tArrival = np.copy(occupancy)
+    tArrival = np.copy(occupancy) #this is a copy of occ so it should also have npquad type
     tArrival[:] = notYetArrived
+    tArrival[occupancy > 0] = 0
+    print("occ & tArr dtype (generateFirstArrival): ",occupancy.dtype, tArrival.dtype)
     # use evolve2DLattice to evolve; record tArrivals and throw them into array as lattice evolves
-    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype):
+    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF):
         if tArrival.shape[0] != occ.shape[0]:
             # Note: this is fragile, we assume that doubling tArrival will always work
-            tArrival = doubleArray(tArrival, arraytype=int, fillValue=notYetArrived)
-        tArrival[(occ > 0) & (tArrival == notYetArrived)] = t
-        # if t % 1000 == 0:
-        #     np.savez_compressed(f"testData3/t{t}.npz", tArrival=tArrival, occ=occ)
+            tArrival = doubleArray(tArrival, arraytype=tArrival.dtype, fillValue=notYetArrived)
+        tArrival[(occ > 0) & np.isnan(tArrival)] = np.quad(t)
+        print("tArrival (generateFirstArrival): ",tArrival)
     return tArrival, occ
 
 
 # wrapper for evolve2DLattice
-def run2dAgent(occupancy, maxT, distribution, params, PDF, occtype):
-    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF, occtype):
+def run2dAgent(occupancy, maxT, distribution, params, PDF):
+    for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, PDF):
         pass
     return t, occ
 
@@ -180,9 +181,8 @@ def getTArrivalMeanAndVar(path):
     :return goodData: the mask, so you only look at the stuff where every agent has gotten to
     """
     filelist = sorted(os.listdir(path))
-    notYetArrived = -1
+    notYetArrived = np.nan
     # initialize the moments & mask
-    # tArrMom1, tArrMom2, goodData = None, None, None
     tArrMom1 = None  # moment 1 is just t
     tArrMom2 = None  # moment 2 is t**2
     goodData = None  # the mask
@@ -194,22 +194,21 @@ def getTArrivalMeanAndVar(path):
         if tArrMom1 is None:
             tArrMom1 = tArrival
             tArrMom2 = tArrival ** 2
-            goodData = (tArrival != -1)
+            goodData = (tArrival != notYetArrived)
         # if you are somewhere in the middle of the list, first check that the array sizes will be the same
         # or alternatively make them the same
         else:
             if tArrMom1.shape[0] < tArrival.shape[0]:
                 # if not the same size, change the moment arrays to be the same size
                 # as the incoming tArrival array
-                tArrMom1 = changeArraySize(tArrMom1, tArrival.shape[0], notYetArrived)
-                tArrMom2 = changeArraySize(tArrMom2, tArrival.shape[0], notYetArrived)
-                goodData = changeArraySize(goodData, tArrival.shape[0], notYetArrived)
+                tArrMom1 = changeArraySize(tArrMom1, tArrival.shape[0], fillval=notYetArrived)
+                tArrMom2 = changeArraySize(tArrMom2, tArrival.shape[0], fillval=notYetArrived)
+                goodData = changeArraySize(goodData, tArrival.shape[0], fillval=False)
             if tArrMom1.shape[0] > tArrival.shape[0]:
                 # if not the same size, change the moment arrays to be the same size
                 # as the incoming tArrival array
                 tArrival = changeArraySize(tArrival, tArrMom1.shape[0], notYetArrived)
             # now cumulatively add the moments
-            # need to deal with the -1 thing... my variance has a range of -20 to 0
             goodData *= (tArrival != notYetArrived)
             tArrMom1 += tArrival * goodData
             tArrMom2 += (tArrival * goodData) ** 2
@@ -244,7 +243,7 @@ def getPerimeterAreaTau(tArrivalArray, tau):
     :return: boundaryDist: the <(distance to origin of boundary)> (to calculate moments) at time tau
     :return: boundaryDist2: the <(dist to origin of boundary)**2> (to calculate moments) at time tau
     """
-    notYetArrived = -1
+    notYetArrived = np.nan
     mask = ((tArrivalArray <= tau) & (tArrivalArray > notYetArrived))
     boundary = (mask ^ m.binary_erosion(mask))
     # get distance to origin of boundary points
