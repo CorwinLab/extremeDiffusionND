@@ -17,7 +17,7 @@ def saveVars(vars, save_file):
 		json.dump(vars, file)
 
 if __name__ == '__main__': 
-	# tMax, L, topDir, distribution, params, sysID = '5000', '2000', '.', 'dirichlet', '4', '0'
+	# tMax, L, topDir, distribution, params, sysID = '100', '5', '.', 'dirichlet', '4', '0'
 	tMax, L, topDir, distribution, params, sysID = sys.argv[1:]
 
 	L = int(L)
@@ -30,7 +30,7 @@ if __name__ == '__main__':
 		params = None
 
 	R = L - 1
-	vs = np.arange(0.2, 1 + 0.05, step=0.05)
+	vs = np.arange(0.1, 1 + 0.05, step=0.05)
 	
 	varsFile = os.path.join(topDir, 'variables.json')
 	vars = {"tMax": tMax, 
