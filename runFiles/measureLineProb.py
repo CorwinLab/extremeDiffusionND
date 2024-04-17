@@ -1,6 +1,6 @@
 import sys 
 sys.path.append("../")
-from evolve2DLattice import measureAtVsOnSphere
+from evolve2DLattice import measureLineProb
 import numpy as np
 import json 
 import os
@@ -17,7 +17,7 @@ def saveVars(vars, save_file):
 		json.dump(vars, file)
 
 if __name__ == '__main__': 
-	# tMax, L, topDir, distribution, params, sysID = '1000', '100', '.', 'dirichlet', '4', '0'
+	# tMax, L, topDir, distribution, params, sysID = '5000', '2000', '.', 'dirichlet', '4', '0'
 	tMax, L, topDir, distribution, params, sysID = sys.argv[1:]
 
 	L = int(L)
@@ -30,8 +30,8 @@ if __name__ == '__main__':
 		params = None
 
 	R = L - 1
-	vs = np.unique(np.geomspace(1/100, 1, num=21))
-
+	vs = np.arange(0.2, 1 + 0.05, step=0.05)
+	
 	varsFile = os.path.join(topDir, 'variables.json')
 	vars = {"tMax": tMax, 
 		 	"L": L,
@@ -39,11 +39,10 @@ if __name__ == '__main__':
 			"vs": vs,
 			"distribution": distribution,
 			"params": params,
-			"sphereSaveFile": sphereSaveFile, 
 			"lineSaveFile": lineSaveFile}
 	
 	if int(sysID) == 0:
 		saveVars(vars, varsFile)
 
-	# measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, lineSaveFile):
-	measureAtVsOnSphere(tMax, L, R, vs, distribution, params, sphereSaveFile, lineSaveFile)
+	# measureLineProb(tMax, L, R, vs , distribution, params, lineSaveFile):
+	measureLineProb(**vars)

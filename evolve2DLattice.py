@@ -3,7 +3,6 @@ import os
 from scipy.ndimage import morphology as m
 # import time
 import csv
-import npquad
 
 
 def doubleArray(array, arraytype, fillValue=0):
@@ -374,7 +373,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
     line_indeces = [getLineIndeces(occ, r) for r in Rs]
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts:
             probs = [1 - np.sum(occ[idx]) for idx in indeces]
@@ -435,10 +434,10 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts: 
-            Rs = list(np.array(vs * t**(3/4)).astype(int))
+            Rs = list(np.array(vs * t).astype(int))
             
             indeces = [getIndecesInsideSphere(occ, r) for r in Rs]
             line_indeces = [getLineIndeces(occ, r) for r in Rs]
@@ -454,6 +453,69 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
     f_line.close()
     f.close()
+
+def measureLineProb(tMax, L, R, vs, distribution, params, lineSaveFile):
+    '''
+    Parameters
+    ----------
+    L : int 
+        Radius of size of box
+
+    tMax : int 
+        Maximum time to iterate to
+
+    R : float
+        Radius of circle for circular boundary conditions
+    
+    Example
+    -------
+    tMax = 100
+    L = 250
+    R = L-1
+    Rs = [5, 10]
+    linefile = 'Line.txt'
+    distribution = 'dirichlet'
+    params = 1/10
+    measureOnSphere(tMax, L, R, Rs, distribution, params, linefile)
+    '''
+
+    f_line = open(lineSaveFile, 'a')
+    writer_line = csv.writer(f_line)
+    writer_line.writerow(['Time', *vs])
+
+    # Create occupancy array
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    
+    x = np.arange(-L, L+1)
+    xx, yy = np.meshgrid(x, x)
+    dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+    boundary = dist_to_center <= R
+
+    ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+    vs = np.array(vs)
+    # Need to make sure occ doesn't change size
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
+        # Get probabilities inside sphere
+        if t in ts:
+            Rs = np.array(vs * t).astype(int)
+            # You might want to flip things to get the tail cdf, but it shouldn't matter
+            xCDF = np.flip(np.cumsum(np.sum(occ, axis=1)))
+            
+            indeces = Rs + L
+            indeces_outside_array = indeces >= len(xCDF)
+            indeces[indeces_outside_array] = 0
+
+            probs = xCDF[indeces]
+            probs[indeces_outside_array] = 0
+            
+            # Don't do this line
+            # probs = [np.sum(occ[xx >= r]) for r in Rs]
+            writer_line.writerow([t, *probs])
+            f_line.flush()
+
+    f_line.close()
+
 
 def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, lineSaveFile):
     '''
@@ -500,7 +562,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 
     ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
     # Need to make sure occ doesn't change size
-    for t, occ in evolve2DLattice(occ, tMax, distribution, True, float, params=params, boundary=boundary):
+    for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, float, boundary=boundary):
         # Get probabilities inside sphere
         if t in ts: 
             Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
