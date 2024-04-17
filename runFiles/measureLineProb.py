@@ -17,7 +17,7 @@ def saveVars(vars, save_file):
 		json.dump(vars, file)
 
 if __name__ == '__main__': 
-	# tMax, L, topDir, distribution, params, sysID = '100', '5', '.', 'dirichlet', '4', '0'
+	# tMax, L, topDir, distribution, params, sysID = '5000', '2000', '.', 'dirichlet', '4', '0'
 	tMax, L, topDir, distribution, params, sysID = sys.argv[1:]
 
 	L = int(L)
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 			"vs": vs,
 			"distribution": distribution,
 			"params": params,
-			"lineSaveFile": lineSaveFile}
+			"saveFile": lineSaveFile}
 	
 	if int(sysID) == 0:
 		saveVars(vars, varsFile)

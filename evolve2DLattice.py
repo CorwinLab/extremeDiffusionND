@@ -51,12 +51,12 @@ def executeMoves(occupancy, i, j, rng, distribution, PDF, params=None):
 	biases = getRandVals(distribution, rng, i.shape[0], params)
 	# On newer numpy we can vectorize to compute the moves
 	if PDF:  # if doing PDF then multiply by biases
-		occupancy = occupancy.astype(np.float)  # since the PDF requires floats but the agents require ints, cast correctly
+		occupancy = occupancy.astype(np.float64)  # since the PDF requires floats but the agents require ints, cast correctly
 		moves = occupancy[i, j].reshape(-1, 1) * biases  # reshape -1 takes the shape of occupancy
 	else:
 		occupancy = occupancy.astype(int) # since the PDF requires floats but the agents require ints, cast correctly
 		moves = rng.multinomial(occupancy[i, j], biases)
-	print("Occupancy dtype (execute moves): ",occupancy.dtype)
+	# print("Occupancy dtype (execute moves): ",occupancy.dtype)
 	# Note that we can use the same array because we're doing checkerboard moves
 	# If we want to use a more general jump kernel we need to use a new (empty) copy of the space
 	occupancy[i, j - 1] += moves[:, 0]  # left
@@ -115,10 +115,8 @@ def evolve2DLattice(occupancy, maxT, distribution, params, PDF, startT=1,
 			# These next two lines are a waste; we could just do index translation
 			sites = (occupancy != 0)
 			i, j = np.where(sites & boundary)
-		print("Occupancy dtype (before executeMoves in evolve2DLattice: ",occupancy.dtype)
 		occupancy = executeMoves(occupancy, i, j, rng, distribution, PDF, params)
-		occupancy = occupancy.astype(np.quad)
-		print("Occupancy dtype (after executeMoves in evolve2DLattice: ",occupancy.dtype)
+		occupancy = occupancy.astype(np.float64)
 		yield t, occupancy
 
 
@@ -484,9 +482,11 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	if os.path.exists(saveFile):
 		data = pd.read_csv(saveFile)
 		max_time = max(data['Time'].values)
-		if max_time == max(ts):
+		if max_time == ts[-2]:
+			print(f"File Finished{f}", flush=True)
 			sys.exit()
 		ts = ts[ts > max_time]
+		print(f"Starting at: {ts[0]}", flush=True)
 		write_header = False
 
 	# Set up writer and write header if save file doesn't exist
@@ -504,10 +504,10 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	xx, yy = np.meshgrid(x, x)
 	dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
 	boundary = dist_to_center <= R
-
+	
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, 
-								  True, float, boundary=boundary):
+								  True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts:
 			Rs = np.array(vs * t).astype(int)
