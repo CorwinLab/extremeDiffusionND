@@ -30,7 +30,7 @@ if __name__ == '__main__':
 		params = None
 
 	R = L - 1
-	vs = np.arange(0.2, 1 + 0.05, step=0.05)
+	vs = np.arange(0.1, 1 + 0.05, step=0.05)
 	
 	varsFile = os.path.join(topDir, 'variables.json')
 	vars = {"tMax": tMax, 
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 			"vs": vs,
 			"distribution": distribution,
 			"params": params,
-			"lineSaveFile": lineSaveFile}
+			"saveFile": lineSaveFile}
 	
 	if int(sysID) == 0:
 		saveVars(vars, varsFile)
