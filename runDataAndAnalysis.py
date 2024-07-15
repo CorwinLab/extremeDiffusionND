@@ -3,55 +3,49 @@ import sys
 import os
 import numpy as np
 
-# 8 April changing all dirichlet --> distribution and getRoughness to getRoughnessNew... add params
-# 9 April getRoughnessNew --> getRoughness
-#TODO: fix to incorporate that roughness now computed w/in the loop
-def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, PDF):
-    # check if path exists or create if doesnt; also create ANOTHER directory to throw statistics into
-    print("top of runDataAndAnalysis PDF", PDF, type(PDF))
+
+#TODO: add in absorbing boundary as a parameter
+def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, PDF, absorbingradius):
     path = f"{directory}"
-    statsPath = f"{directory}"+"Statistics"
     if PDF:  # to better label directories
         path = path + "PDF"
-        # statsPath = path + "Statistics" (Don't need b/c stats in generator loop now)
-    if not os.path.exists(path):
+    else:
+        path = path + "Agents"
+    if not os.path.exists(path):  # check if exists already, create if doesn't
         os.mkdir(path)
-        # os.mkdir(statsPath)
         print(f"{path} has been created.")
-
     if PDF:  # if evolving PDF then use evolvePDF, save the relevant stuff
-        print("right before ev.evolvePDF", PDF, type(PDF))
-        pdf, cdf, cdfStats = ev.evolvePDF(MaxT, distribution, params)
-        # save the PDF, CDF, & CDF Stats to the directory with the systID as the filename
-        np.savez_compressed(f"{path}/{sysID}.npz", pdf = pdf, cdf = cdf, cdfStats = cdfStats)
-        #TODO: rewrite once i split generateFirstArrival
-        # # now I want to do the analysis. on tArrival arrays (if agents)
-        # if not PDF:
-        #     statistics = ev.getRoughness(tArrival)
-        #     # statistics = ev.getTArrivalRoughness(tArrival) # 29 Apr testing new functions for get Rougheness
-        # else:  # if you are doing PDFs then we'll want the PDF roughness stats
-        #     statistics = ev.getRoughness(occ)
-        # np.save(f"{statsPath}/{sysID}.npy", statistics)  # since outputs one array, use np.save and .npy
+        pdf, integratedPDF, pdfStats, integratedPDFStats, time, boundary = ev.evolvePDF(MaxT, distribution,
+                                                                    params, startT=1,
+                                                                    absorbingRadius = absorbingradius)
+        np.savez_compressed(f"{path}/{sysID}.npz", pdf=pdf, integratedPDF=integratedPDF, pdfStats=pdfStats,
+                            integratedPDFStats=integratedPDFStats, time=time, absorbingBoundary=boundary)
     else:  # if evolving agents then use evolveAgents, save relevant stuff
-        tArrival, occ, tArrStats = ev.evolveAgents(occupancy, MaxT, distribution, params)
-        np.savez_compressed(f"{path}/{sysID}.npz",tArrival = tArrival, occupancy = occ, tArrivalStats = tArrStats)
-        print(f"Saved {path}/{sysID}.npz")
+        tArrival, occ, tArrStats, boundary, times  = ev.evolveAgents(occupancy, MaxT, distribution,
+                                                   params, startT=1, absorbingRadius=absorbingradius)
+        np.savez_compressed(f"{path}/{sysID}.npz",tArrival = tArrival, occupancy = occ, tArrivalStats = tArrStats, absorbingBoundary=boundary,times=times)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 9:
+    if len(sys.argv) != 10:
         print("Usage: runDataAndAnalysis.py <directoryName> <system ID> <occupancy> "
-              "<maxT> <distribtuion> <params> <PDF> <number of systems>")
+              "<maxT> <distribtuion> <params> <PDF> <number of systems> <absorbingRadius>")
         sys.exit(1)
     directoryName = sys.argv[1]  # String
     sysID = int(sys.argv[2])  # Integer
     occupancy = int(float(sys.argv[3]))  # Integer, cast from float to allow for scientific notation
     MaxT = int(sys.argv[4])  # Integer
-    # dirichlet = eval(sys.argv[5])  # Bool
     distribution = str(sys.argv[5])  # string for distribution name
     params = sys.argv[6]  # i think this needs to be a list
     PDF = eval(str(sys.argv[7]))  # Bool
     numSystems = int(sys.argv[8])  # Integer (why do I have this..)
-
+    for i in range(0,10):
+        print(f"sys.argv{i}= {sys.argv[i]}, type = {type(sys.argv[i])}")
+    if sys.argv[9] == 'off':  # this is maybe a dumb way to correctly cast the absorbing radius parameter
+        absorbingradius = str(sys.argv[9])
+    elif sys.argv[9] == 'None':
+        absorbingradius = None
+    else:
+        absorbingradius = int(sys.argv[9])
     for i in range(numSystems):
-        runDataAndAnalysis(directoryName, sysID + i, occupancy, MaxT, distribution, params, PDF)
+        runDataAndAnalysis(directoryName, sysID + i, occupancy, MaxT, distribution, params, PDF, absorbingradius)
