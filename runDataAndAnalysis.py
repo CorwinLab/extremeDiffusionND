@@ -2,9 +2,9 @@ import evolve2DLattice as ev
 import sys
 import os
 import numpy as np
+import argparse as ap
 
-
-#TODO: add in absorbing boundary as a parameter
+# OLD VERSION
 def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, PDF, absorbingradius):
     path = f"{directory}"
     if PDF:  # to better label directories
@@ -23,7 +23,8 @@ def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, 
     else:  # if evolving agents then use evolveAgents, save relevant stuff
         tArrival, occ, tArrStats, boundary, times  = ev.evolveAgents(occupancy, MaxT, distribution,
                                                    params, startT=1, absorbingRadius=absorbingradius)
-        np.savez_compressed(f"{path}/{sysID}.npz",tArrival = tArrival, occupancy = occ, tArrivalStats = tArrStats, absorbingBoundary=boundary,times=times)
+        np.savez_compressed(f"{path}/{sysID}.npz",tArrival = tArrival, occupancy = occ,
+                            tArrivalStats = tArrStats, absorbingBoundary=boundary,times=times)
 
 
 if __name__ == "__main__":

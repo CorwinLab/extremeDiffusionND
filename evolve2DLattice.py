@@ -39,6 +39,7 @@ def getRandVals(distribution, rng, shape, params):
 	elif distribution == 'SSRW':
 		biases = np.full([shape, 4], 1 / 4)
 	elif distribution == 'dirichlet':
+		params = float(params)
 		biases = rng.dirichlet([params] * 4, shape)
 	else:  # catchall in case inputted distribution isn't one of these.
 		print(f"Specified distribution: {distribution} is not an option. 'uniform', 'SSRW', or 'dirichlet' allowed."
@@ -163,6 +164,14 @@ def getListOfTimes(maxT,startT=1):
 	"""
 	return np.unique(np.geomspace(startT+3, maxT, round(10 * np.log10(maxT))).astype(int))
 
+def getListOfNs():
+	"""
+	return a list of particle numbers between 100 and 1e301
+	:return:
+	"""
+	# to get n = 1e2 - 1e10, then in increments of 50
+	return 10. ** np.hstack([np.arange(2, 11, 2), np.arange(50, 301, 50)])
+
 def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boundaryScale=5, listOfTimes = None, listOfNs = None):
 	"""
 	Evolves a RWRE PDF and integrated PDF on a 2DLattice with dynamic scaling.
@@ -195,7 +204,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boun
 	if listOfTimes is None:
 		listOfTimes = getListOfTimes(maxT, startT=startT)
 	if listOfNs is None:
-		listOfNs = 10. ** np.hstack([np.arange(2, 11, 2), np.arange(50, 301, 50)])  # to get n = 1e2 - 1e10, then in increments of 50
+		listOfNs = getListOfNs()
 	# Run the data and stats generation loop
 	for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, True, boundary=absorbingBoundary):
 		integratedPDF += occ
@@ -208,7 +217,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boun
 			PDFstats, integratedPDFStats = organizePDFStats(occ, integratedPDF, listOfNs, PDFstats, integratedPDFStats)
 	return occ, integratedPDF, np.array(PDFstats), np.array(integratedPDFStats), listOfTimes, absorbingBoundary
 
-def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadius = None, listOfTimes = None):
+def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadius = False, listOfTimes = None):
 	"""
 	Evolves a 2DLattice with dynamic scaling.
 	:param occupancy: initial occupancy, can be a number (NParticles) or an existing array
@@ -221,10 +230,6 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	:return tArrival: the array with the time of first arrival for every site in the occupancy array
 	"""
 	notYetArrived = np.nan #-1
-	if distribution == 'dirichlet':
-		params = float(params)
-	else:
-		params = None
 	if np.isscalar(occupancy):  # if given a scalar (ie NParticles or something), initializes array
 		NParticles = occupancy
 		occupancy = np.array([[NParticles]], dtype=float)
@@ -235,7 +240,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	else:  # if there is a boundary, initialize occupancy as fixed lattice size
 		occupancy = np.zeros((2*maxT+1,2*maxT+1), dtype=float)
 		occupancy[maxT, maxT] = NParticles
-		if absorbingRadius is None:
+		if absorbingRadius == False:
 			absorbingRadius = 2 * np.sqrt(maxT * np.log(NParticles))  # calculate absorbingRadius
 		absorbingBoundary = prepareBoundary(maxT, absorbingRadius)  # and get the mask for the boundary
 	# initialize necessary arrays and variables
@@ -255,7 +260,6 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 		elif t in listOfTimes:
 			stats = organizeTArrivalStats(t, tArrival, stats)
 	return tArrival.astype(np.quad), occ, np.array(stats), absorbingBoundary
-
 def run2DAgent(*args, **kwargs):
 	"""
 	copy of run2DAgent but using *args and **kwargs instead
