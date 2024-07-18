@@ -1,5 +1,5 @@
 import evolve2DLattice as ev
-import sys
+# import sys
 import os
 import numpy as np
 import argparse as ap
@@ -12,8 +12,7 @@ def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, 
     else:
         path = path + "Agents"
     if not os.path.exists(path):  # check if exists already, create if doesn't
-        os.mkdir(path)
-        print(f"{path} has been created.")
+        os.makedirs(path)
     if PDF:  # if evolving PDF then use evolvePDF, save the relevant stuff
         pdf, integratedPDF, pdfStats, integratedPDFStats, time, boundary = ev.evolvePDF(MaxT, distribution,
                                                                     params, startT=1,
@@ -28,25 +27,21 @@ def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, 
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 10:
-        print("Usage: runDataAndAnalysis.py <directoryName> <system ID> <occupancy> "
-              "<maxT> <distribtuion> <params> <PDF> <number of systems> <absorbingRadius>")
-        sys.exit(1)
-    directoryName = sys.argv[1]  # String
-    sysID = int(sys.argv[2])  # Integer
-    occupancy = int(float(sys.argv[3]))  # Integer, cast from float to allow for scientific notation
-    MaxT = int(sys.argv[4])  # Integer
-    distribution = str(sys.argv[5])  # string for distribution name
-    params = sys.argv[6]  # i think this needs to be a list
-    PDF = eval(str(sys.argv[7]))  # Bool
-    numSystems = int(sys.argv[8])  # Integer (why do I have this..)
-    for i in range(0,10):
-        print(f"sys.argv{i}= {sys.argv[i]}, type = {type(sys.argv[i])}")
-    if sys.argv[9] == 'off':  # this is maybe a dumb way to correctly cast the absorbing radius parameter
-        absorbingradius = str(sys.argv[9])
-    elif sys.argv[9] == 'None':
-        absorbingradius = None
-    else:
-        absorbingradius = int(sys.argv[9])
-    for i in range(numSystems):
-        runDataAndAnalysis(directoryName, sysID + i, occupancy, MaxT, distribution, params, PDF, absorbingradius)
+    # initialize argparse
+    parser = ap.ArgumentParser()
+    parser.add_argument('directoryName', type=str, help=" specify directory to which data is saved")
+    parser.add_argument('occupancy', type=float, help='specify initial occupancy of lattice')
+    parser.add_argument('maxT', type=int, help='specify maximum time to which lattice is evolved')
+    parser.add_argument('distribution', type=str, choices=['uniform', 'dirichlet', 'SSRW'],
+                        help='specify "uniform", "dirichlet", or "SSRW" as the distribution from which biases are drawn')
+    parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now)')
+    parser.add_argument('--isPDF', action='store_true', help='a boolean switch to turn pdf on')
+    parser.add_argument('--isNotPDF', action='store_false', dest='isPDF', help='boolean switch to turn off pdf')
+    parser.add_argument('--absorbingRadius', type=int, default=False,
+                        help='specify the radius of absorbing boundary, if <0 then no boundary, if not specified then uses default scaling')
+    parser.add_argument('sysID', type=int, help='system ID passed in; should be the slurm array number')
+    args = parser.parse_args()
+
+    # call it once, instead of numSys
+    runDataAndAnalysis(args.directoryName, args.sysID, args.occupancy, args.maxT,
+                           args.distribution, args.params, args.isPDF, args.absorbingRadius)

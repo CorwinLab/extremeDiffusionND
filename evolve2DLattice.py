@@ -23,8 +23,6 @@ def changeArraySize(array, size, fillval):
 		newArray = array
 	return newArray
 
-
-
 def getRandVals(distribution, rng, shape, params):
 	"""
 	Get random values across the lattice with specified shape according to the specified distribution
@@ -42,13 +40,13 @@ def getRandVals(distribution, rng, shape, params):
 		params = float(params)
 		biases = rng.dirichlet([params] * 4, shape)
 	else:  # catchall in case inputted distribution isn't one of these.
+		# maybe take out the print statement once i move to talapas?
 		print(f"Specified distribution: {distribution} is not an option. 'uniform', 'SSRW', or 'dirichlet' allowed."
 			  "\n Default to SSRW Distribution")
-		biases = np.full([shape,4], 1/4)
+		biases = np.full([shape, 4], 1/4)
 	return biases
 
-
-def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionpParams=None):
+def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionParams=None):
 	"""
 	Evolves 2Dlattice according to a distribution, with the option to evolve agents or the PDF
 	:param occupancy: the array you are working in or the initial occupancy
@@ -56,11 +54,11 @@ def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionpParams=
 	:param rng: numpy random number generator (should be np.random.default_rng() passed in)
 	:param distribution: string specifying distribution you are using to generate biases
 	:param isPDF: boolean; if true then multiplies biases; if false then draws multinomial\
-	:param params: the parameters of the distribution
+	:param distributionParams: the parameters of the distribution
 	:return occupancy: the new occupancy after moving everything
 	"""
 	# Generate biases for each site
-	biases = getRandVals(distribution, rng, i.shape[0], distributionpParams)#.astype(np.quad)
+	biases = getRandVals(distribution, rng, i.shape[0], distributionParams).astype(np.quad)
 	# On newer numpy we can vectorize to compute the moves
 	if isPDF:  # if doing PDF then multiply by biases
 		moves = occupancy[i, j].reshape(-1, 1) * biases
@@ -83,7 +81,7 @@ def evolve2DLattice(occupancy, maxT, distribution, params, isPDF, startT=1,
 	:param maxT: timestep you want to go out to
 	:param distribution: string, specify the distribution of biases; see getRandVals for options
 	:param params: parameters of distribution
-	:param PDF: boolean; if true then multiplies biases; if false then evolves agents
+	:param isPDF: boolean; if true then multiplies biases; if false then evolves agents
 	:param startT: optional; time you want to start at; default 1
 	:param rng: the numpy random number generator obj(default np.random.default_rng() )
 	:param boundary: (numpy array of bools) boundary conditions should be same size as occupancy.
@@ -131,9 +129,9 @@ def organizePDFStats(occ, integratedPDF, listOfNs, firstPDFStats, firstIntegrate
 	:param t, occ: the t, occ in the evolve2DLattice generator
 	:param integratedPDF: pass in the integratedPDF which is +=occ at every timestep
 	:param listOfNs: array; values of N at which you want to calc. roughness stats
-	:param listOfTimes: array; values of t at which you want to calc. roughness stats
-	:param startT: optional, default=1; the initial time at which to evolve lattice
-	:return: PDFstats, integratedPDFStats: two arrays
+	:param firstPDFStats, firstIntegratedPDFStats: the initial stats that start the picket fence (?)
+	:return: PDFstats, integratedPDFStats: two arrays;shape is (time, N's, stats); statsN0 = stats[:,0,:]
+		stats are: perimeter, area, roughness, radius moment 1,radius moment 2, N
 	"""
 	# update the integratedPDF stats
 	tempIntegratedPDFStats = np.expand_dims(np.array([getContourRoughness(integratedPDF, N) for N in listOfNs]), axis=0)
@@ -149,17 +147,19 @@ def organizeTArrivalStats(t, tArrival, firstStats):
 	reshape and combine the tArrival roughness stats into one array as lattice is evolved
 	:param t: the t in the evolve2D lattice generator
 	:param tArrival: array of tArrivals from evolveAgents
-	:param firstStats: the
-	:return: stats:
+	:param firstStats: the initial stats that start the picket fence (?)
+	:return: stats: an array of shape (time, stat) and the stats are: perimeter, area, roughness,
+		radius moment1, randius moment 2, tau (time)
 	"""
 	tempstats = np.array(getTArrivalRoughness(tArrival, t))
 	stats = np.vstack((firstStats, tempstats))
 	return stats
 
-def getListOfTimes(maxT,startT=1):
+def getListOfTimes(maxT, startT=1):
 	"""
 	Generate a list of times, with approx. 10 times per decade (via np.geomspace), out to time maxT
 	:param maxT: the maximum time to which lattice is being evolved
+	:param startT: initial time at which lattice evolution is started
 	:return: the list of times
 	"""
 	return np.unique(np.geomspace(startT+3, maxT, round(10 * np.log10(maxT))).astype(int))
@@ -172,7 +172,7 @@ def getListOfNs():
 	# to get n = 1e2 - 1e10, then in increments of 50
 	return 10. ** np.hstack([np.arange(2, 11, 2), np.arange(50, 301, 50)])
 
-def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boundaryScale=5, listOfTimes = None, listOfNs = None):
+def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius=None, boundaryScale=5, listOfTimes=None, listOfNs=None):
 	"""
 	Evolves a RWRE PDF and integrated PDF on a 2DLattice with dynamic scaling.
 	Does not return tArrivals b/c theyre deterministic
@@ -183,12 +183,15 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boun
 	:param absorbingRadius: optional parameter to set location of absorbing boundary condition
 		if absorbingRadius <0 >then turns it off; default=None which sets the radius to scale with
 		boundaryScale*np.sqrt(maxT)
+	:param boundaryScale: the coeffence before sqrt(maxT) that sets the default boundary scaling
+	:param listOfTimes: array, list of times at which statistics calculated
+	:param listOfNs: array, list of occupancies/particle numbers for which statistics calculated
 	:return occ: the final evolved occupancy array
 	:return integratedPDF: the final cumulative probabiliity
 	:return integratedPDFStats: the roughness stats of the CDF for list of times and list of Ns
 	:return listofTimes: the times generated/used at which to roughness stats calculated
 	"""
-	occupancy = np.zeros((2*maxT+1, 2*maxT+1), dtype=float)  # initialize occupancy #TODO: return to quad
+	occupancy = np.zeros((2*maxT+1, 2*maxT+1), dtype=np.quad)  # initialize occupancy
 	occupancy[maxT, maxT] = 1
 	# No boundary mask
 	if absorbingRadius < 0:
@@ -200,7 +203,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boun
 		# get boundary
 		absorbingBoundary = prepareBoundary(maxT, absorbingRadius)
 	# Initialize needed variables
-	integratedPDF = np.copy(occupancy)# .astype(np.quad)
+	integratedPDF = np.copy(occupancy) # should inehrit occupancy's dtype
 	if listOfTimes is None:
 		listOfTimes = getListOfTimes(maxT, startT=startT)
 	if listOfNs is None:
@@ -217,7 +220,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius = None, boun
 			PDFstats, integratedPDFStats = organizePDFStats(occ, integratedPDF, listOfNs, PDFstats, integratedPDFStats)
 	return occ, integratedPDF, np.array(PDFstats), np.array(integratedPDFStats), listOfTimes, absorbingBoundary
 
-def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadius = False, listOfTimes = None):
+def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadius=False, listOfTimes=None):
 	"""
 	Evolves a 2DLattice with dynamic scaling.
 	:param occupancy: initial occupancy, can be a number (NParticles) or an existing array
@@ -226,23 +229,24 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	:param params: the parameters of the specified distribution
 	:param startT: optional arg, starts at 1
 	:param absorbingRadius: optional parameter to set location of absorbing boundary condition
+	:param listOfTimes: array, list of times at which statistics calculated
 	:return occ: the final evolved occupancy array
 	:return tArrival: the array with the time of first arrival for every site in the occupancy array
 	"""
-	notYetArrived = np.nan #-1
+	notYetArrived = np.nan
 	if np.isscalar(occupancy):  # if given a scalar (ie NParticles or something), initializes array
 		NParticles = occupancy
-		occupancy = np.array([[NParticles]], dtype=float)
+		occupancy = np.array([[NParticles]], dtype=np.quad)
 	# no boundary
 	if absorbingRadius < 0:
 		absorbingBoundary = None
 	# there is a boundary
 	else:  # if there is a boundary, initialize occupancy as fixed lattice size
-		occupancy = np.zeros((2*maxT+1,2*maxT+1), dtype=float)
+		occupancy = np.zeros((2*maxT+1,2*maxT+1), dtype=np.quad)
 		occupancy[maxT, maxT] = NParticles
 		if absorbingRadius == False:
 			absorbingRadius = 2 * np.sqrt(maxT * np.log(NParticles))  # calculate absorbingRadius
-		absorbingBoundary = prepareBoundary(maxT, absorbingRadius)  # and get the mask for the boundary
+		absorbingBoundary = prepareBoundary(maxT, absorbingRadius)  # get mask for the boundary
 	# initialize necessary arrays and variables
 	tArrival = np.copy(occupancy)  # inherits quads
 	tArrival[:] = notYetArrived
@@ -250,16 +254,17 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	if listOfTimes is None:
 		listOfTimes = getListOfTimes(maxT, startT=startT)
 	# data and stats generation
-	for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, False , boundary=absorbingBoundary):
+	for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, False, boundary=absorbingBoundary):
 		if tArrival.shape[0] != occ.shape[0]:
 			# Note: this is fragile, we assume that doubling tArrival will always work
-			tArrival = changeArraySize(tArrival, 2*tArrival.shape[0],fillval=notYetArrived)
+			tArrival = changeArraySize(tArrival, 2*tArrival.shape[0], fillval=notYetArrived)
 		tArrival[(occ > 0) & (np.isnan(tArrival))] = t  # update tArrival array
 		if t == startT+1:  # initialize stats
 			stats = np.array(getTArrivalRoughness(tArrival, t))  # p, a, r, d, d2, t
 		elif t in listOfTimes:
 			stats = organizeTArrivalStats(t, tArrival, stats)
 	return tArrival.astype(np.quad), occ, np.array(stats), absorbingBoundary
+
 def run2DAgent(*args, **kwargs):
 	"""
 	copy of run2DAgent but using *args and **kwargs instead
@@ -362,7 +367,7 @@ def getTArrivalRoughness(tArrival, tau):
 	# initialize the instantaneousStats w/ the stats at tau=1
 	mask = (tArrival <= tau) & (np.invert(np.isnan(tArrival)))
 	# use getStateRoughness to then calc stats and return them plus time=tau
-	return getStateRoughness(mask)+(tau,) #p, a, r, d, d2, tau
+	return getStateRoughness(mask)+(tau,)  # p, a, r, d, d2, tau
 
 def getContourRoughness(Array, N):
 	"""
@@ -374,7 +379,7 @@ def getContourRoughness(Array, N):
     """
 	mask = (Array >= (1/N))  # binary image
 	roughnessStats = getStateRoughness(mask)  # get roughness vals for that specific 1/N
-	return roughnessStats +(N,)  # p, a, r, d, d2, N
+	return roughnessStats + (N,)  # p, a, r, d, d2, N
 
 def getRoughnessMeanVar(path):
 	"""
@@ -392,7 +397,7 @@ def getRoughnessMeanVar(path):
 	temp = np.load(f'{path}/{filelist[0]}')  # load in 1 so we can check keywords of the npz files
 	if 'tArrStats' or 'tArrivalStats' in temp.files:  # if loading tArrival Stats
 		# throw all stats into one array, so we can take mean and var
-		listOfStats = np.array([np.load(f'{path}/{filelist[i]}')['tArrivalStats'] for i in range(len(filelist))])
+		listOfStats = np.array([np.load(f'{path}/{filelist[i]}')['tArrStats'] for i in range(len(filelist))])
 		meanStats = np.mean(listOfStats, 0)  # along axis 0 so we avg. over the files
 		varStats = np.var(listOfStats, 0)
 		return meanStats, varStats  # return appropriate mean & var
@@ -405,7 +410,6 @@ def getRoughnessMeanVar(path):
 		meanIntegratedPDFStats = np.mean(listOfIntegratedPDFStats)  # integratedPDF
 		varIntegratedPDFStats = np.var(listOfIntegratedPDFStats)
 		return meanPDFStats, varPDFStats, meanIntegratedPDFStats, varIntegratedPDFStats  # return appropriate mean & var
-
 
 def getIndicesInsideSphere(occ, r):
 	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
@@ -552,6 +556,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
 	f_line.close()
 	f.close()
+
 
 def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	'''

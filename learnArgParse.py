@@ -37,19 +37,14 @@ if __name__ == "__main__":
     parser.add_argument('distribution',type=str, choices=['uniform','dirichlet','SSRW'],
                         help='required; specify "uniform", "dirichlet", "SSRW"')
     parser.add_argument('--params',help='optional; parameters of distribution')
-    # NOTE: bool not recommended as a type converted, instead use choice
-    # maybe use --feature and --no-feature?  https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
-    # parser.add_argument('isPDF',choices=[True, False], help='denote if evolving a PDF or agents')
-    # below: https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
     parser.add_argument('--isPDF',action='store_true',help='a boolean switch to turn pdf on')
     parser.add_argument('--isNotPDF', action='store_false', dest='isPDF', help='boolean switch to turn off pdf')
+    # don't actually need numSystems because we're getting rid of the for loop for Talapas
     parser.add_argument('--numSystems',default=10,type=int,help='denote how many systems should be evolved')
     parser.add_argument('--absorbingRadius', type=int, default=False,
                         help='specify the radius of absorbing boundary, if <0 then no boundary, if not specified then defaults ')
-    # sysID will be str, but its just a number so int
     parser.add_argument('sysID', type=int, help='system ID passed in from slurm array?')
     args = parser.parse_args()
-    print(args)
 
     # i think eventually we just want one thing?
     runDataAndAnalysisTEMP(args.directoryName, args.sysID,args.occupancy,args.maxT,
