@@ -4,15 +4,16 @@ import os
 import numpy as np
 import argparse as ap
 
-# OLD VERSION
 def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, PDF, absorbingradius):
     path = f"{directory}"
-    if PDF:  # to better label directories
-        path = path + "PDF"
-    else:
-        path = path + "Agents"
-    if not os.path.exists(path):  # check if exists already, create if doesn't
-        os.makedirs(path)
+    # if PDF:  # to better label directories
+    #     path = path + "PDF"
+    # else:
+    #     path = path + "Agents"
+    # Make sure that the directory path exists after this line executes
+    # This feels identical to wrapping it in an if statement but it
+    # catches the potential race conditions
+    os.makedirs(path, exist_ok=True)
     if PDF:  # if evolving PDF then use evolvePDF, save the relevant stuff
         pdf, integratedPDF, pdfStats, integratedPDFStats, time, boundary = ev.evolvePDF(MaxT, distribution,
                                                                     params, startT=1,
