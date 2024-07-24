@@ -1,5 +1,4 @@
 import evolve2DLattice as ev
-# import sys
 import os
 import numpy as np
 import argparse as ap

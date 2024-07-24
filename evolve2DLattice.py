@@ -58,10 +58,10 @@ def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionParams=N
 	:return occupancy: the new occupancy after moving everything
 	"""
 	# Generate biases for each site
-	biases = getRandVals(distribution, rng, i.shape[0], distributionParams).astype(np.quad)
+	biases = getRandVals(distribution, rng, i.shape[0], distributionParams)
 	# On newer numpy we can vectorize to compute the moves
 	if isPDF:  # if doing PDF then multiply by biases
-		moves = occupancy[i, j].reshape(-1, 1) * biases
+		moves = occupancy[i, j].reshape(-1, 1) * biases.astype(np.quad)
 	else:
 		moves = rng.multinomial(occupancy[i, j].astype(int), biases)
 	# Note that we can use the same array because we're doing checkerboard moves
