@@ -20,10 +20,10 @@ def runDataAndAnalysis(directory, sysID, occupancy, MaxT, distribution, params, 
         np.savez_compressed(f"{path}/{sysID}.npz", pdf=pdf, integratedPDF=integratedPDF, pdfStats=pdfStats,
                             integratedPDFStats=integratedPDFStats, time=time, absorbingBoundary=boundary)
     else:  # if evolving agents then use evolveAgents, save relevant stuff
-        tArrival, occ, tArrStats, boundary, times  = ev.evolveAgents(occupancy, MaxT, distribution,
+        tArrival, occ, tArrStats, boundary  = ev.evolveAgents(occupancy, MaxT, distribution,
                                                    params, startT=1, absorbingRadius=absorbingradius)
         np.savez_compressed(f"{path}/{sysID}.npz",tArrival = tArrival, occupancy = occ,
-                            tArrivalStats = tArrStats, absorbingBoundary=boundary,times=times)
+                            tArrivalStats = tArrStats, absorbingBoundary=boundary)
 
 
 if __name__ == "__main__":
