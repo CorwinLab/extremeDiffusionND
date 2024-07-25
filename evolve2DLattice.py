@@ -60,10 +60,13 @@ def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionParams=N
 	# Generate biases for each site
 	biases = getRandVals(distribution, rng, i.shape[0], distributionParams)
 	# On newer numpy we can vectorize to compute the moves
-	if isPDF:  # if doing PDF then multiply by biases
+	if isPDF:  # if doing PDF then multiply by biases as npquads
 		moves = occupancy[i, j].reshape(-1, 1) * biases.astype(np.quad)
 	else:
-		moves = rng.multinomial(occupancy[i, j].astype(int), biases)
+		if i.shape[0] == 1:
+			moves = rng.multinomial(occupancy[i,j].astype(int),biases.squeeze())
+		else:
+			moves = rng.multinomial(occupancy[i, j].astype(int), biases)
 	# Note that we can use the same array because we're doing checkerboard moves
 	# If we want to use a more general jump kernel we need to use a new (empty) copy of the space
 	occupancy[i, j - 1] += moves[:, 0]  # left
@@ -167,7 +170,7 @@ def getListOfTimes(maxT, startT=1):
 def getListOfNs():
 	"""
 	return a list of particle numbers between 100 and 1e301
-	:return:
+	:return: list of particle numbers, about going every 2 from 1e2 to 1e10, and then every 50 from 1e50 to 1e301
 	"""
 	# to get n = 1e2 - 1e10, then in increments of 50
 	return 10. ** np.hstack([np.arange(2, 11, 2), np.arange(50, 301, 50)])
@@ -236,19 +239,19 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	notYetArrived = np.nan
 	if np.isscalar(occupancy):  # if given a scalar (ie NParticles or something), initializes array
 		NParticles = occupancy
-		occupancy = np.array([[NParticles]], dtype=np.quad)
+		occupancy = np.array([[NParticles]], dtype=float)  # NO QUADS IN AGENTS
 	# no boundary
 	if absorbingRadius < 0:
 		absorbingBoundary = None
 	# there is a boundary
 	else:  # if there is a boundary, initialize occupancy as fixed lattice size
-		occupancy = np.zeros((2*maxT+1,2*maxT+1), dtype=np.quad)
+		occupancy = np.zeros((2*maxT+1,2*maxT+1), dtype=float)
 		occupancy[maxT, maxT] = NParticles
 		if absorbingRadius == False:
 			absorbingRadius = 2 * np.sqrt(maxT * np.log(NParticles))  # calculate absorbingRadius
 		absorbingBoundary = prepareBoundary(maxT, absorbingRadius)  # get mask for the boundary
 	# initialize necessary arrays and variables
-	tArrival = np.copy(occupancy)  # inherits quads
+	tArrival = np.copy(occupancy)  # inherits floats
 	tArrival[:] = notYetArrived
 	tArrival[occupancy > 0] = 0
 	if listOfTimes is None:
@@ -263,7 +266,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 			stats = np.array(getTArrivalRoughness(tArrival, t))  # p, a, r, d, d2, t
 		elif t in listOfTimes:
 			stats = organizeTArrivalStats(t, tArrival, stats)
-	return tArrival.astype(np.quad), occ, np.array(stats), absorbingBoundary
+	return tArrival, occ, np.array(stats), absorbingBoundary
 
 def run2DAgent(*args, **kwargs):
 	"""
