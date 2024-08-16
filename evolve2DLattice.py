@@ -420,13 +420,23 @@ def getIndicesInsideSphere(occ, r):
 	indices = np.where(dist_from_center < r)
 	return indices
 
+#TODO: fix the way we do indices? use mask instead idk.
 
-def getLineIndices(occ, r):
+def getLineIndices(occ, r, axis=0):
+	'''something here
+	:param occ: pass in occupancy array, should be np array
+	:param r: value at which the lines are
+	:param axis: if 0 (default), line is vertical, get everything to the right of it;
+		if 1, line horizontal and get everything past it
+	:return indices: indices of occ which fulfill x or y >= r
+	'''
 	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
 	xx, yy = np.meshgrid(x, x)
 
-	#TOOD: input so its either xx or yy depending on axis?
-	indices = np.where(xx >= r)
+	if axis == 0:  # if asking for vertical line
+		indices = np.where(xx >= r)
+	else:  # if asking for horizontal line
+		indices = np.where(yy >= r)
 	return indices
 
 def getBoxIndices(occ, line):
@@ -441,12 +451,6 @@ def getBoxIndices(occ, line):
 	# ok technically this is the bottom right quadrant because of the way python does indices  but its fine
 	indices = np.where((x>=line ) & (y >= line))
 	return indices
-
-# def getBoxIndices2(occ, line):
-# 	'''
-# 	use splicing to get the correct box? idk
-# 	'''
-# 	box = occ[:line, :line] # top left corner (since pyplot does weird axis stuff)
 
 def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSaveFile):
 	'''
@@ -740,7 +744,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	string here
 	'''
 	# set up each save file
-	f = open(boxSaveFile,'a')  # prob. past two lines
+	f = open(boxSaveFile,'a')  # prob. in first quadrant
 	writer = csv.writer(f)
 	writer.writerow(["Time", *vs])
 	f_hline = open(horizontalLineSaveFile, 'a')  # prob. above moving horizontal line
@@ -753,11 +757,19 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	writer_sphere = csv.writer(f_sphere)
 	writer_sphere.writerow(["Time",*vs])
 
-	# initialize occ witha bsorbing boundary,
+	# initialize occ with absorbing boundary,
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
-	absorbingBoundary = prepareBoundary(tMax, R)  # use R as the absorbing radius (1 less than full occ)
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times?
+	absorbingBoundary = prepareBoundary(L,R)
+	# if absorbingRadius < 0:
+	# 	absorbingBoundary = None  # set absorbingBoundary to be none
+	# # Boundary mask
+	# else:
+	# 	if absorbingRadius is None:  # if no radius specified, make it this default:
+	# 		absorbingRadius = boundaryScale * np.sqrt(tMax)
+	# 	# get boundary
+	# 	absorbingBoundary = prepareBoundary(tMax, absorbingRadius)
+	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
 
 	# generator loop
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
@@ -765,23 +777,35 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 		if t in ts:
 			Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
 
-			#TODO:  rewrite jacob's get line index thing so it does x or y
-			# finish generalizing this function to do. every fucking /:
+			# grab indices for box, past lines, and outside sphere
+			box_indices = [getBoxIndices(occ, r) for r in Rs]  # quadrant 1
+			hline_indices = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
+			vline_indices = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
+			sphere_indices = [getIndicesInsideSphere(occ, r) for r in Rs]  # outside sphere
 
-	# 		# grab indices for box, past lines, and outside sphere
-	# 		indices = [getIndicesInsideSphere(occ, r) for r in Rs]
-	# 		line_indices = [getLineIndices(occ, r) for r in Rs]
-	#
-	# 		probs = [1-np.sum(occ[idx]) for idx in indices]
-	# 		writer.writerow([t, *probs])
-	# 		f.flush()
-	#
-	# 		# Get probabilities outside line
-	# 		probs = [np.sum(occ[idx]) for idx in line_indices]
-	# 		writer_line.writerow([t, *probs])
-	# 		f_line.flush()
-	#
-	# f_line.close()
-	# f.close()
+			# get probabilities in quadrant
+			probs = [1-np.sum(occ[idx]) for idx in box_indices]
+			writer.writerow([t, *probs])
+			f.flush()
+
+			# Get probabilities past horizontal line
+			probs = [np.sum(occ[idx]) for idx in hline_indices]
+			writer_hline.writerow([t, *probs])
+			f_hline.flush()
+
+			# get probabilities past veritcal line:
+			probs = [np.sum(occ[idx]) for idx in vline_indices]
+			writer_vline.writerow([t,*probs])
+			f_vline.flush()
+
+			#get probabilities outside sphere
+			probs = [1-np.sum(occ[idx]) for idx in sphere_indices]
+			writer_sphere.writerow([t,*probs])
+			f_sphere.flush()
+
+	f_sphere.close()
+	f_vline.close()
+	f_hline.close()
+	f.close()
 
 
