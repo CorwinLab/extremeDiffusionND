@@ -317,7 +317,6 @@ def getTArrivalMeanAndVar(path):
 	# Return the mean and the variance, and the mask
 	return finalMom1, finalMom2 - finalMom1 ** 2, goodData
 
-
 def cartToPolar(i, j):
 	"""
 	Can take indices (i,j) and turn them into polar coords. r, theta
@@ -329,7 +328,6 @@ def cartToPolar(i, j):
 	r = np.sqrt(i ** 2 + j ** 2)
 	theta = np.arctan2(j, i)
 	return r, theta
-
 
 def getStateRoughness(binaryImage):
 	"""
@@ -380,7 +378,7 @@ def getContourRoughness(Array, N):
     :param N: the number of particles for which you want probability to be >= 1/N
     :return: perimeter, area, roughness, radius moment 1, adius moment 2, N
     """
-	mask = (Array >= (1/N))  # binary image
+	mask = (Array >= np.quad(1/N))  # binary image
 	roughnessStats = getStateRoughness(mask)  # get roughness vals for that specific 1/N
 	return roughnessStats + (N,)  # p, a, r, d, d2, N
 
@@ -427,9 +425,28 @@ def getLineIndices(occ, r):
 	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
 	xx, yy = np.meshgrid(x, x)
 
+	#TOOD: input so its either xx or yy depending on axis?
 	indices = np.where(xx >= r)
 	return indices
 
+def getBoxIndices(occ, line):
+	'''
+	use np.where in the x direction and y direction to get a box?
+	'''
+	temp = np.arange(-(occ.shape[0]//2), occ.shape[0]//2+1)
+	x, y = np.meshgrid(temp, temp)
+
+	# get the first quadrant (positive x and positive y?)
+	# assumes that the line we're interested in is the same at x as it is y
+	# ok technically this is the bottom right quadrant because of the way python does indices  but its fine
+	indices = np.where((x>=line ) & (y >= line))
+	return indices
+
+# def getBoxIndices2(occ, line):
+# 	'''
+# 	use splicing to get the correct box? idk
+# 	'''
+# 	box = occ[:line, :line] # top left corner (since pyplot does weird axis stuff)
 
 def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSaveFile):
 	'''
@@ -507,24 +524,26 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
 	R : float
 		Radius of circle for circular boundary conditions
+
+	vs : np array
+		list of velocities at which boundary moves?
 	
 	Example
 	-------
 	tMax = 100
 	L = 250
 	R = L-1
-	Rs = [5, 10]
+	vs = np.array([5, 10])  # should be about a decade or two of difference
 	savefile = 'PDF.txt'
 	linefile = 'Line.txt'
 	distribution = 'dirichlet'
 	params = 1/10
-	measureOnSphere(tMax, L, R, Rs, distribution, params, savefile, linefile)
+	measureAtVsOnSphere(tMax, L, R, vs, distribution, params, savefile, linefile)
 	'''
 	
 	f = open(sphereSaveFile, 'a')
 	writer = csv.writer(f)
 	writer.writerow(["Time", *vs])
-
 	f_line = open(lineSaveFile, 'a')
 	writer_line = csv.writer(f_line)
 	writer_line.writerow(['Time', *vs])
@@ -544,7 +563,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 		# Get probabilities inside sphere
 		if t in ts: 
 			Rs = list(np.array(vs * t).astype(int))
-			
+
 			indices = [getIndicesInsideSphere(occ, r) for r in Rs]
 			line_indices = [getLineIndices(occ, r) for r in Rs]
 
@@ -573,13 +592,15 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 
 	R : float
 		Radius of circle for circular boundary conditions
-	
+
+	vs : nummpy array
+			something here
 	Example
 	-------
 	tMax = 100
 	L = 250
 	R = L-1
-	Rs = [5, 10]
+	vs = np.array([0.01,0.1])
 	linefile = 'Line.txt'
 	distribution = 'dirichlet'
 	params = 1/10
@@ -606,7 +627,7 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 		# This was previously misnamed Mean(Sam) and Var(Sam)
 		writer.writerow(["Time", *vs])
 
-	# Create occupancy array
+	# Create occupancy array, goes from 0 to 2L+1 in each dir.
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	
@@ -621,11 +642,18 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 		# Get probabilities inside sphere
 		if t in ts:
 			Rs = np.array(vs * t).astype(int)
-			# You might want to flip things to get the tail cdf, 
-			# but it shouldn't matter
+
+			# np.sum (axis=1) will sum each column, so you'll get 1d array [sum column 1, sum column 2,...]
+			# np.cumsum will give [sum c1, sumc1+sumc2, sumc1+sumc2+sumc3, ...] (going from ~0 to 1)
+			# np.flip turns it into [1, ...., 0], which we want for precision reasons.
+			# this means we will be measuring to the left of our lines
 			xCDF = np.flip(np.cumsum(np.sum(occ, axis=1)))
-			
-			indices = Rs + L
+
+			# next we get the indices to the left of the line at R?
+			# You add L to the Rs to shift it to the center of the array
+			indices = Rs + L  # this is faster than np.where which is what getLineIndices uses
+
+			# eventaully Rs+L > 2L+1
 			indices_outside_array = indices >= len(xCDF)
 			indices[indices_outside_array] = 0
 
@@ -689,7 +717,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 		# Get probabilities inside sphere
 		if t in ts: 
 			Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
-			
+
 			indices = [getIndicesInsideSphere(occ, r) for r in Rs]
 			line_indices = [getLineIndices(occ, r) for r in Rs]
 
@@ -704,4 +732,56 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 
 	f_line.close()
 	f.close()
+
+# guess i'm writing code like jacob now
+def measureAtVsBox(tMax, L, R, vs, distribution, params,
+		boxSaveFile, verticalLineSaveFile,horizontalLineSaveFile,sphereSavefile):
+	'''
+	string here
+	'''
+	# set up each save file
+	f = open(boxSaveFile,'a')  # prob. past two lines
+	writer = csv.writer(f)
+	writer.writerow(["Time", *vs])
+	f_hline = open(horizontalLineSaveFile, 'a')  # prob. above moving horizontal line
+	writer_hline = csv.writer(f_hline)
+	writer_hline.writerow(['Time', *vs])
+	f_vline = open(verticalLineSaveFile, 'a')  # prob to the right of moving vertical line
+	writer_vline = csv.writer(f_vline)
+	writer_vline.writerow(['Time', *vs])
+	f_sphere = open(sphereSavefile,'a')  # prob. outside growing sphere
+	writer_sphere = csv.writer(f_sphere)
+	writer_sphere.writerow(["Time",*vs])
+
+	# initialize occ witha bsorbing boundary,
+	occ = np.zeros((2 * L + 1, 2 * L + 1))
+	occ[L, L] = 1
+	absorbingBoundary = prepareBoundary(tMax, R)  # use R as the absorbing radius (1 less than full occ)
+	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times?
+
+	# generator loop
+	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
+		# Get probabilities inside sphere
+		if t in ts:
+			Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
+
+			#TODO:  rewrite jacob's get line index thing so it does x or y
+			# finish generalizing this function to do. every fucking /:
+
+	# 		# grab indices for box, past lines, and outside sphere
+	# 		indices = [getIndicesInsideSphere(occ, r) for r in Rs]
+	# 		line_indices = [getLineIndices(occ, r) for r in Rs]
+	#
+	# 		probs = [1-np.sum(occ[idx]) for idx in indices]
+	# 		writer.writerow([t, *probs])
+	# 		f.flush()
+	#
+	# 		# Get probabilities outside line
+	# 		probs = [np.sum(occ[idx]) for idx in line_indices]
+	# 		writer_line.writerow([t, *probs])
+	# 		f_line.flush()
+	#
+	# f_line.close()
+	# f.close()
+
 
