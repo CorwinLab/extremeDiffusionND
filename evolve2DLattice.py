@@ -412,6 +412,7 @@ def getRoughnessMeanVar(path):
 		varIntegratedPDFStats = np.var(listOfIntegratedPDFStats)
 		return meanPDFStats, varPDFStats, meanIntegratedPDFStats, varIntegratedPDFStats  # return appropriate mean & var
 
+#TODO: get rid of np.wheres, use masks instead
 def getIndicesInsideSphere(occ, r):
 	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
 	xx, yy = np.meshgrid(x, x)
@@ -420,7 +421,6 @@ def getIndicesInsideSphere(occ, r):
 	indices = np.where(dist_from_center < r)
 	return indices
 
-#TODO: fix the way we do indices? use mask instead idk.
 
 def getLineIndices(occ, r, axis=0):
 	'''something here
@@ -434,23 +434,22 @@ def getLineIndices(occ, r, axis=0):
 	xx, yy = np.meshgrid(x, x)
 
 	if axis == 0:  # if asking for vertical line
-		indices = np.where(xx >= r)
+		mask = np.where(xx >= r)
 	else:  # if asking for horizontal line
-		indices = np.where(yy >= r)
-	return indices
+		mask = np.where(yy >= r)
+	return mask
 
-def getBoxIndices(occ, line):
+def getBoxMask(occ, line):
 	'''
 	use np.where in the x direction and y direction to get a box?
 	'''
 	temp = np.arange(-(occ.shape[0]//2), occ.shape[0]//2+1)
 	x, y = np.meshgrid(temp, temp)
 
-	# get the first quadrant (positive x and positive y?)
+	# get the quadrant (positive x and positive y?)
 	# assumes that the line we're interested in is the same at x as it is y
-	# ok technically this is the bottom right quadrant because of the way python does indices  but its fine
-	indices = np.where((x>=line ) & (y >= line))
-	return indices
+	mask = ((x>=line ) & (y >= line))
+	return mask
 
 def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSaveFile):
 	'''
@@ -739,21 +738,21 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 
 # guess i'm writing code like jacob now
 def measureAtVsBox(tMax, L, R, vs, distribution, params,
-		boxSaveFile, verticalLineSaveFile,horizontalLineSaveFile,sphereSavefile):
+				   boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile):
 	'''
 	string here
 	'''
-	# set up each save file
+	# set up each save file. this feels so silly.
 	f = open(boxSaveFile,'a')  # prob. in first quadrant
 	writer = csv.writer(f)
 	writer.writerow(["Time", *vs])
-	f_hline = open(horizontalLineSaveFile, 'a')  # prob. above moving horizontal line
+	f_hline = open(hLineSaveFile, 'a')  # prob. above moving horizontal line
 	writer_hline = csv.writer(f_hline)
 	writer_hline.writerow(['Time', *vs])
-	f_vline = open(verticalLineSaveFile, 'a')  # prob to the right of moving vertical line
+	f_vline = open(vLineSaveFile, 'a')  # prob to the right of moving vertical line
 	writer_vline = csv.writer(f_vline)
 	writer_vline.writerow(['Time', *vs])
-	f_sphere = open(sphereSavefile,'a')  # prob. outside growing sphere
+	f_sphere = open(sphereSaveFile,'a')  # prob. outside growing sphere
 	writer_sphere = csv.writer(f_sphere)
 	writer_sphere.writerow(["Time",*vs])
 
@@ -761,40 +760,33 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	absorbingBoundary = prepareBoundary(L,R)
-	# if absorbingRadius < 0:
-	# 	absorbingBoundary = None  # set absorbingBoundary to be none
-	# # Boundary mask
-	# else:
-	# 	if absorbingRadius is None:  # if no radius specified, make it this default:
-	# 		absorbingRadius = boundaryScale * np.sqrt(tMax)
-	# 	# get boundary
-	# 	absorbingBoundary = prepareBoundary(tMax, absorbingRadius)
 	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
 
 	# generator loop
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
 		# Get probabilities inside sphere
 		if t in ts:
+			# make lines/radius move with v*t^(1/2)
 			Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
 
 			# grab indices for box, past lines, and outside sphere
-			box_indices = [getBoxIndices(occ, r) for r in Rs]  # quadrant 1
-			hline_indices = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
-			vline_indices = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
+			box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
+			hline_masks = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
+			vline_masks = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
 			sphere_indices = [getIndicesInsideSphere(occ, r) for r in Rs]  # outside sphere
 
 			# get probabilities in quadrant
-			probs = [1-np.sum(occ[idx]) for idx in box_indices]
+			probs = [np.sum(occ[mask]) for mask in box_masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
 			# Get probabilities past horizontal line
-			probs = [np.sum(occ[idx]) for idx in hline_indices]
+			probs = [np.sum(occ[mask]) for mask in hline_masks]
 			writer_hline.writerow([t, *probs])
 			f_hline.flush()
 
 			# get probabilities past veritcal line:
-			probs = [np.sum(occ[idx]) for idx in vline_indices]
+			probs = [np.sum(occ[mask]) for mask in vline_masks]
 			writer_vline.writerow([t,*probs])
 			f_vline.flush()
 
