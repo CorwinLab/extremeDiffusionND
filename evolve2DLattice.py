@@ -37,6 +37,7 @@ def getRandVals(distribution, rng, shape, params):
 	elif distribution == 'SSRW':
 		biases = np.full([shape, 4], 1 / 4)
 	elif distribution == 'dirichlet':
+		# params should be a number >0 (it's alpha from dirichlet dist.)
 		params = float(params)
 		biases = rng.dirichlet([params] * 4, shape)
 	else:  # catchall in case inputted distribution isn't one of these.
