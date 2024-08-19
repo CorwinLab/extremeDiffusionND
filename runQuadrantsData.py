@@ -4,7 +4,14 @@ import numpy as np
 import argparse as ap
 
 # base directory should be /projects/jamming/fransces/data/quadrants/
-def runQuadrantsData((baseDirectory, sysID, tMax, L, R, vs, distribution, params):
+def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params):
+    '''run file to generate cumulative probability in quadrants
+    :param baseDirectory: str, path to which you save data
+    :param sysID: int
+    :param tMax: maximum time to evolve system to
+    :param L: int, dist. from center of occupancy array
+    :param R: int, should be L-1, determins radius of absorbing boundary
+    :param vs: np array, list of "velocities", about a decade between'''
     #TODO: figure out data saving structure because my brain is stalling
     os.makedirs(baseDirectory, exist_ok=True)
     boxSaveFile = baseDirectory + sysID +'Box.txt'
