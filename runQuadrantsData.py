@@ -37,7 +37,15 @@ if __name__ == "__main__":
     # parser.add_argument('--absorbingRadius', type=int, default=False,
     #                     help='specify the radius of absorbing boundary, if <0 then no boundary, if not specified then uses default scaling')
     parser.add_argument('sysID', type=int, help='system ID passed in; should be the slurm array number')
+    parser.add_argument("L", type=int, help="specify dist. from origin to edge of occupancy")
+    parser.add_argument("R",type=int,default=None, help="specify radius of absorbing boundary, default L-1")
+    parser.add_argument("vs",type=list, help="specify list of velocities, so quadrants move w/ v*t^(1/2)")
     args = parser.parse_args()
 
+    # workaround to specify R = L-1
+    if args.R is None:
+        args.R = args.L - 1
+
     # call it once, instead of numSys
-    runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.distribution, args.params)
+    runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, np.array(args.vs),
+                     args.distribution, args.params)
