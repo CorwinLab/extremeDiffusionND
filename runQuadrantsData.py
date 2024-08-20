@@ -15,17 +15,15 @@ def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params)
     :param vs: np array, list of "velocities", about a decade between'''
     #TODO: figure out data saving structure because my brain is stalling
     os.makedirs(baseDirectory, exist_ok=True)
-    boxSaveFile = baseDirectory + str(sysID) +'Box.txt'
-    hLineSaveFile = baseDirectory + str(sysID) +'hLine.txt'
-    vLineSaveFile = baseDirectory + str(sysID) + 'vLine.txt'
-    sphereSaveFile = baseDirectory + str(sysID)+'sphere.txt'
+    boxSaveFile = os.path.join(baseDirectory,'Box'+str(sysID)+'.txt')
+    hLineSaveFile = os.path.join(baseDirectory, 'hLine'+str(sysID)+'.txt')
+    vLineSaveFile = os.path.join(baseDirectory,'vLine'+str(sysID)+'.txt')
+    sphereSaveFile = os.path.join(baseDirectory,'sphere'+str(sysID)+'.txt')
 
     # output: 4 files... but 1 directory?
     # ie give /projects/jamming/fransces/data/quadrants/
     ev.measureAtVsBox(tMax, L, R, vs, distribution, params,
                    boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile)
-
-
 
 if __name__ == "__main__":
     # initialize argparse
@@ -34,21 +32,24 @@ if __name__ == "__main__":
     parser.add_argument('tMax', type=int, help='specify maximum time to which lattice is evolved')
     parser.add_argument('distribution', type=str, choices=['uniform', 'dirichlet', 'SSRW'],
                          help='specify "uniform", "dirichlet", or "SSRW" as the distribution from which biases are drawn')
-    parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now, 1/10)',
-                        default=None)
     # parser.add_argument('--absorbingRadius', type=int, default=False,
     #                     help='specify the radius of absorbing boundary, if <0 then no boundary, if not specified then uses default scaling')
     parser.add_argument('sysID', type=int, help='system ID passed in; should be the slurm array number')
     parser.add_argument("L", type=int, help="specify dist. from origin to edge of occupancy")
+    parser.add_argument("--vs", help="specify list of velocities, so quadrants move w/ v*t^(1/2)")
     parser.add_argument("--R",type=int, default=None, help="specify radius of absorbing boundary, default L-1")
-    parser.add_argument("vs", help="specify list of velocities, so quadrants move w/ v*t^(1/2)")
+    parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now, 1/10)',
+                        default=None)
     args = parser.parse_args()
-
-    # workaround to specify R = L-1
+    # workaround to specify R = L-1 in case you don't put in a radius
     if args.R is None:
         args.R = args.L - 1
+
     # argparse and python are stupid. need to cast the Strint version of the list of vs back to list, then to np array
-    vs = np.array(ast.literal_eval(args.vs))
+    # TODO: maybe change so instead of vs being an arg. input from commandline, i do like
+    # vs = np.arange(0.1, 1.5 + 0.05, step=0.05)
+    # vs = np.array(ast.literal_eval(args.vs))
+    vs = np.array([0.1,0.5,1,1.5])
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,
