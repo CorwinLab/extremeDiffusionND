@@ -811,23 +811,22 @@ def getBoxMeanVar(path):
 	:return finalMom2 - finalMom1**2: the variance of the probabilities
 	"""
 	# grab the files in the data directory that are the Box data
-	filelist = glob.glob("*Box.txt",root_dir=path)
+	files = glob.glob("*Box.txt",root_dir=path)
 	# initialize the moments & mask
 	# see below... trying to get mean and var across both?
 	# https://stackoverflow.com/questions/25057835/get-the-mean-across-multiple-pandas-dataframes
-	moment1, moment2 = None, None, None  # moment 1 is just t, moment 2 is t**2
-	# go through each file and pull out the tArrival array
-	for file in filelist:
+	moment1, moment2 = None, None
+	for file in files:
 		data = pd.read_csv(f"{path}/{file}")
-		#tArrival = np.load(f'{path}/{file}')['tArrival']
-		if moment1 is None:  # if you are on the first file, make the moment arrays using the first file
+		# data['Time'] = data['Time'].astype(int)
+		data = data.values
+		if moment1 is None:
 			moment1 = data
-			moment2 = data ** 2
-		else:  # check that array sizes agree; make them the same if they don't
-			# now cumulatively add the moments
+			moment2 = np.square(data)
+		else:
 			moment1 += data
-			moment2 += data ** 2
-	finalMom1 = moment1 / len(filelist)
-	finalMom2 = moment2 / len(filelist)
+			moment2 += np.square(data)
+		moment1 = moment1 / len(files)
+		moment2 = moment2 / len(files)
 	# Return the mean and the variance, and the mask
-	return finalMom1, finalMom2 - finalMom1 ** 2
+	return moment1, moment2 - np.square(moment1)
