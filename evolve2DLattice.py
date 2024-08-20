@@ -744,26 +744,38 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	'''
 	string here
 	'''
-	# set up each save file. this feels so silly.
-	f = open(boxSaveFile,'a')  # prob. in first quadrant
+	# check if savefiles exist first
+	write_header = True
+	if os.path.exists(boxSaveFile):
+		data = pd.read_csv(boxSaveFile)
+		max_time = max(data['Time'].values)
+		if max_time == ts[-2]:
+			print(f"File Finished{f}", flush=True)
+			sys.exit()
+		ts = ts[ts > max_time]
+		print(f"Starting at: {ts[0]}", flush=True)
+		write_header = False
+
+	# Set up writer and write header if save file doesn't exist, only write if
+	f = open(boxSaveFile, 'a')
 	writer = csv.writer(f)
-	writer.writerow(["Time", *vs])
 	f_hline = open(hLineSaveFile, 'a')  # prob. above moving horizontal line
 	writer_hline = csv.writer(f_hline)
-	writer_hline.writerow(['Time', *vs])
 	f_vline = open(vLineSaveFile, 'a')  # prob to the right of moving vertical line
 	writer_vline = csv.writer(f_vline)
-	writer_vline.writerow(['Time', *vs])
 	f_sphere = open(sphereSaveFile,'a')  # prob. outside growing sphere
 	writer_sphere = csv.writer(f_sphere)
-	writer_sphere.writerow(["Time",*vs])
+	if write_header:
+		writer.writerow(["Time", *vs])
+		writer_hline.writerow(['Time', *vs])
+		writer_vline.writerow(['Time', *vs])
+		writer_sphere.writerow(["Time", *vs])
 
 	# initialize occ with absorbing boundary,
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	absorbingBoundary = prepareBoundary(L,R)
 	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
-
 	# generator loop
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
 		# Get probabilities inside sphere
