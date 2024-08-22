@@ -45,11 +45,11 @@ if __name__ == "__main__":
     if args.R is None:
         args.R = args.L - 1
 
-    # argparse and python are stupid. need to cast the Strint version of the list of vs back to list, then to np array
-    # TODO: maybe change so instead of vs being an arg. input from commandline, i do like
-    # vs = np.arange(0.1, 1.5 + 0.05, step=0.05)
-    # vs = np.array(ast.literal_eval(args.vs))
-    vs = np.array([0.1,0.5,1,1.5])
+    # argparse dumb so hard code in equally spaced velocities
+    # the min. velocity to check is the one where at t=tMax, the radius
+    # or moving line has moved exactly 1
+    # the max is when, at t=tmax, v sqrt(t) has crossed t exaclty once. 
+    vs = np.geomspace(1/np.sqrt(args.tMax),np.sqrt(args.tMax), 21)
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,

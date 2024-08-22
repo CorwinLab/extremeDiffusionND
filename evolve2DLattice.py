@@ -745,85 +745,93 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	string here
 	'''
 	# check if savefiles exist first
+	#TODO:
 	write_header = True
 	if os.path.exists(boxSaveFile):
 		data = pd.read_csv(boxSaveFile)
 		max_time = max(data['Time'].values)
+		# if file exists and is finished, exit
 		if max_time == ts[-2]:
 			print(f"File Finished{f}", flush=True)
 			sys.exit()
-		ts = ts[ts > max_time]
-		print(f"Starting at: {ts[0]}", flush=True)
-		write_header = False
 
 	# Set up writer and write header if save file doesn't exist, only write if
-	f = open(boxSaveFile, 'a')
-	writer = csv.writer(f)
-	f_hline = open(hLineSaveFile, 'a')  # prob. above moving horizontal line
-	writer_hline = csv.writer(f_hline)
-	f_vline = open(vLineSaveFile, 'a')  # prob to the right of moving vertical line
-	writer_vline = csv.writer(f_vline)
-	f_sphere = open(sphereSaveFile,'a')  # prob. outside growing sphere
-	writer_sphere = csv.writer(f_sphere)
-	if write_header:
-		writer.writerow(["Time", *vs])
-		writer_hline.writerow(['Time', *vs])
-		writer_vline.writerow(['Time', *vs])
-		writer_sphere.writerow(["Time", *vs])
+	#TODO: currently opening files with append, which adds to end, but could use overwrite ('w')
+	# which is equivalent to deleting & creating a new one
+	with open(boxSaveFile, 'w') as f, open(hLineSaveFile, 'w') as f_hline, open(vLineSaveFile, 'w') as f_vline, open(sphereSaveFile, 'w') as f_sphere:
+		# create writers
+		writer = csv.writer(f)  # prob. in quadrant
+		writer_hline = csv.writer(f_hline)  # prob. above moving horizontal line
+		writer_vline = csv.writer(f_vline)  # prob. past vertical line
+		writer_sphere = csv.writer(f_sphere)  # prob outside sphere
+		# only write data if savefile doesn't exist?
+		if write_header:
+			writer.writerow(["Time", *vs])
+			writer_hline.writerow(['Time', *vs])
+			writer_vline.writerow(['Time', *vs])
+			writer_sphere.writerow(["Time", *vs])
 
-	# initialize occ with absorbing boundary,
-	occ = np.zeros((2 * L + 1, 2 * L + 1))
-	occ[L, L] = 1
-	absorbingBoundary = prepareBoundary(L,R)
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
-	# generator loop
-	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
-		# Get probabilities inside sphere
-		if t in ts:
-			# make lines/radius move with v*t^(1/2)
-			Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
+		# initialize occ with absorbing boundary,
+		occ = np.zeros((2 * L + 1, 2 * L + 1))
+		occ[L, L] = 1
+		absorbingBoundary = prepareBoundary(L,R)
+		ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
+		# generator loop
+		for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
+			# Get probabilities inside sphere
+			if t in ts:
+				# make lines/radius move with v*t^(1/2)
+				Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
 
-			# grab indices for box, past lines, and outside sphere
-			box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
-			hline_masks = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
-			vline_masks = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
-			sphere_indices = [getIndicesInsideSphere(occ, r) for r in Rs]  # outside sphere
+				# grab indices for box, past lines, and outside sphere
+				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
+				hline_masks = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
+				vline_masks = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
+				sphere_indices = [getIndicesInsideSphere(occ, r) for r in Rs]  # outside sphere
 
-			# get probabilities in quadrant
-			probs = [np.sum(occ[mask]) for mask in box_masks]
-			writer.writerow([t, *probs])
-			f.flush()
+				# get probabilities in quadrant
+				probs = [np.sum(occ[mask]) for mask in box_masks]
+				writer.writerow([t, *probs])
+				f.flush()
 
-			# Get probabilities past horizontal line
-			probs = [np.sum(occ[mask]) for mask in hline_masks]
-			writer_hline.writerow([t, *probs])
-			f_hline.flush()
+				# Get probabilities past horizontal line
+				probs = [np.sum(occ[mask]) for mask in hline_masks]
+				writer_hline.writerow([t, *probs])
+				f_hline.flush()
 
-			# get probabilities past veritcal line:
-			probs = [np.sum(occ[mask]) for mask in vline_masks]
-			writer_vline.writerow([t,*probs])
-			f_vline.flush()
+				# get probabilities past veritcal line:
+				probs = [np.sum(occ[mask]) for mask in vline_masks]
+				writer_vline.writerow([t,*probs])
+				f_vline.flush()
 
-			#get probabilities outside sphere
-			probs = [1-np.sum(occ[idx]) for idx in sphere_indices]
-			writer_sphere.writerow([t,*probs])
-			f_sphere.flush()
+				#get probabilities outside sphere
+				probs = [1-np.sum(occ[idx]) for idx in sphere_indices]
+				writer_sphere.writerow([t,*probs])
+				f_sphere.flush()
 
-	f_sphere.close()
-	f_vline.close()
-	f_hline.close()
-	f.close()
+		f_sphere.close()
+		f_vline.close()
+		f_hline.close()
 
-def getBoxMeanVar(path):
+def getQuadrantMeanVar(path, filetype):
 	"""
-	Takes a directory filled with tArrival arrays and finds the mean and variance of tArrivals
+	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
 	:param path: the path of the directory, /projects/jamming/fransces/data/quadrant/distribution/tMax
-	:return: finalMom1: the first moment (mean) of the probabilities
-	:return finalMom2 - finalMom1**2: the variance of the probabilities
+	:filetype: string, 'box', 'hline', 'vline, 'sphere'
+	:return: finalMom1: the first moment (mean) of log(probabilities)
+	:return finalMom2 - finalMom1**2: the variance of log(probabilities)
 	"""
 	# grab the files in the data directory that are the Box data
-	files = glob.glob("*Box.txt",root_dir=path)
+	if filetype == 'box':
+		files = glob.glob("Box*",root_dir=path)
+	elif filetype == 'vline':
+		files = glob.glob("vLine*", root_dir=path)
+	elif filetype == 'hline':
+		files = glob.glob("hLine*",root_dir=path)
+	elif filetype == 'sphere':
+		files = glob.glob("sphere*",root_dir=path)
+	# print(files)
 	# initialize the moments & mask
 	# see below... trying to get mean and var across both?
 	# https://stackoverflow.com/questions/25057835/get-the-mean-across-multiple-pandas-dataframes
@@ -831,14 +839,16 @@ def getBoxMeanVar(path):
 	for file in files:
 		data = pd.read_csv(f"{path}/{file}")
 		# data['Time'] = data['Time'].astype(int)
-		data = data.values
+		data = np.log(data.values)
 		if moment1 is None:
 			moment1 = data
 			moment2 = np.square(data)
 		else:
 			moment1 += data
 			moment2 += np.square(data)
-		moment1 = moment1 / len(files)
-		moment2 = moment2 / len(files)
-	# Return the mean and the variance, and the mask
+	moment1 = moment1 / len(files)
+	moment2 = moment2 / len(files)
+	# Return the mean and the variance
+	# note this also will take the mean and var of time. what you want is
+	# meanBox[:,1:] to get just the probs.
 	return moment1, moment2 - np.square(moment1)
