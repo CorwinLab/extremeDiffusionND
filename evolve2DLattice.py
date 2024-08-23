@@ -745,7 +745,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	string here
 	'''
 	# check if savefiles exist first
-	#TODO:
+	#TODO: get rid of the write_header boolean?
 	write_header = True
 	if os.path.exists(boxSaveFile):
 		data = pd.read_csv(boxSaveFile)
@@ -755,9 +755,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 			print(f"File Finished{f}", flush=True)
 			sys.exit()
 
-	# Set up writer and write header if save file doesn't exist, only write if
-	#TODO: currently opening files with append, which adds to end, but could use overwrite ('w')
-	# which is equivalent to deleting & creating a new one
+	# Set up writer and write header if save file doesn't exist,
 	with open(boxSaveFile, 'w') as f, open(hLineSaveFile, 'w') as f_hline, open(vLineSaveFile, 'w') as f_vline, open(sphereSaveFile, 'w') as f_sphere:
 		# create writers
 		writer = csv.writer(f)  # prob. in quadrant
@@ -781,7 +779,9 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 			# Get probabilities inside sphere
 			if t in ts:
 				# make lines/radius move with v*t^(1/2)
-				Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
+				# Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
+				# make lines/radii move with v* (t/sqrt(ln t) )
+				Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
 
 				# grab indices for box, past lines, and outside sphere
 				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
@@ -839,7 +839,7 @@ def getQuadrantMeanVar(path, filetype):
 	for file in files:
 		data = pd.read_csv(f"{path}/{file}")
 		# data['Time'] = data['Time'].astype(int)
-		data = np.log(data.values)
+		data = np.log(data.values, where=(data.values!=0))
 		if moment1 is None:
 			moment1 = data
 			moment2 = np.square(data)
