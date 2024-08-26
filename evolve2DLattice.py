@@ -744,6 +744,12 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 	'''
 	string here
 	'''
+	# initialize occ with absorbing boundary,
+	occ = np.zeros((2 * L + 1, 2 * L + 1))
+	occ[L, L] = 1
+	absorbingBoundary = prepareBoundary(L, R)
+	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
+
 	# check if savefiles exist first
 	#TODO: get rid of the write_header boolean?
 	write_header = True
@@ -769,17 +775,13 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 			writer_vline.writerow(['Time', *vs])
 			writer_sphere.writerow(["Time", *vs])
 
-		# initialize occ with absorbing boundary,
-		occ = np.zeros((2 * L + 1, 2 * L + 1))
-		occ[L, L] = 1
-		absorbingBoundary = prepareBoundary(L,R)
-		ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
-		# generator loop
+		# generate data
 		for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
 			# Get probabilities inside sphere
 			if t in ts:
 				# make lines/radius move with v*t^(1/2)
 				# Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
+
 				# make lines/radii move with v* (t/sqrt(ln t) )
 				Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
 
@@ -839,7 +841,8 @@ def getQuadrantMeanVar(path, filetype):
 	for file in files:
 		data = pd.read_csv(f"{path}/{file}")
 		# data['Time'] = data['Time'].astype(int)
-		data = np.log(data.values, where=(data.values!=0))
+		# data = np.log(data.values, where=(data.values!=0))
+		data = np.log(data.values)
 		if moment1 is None:
 			moment1 = data
 			moment2 = np.square(data)
