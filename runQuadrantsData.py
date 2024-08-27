@@ -38,6 +38,8 @@ if __name__ == "__main__":
     parser.add_argument("L", type=int, help="specify dist. from origin to edge of occupancy")
     parser.add_argument("barrierScaling", type=str, help="specify the time scaling with which the barrier moves",
                         choices = ['t','np.sqrt(t)','t/np.sqrt(np.log(t))','t/np.log(t)'])
+    parser.add_argument("vmin",type=str,help='specify minimum velocity')
+    parser.add_argument("vmax",type=str,help='specify maximum velocity')
     parser.add_argument("--R",type=int, default=None, help="specify radius of absorbing boundary, default L-1")
     parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now, 1/10)',
                         default=None)
@@ -50,10 +52,13 @@ if __name__ == "__main__":
     # the min. velocity to check is the one where at t=tMax, the radius
     # or moving line has moved exactly 1
     # the max is when, at t=tmax, v sqrt(t) has crossed t exaclty once.
-    # TODO: automate this?? or just have a fixed number... idk.
     # vs = np.geomspace(1/np.sqrt(args.tMax),np.sqrt(args.tMax), 21)
     # for radii going as vt, the max v = 1
-    vs = np.geomspace(1/args.tMax, 1, 21)
+    # vs = np.geomspace(1/args.tMax, 1, 21)
+
+    # TODO: automate this?? or just have a fixed number... idk.
+    # using eval(args) to avoid having a bunch of if elif statements
+    vs = np.geomspace(eval(args.vmin), eval(args.vmax), 21)
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,

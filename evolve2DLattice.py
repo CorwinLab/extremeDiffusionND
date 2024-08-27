@@ -785,9 +785,13 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				# make lines/radii move with v* (t/sqrt(ln t) )
 				# Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
 
-				#TODO: check if eval(barrierScaleString) works
 				RsScale = eval(barrierScale)
-				Rs = list(np.array(vs * RsScale).astype(int))
+				# Rs = list(np.array(vs * RsScale).astype(int))
+
+				# remove the astype(int) because it's causing the data to "turn on"
+				# at weird spots, and is unnecessary because get(insertshape)Indices already
+				# implicitly takes into account the lattice spacing.
+				Rs = list(np.array(vs * RsScale))
 
 				# grab indices for box, past lines, and outside sphere
 				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
