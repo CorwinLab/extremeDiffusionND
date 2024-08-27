@@ -5,7 +5,7 @@ import argparse as ap
 import ast
 
 # base directory should be /projects/jamming/fransces/data/quadrants/
-def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params):
+def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params, barrierScale):
     '''run file to generate cumulative probability in quadrants
     :param baseDirectory: str, path to which you save data
     :param sysID: int
@@ -22,7 +22,7 @@ def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params)
 
     # output: 4 files... but 1 directory?
     # ie give /projects/jamming/fransces/data/quadrants/
-    ev.measureAtVsBox(tMax, L, R, vs, distribution, params,
+    ev.measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
                    boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile)
 
 if __name__ == "__main__":
@@ -31,12 +31,13 @@ if __name__ == "__main__":
     parser.add_argument('baseDirectory', type=str, help=" specify directory to which data is saved")
     parser.add_argument('tMax', type=int, help='specify maximum time to which lattice is evolved')
     parser.add_argument('distribution', type=str, choices=['uniform', 'dirichlet', 'SSRW'],
-                         help='specify "uniform", "dirichlet", or "SSRW" as the distribution from which biases are drawn')
+                         help='specify the distribution from which biases are drawn')
     # parser.add_argument('--absorbingRadius', type=int, default=False,
     #                     help='specify the radius of absorbing boundary, if <0 then no boundary, if not specified then uses default scaling')
     parser.add_argument('sysID', type=int, help='system ID passed in; should be the slurm array number')
     parser.add_argument("L", type=int, help="specify dist. from origin to edge of occupancy")
-    parser.add_argument("--vs", help="specify list of velocities, so quadrants move w/ v*t^(1/2)")
+    parser.add_argument("barrierScaling", type=str, help="specify the time scaling with which the barrier moves",
+                        choices = ['t','np.sqrt(t)','t/np.sqrt(np.log(t))','t/np.log(t)'])
     parser.add_argument("--R",type=int, default=None, help="specify radius of absorbing boundary, default L-1")
     parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now, 1/10)',
                         default=None)
@@ -48,9 +49,12 @@ if __name__ == "__main__":
     # argparse dumb so hard code in equally spaced velocities
     # the min. velocity to check is the one where at t=tMax, the radius
     # or moving line has moved exactly 1
-    # the max is when, at t=tmax, v sqrt(t) has crossed t exaclty once. 
-    vs = np.geomspace(1/np.sqrt(args.tMax),np.sqrt(args.tMax), 21)
+    # the max is when, at t=tmax, v sqrt(t) has crossed t exaclty once.
+    # TODO: automate this?? or just have a fixed number... idk.
+    # vs = np.geomspace(1/np.sqrt(args.tMax),np.sqrt(args.tMax), 21)
+    # for radii going as vt, the max v = 1
+    vs = np.geomspace(1/args.tMax, 1, 21)
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,
-                     args.distribution, args.params)
+                     args.distribution, args.params, args.barrierScaling)

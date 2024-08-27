@@ -739,7 +739,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	f.close()
 
 # guess i'm writing code like jacob now
-def measureAtVsBox(tMax, L, R, vs, distribution, params,
+def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				   boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile):
 	'''
 	string here
@@ -783,7 +783,11 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params,
 				# Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
 
 				# make lines/radii move with v* (t/sqrt(ln t) )
-				Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
+				# Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
+
+				#TODO: check if eval(barrierScaleString) works
+				RsScale = eval(barrierScale)
+				Rs = list(np.array(vs * RsScale).astype(int))
 
 				# grab indices for box, past lines, and outside sphere
 				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
