@@ -1,5 +1,7 @@
 import numpy as np
 import os
+
+from numba.np.npdatetime import timedelta_maximum_impl
 from scipy.ndimage import morphology as m
 import csv
 import npquad
@@ -120,9 +122,13 @@ def prepareBoundary(maxT, absorbingRadius):
 	:return distToOrigin <=absorbingRadius: the mask that is boundary
 	"""
 	# get the distance to Origin of lattice
-	temp = np.arange(-maxT, maxT+1)
-	x, y = np.meshgrid(temp, temp)
-	distToOrigin = np.sqrt(x**2 + y**2)
+	# temp = np.arange(-maxT, maxT+1)
+	# x, y = np.meshgrid(temp, temp)
+	# distToOrigin = np.sqrt(x**2 + y**2)
+
+	# geneerate distToOrigin using maxT=L
+	x, y, distToOrigin = getDistFromCenter(maxT)
+
 	# make sure to check that the absorbingRadius is at largest, the lattice size
 	if absorbingRadius >= (maxT - 1):
 		absorbingRadius = maxT - 1  # if it's larger than lattice, set it to be what it should be
@@ -160,14 +166,14 @@ def organizeTArrivalStats(t, tArrival, firstStats):
 	stats = np.vstack((firstStats, tempstats))
 	return stats
 
-def getListOfTimes(maxT, startT=1):
+def getListOfTimes(maxT, startT=1,num=500):
 	"""
 	Generate a list of times, with approx. 10 times per decade (via np.geomspace), out to time maxT
 	:param maxT: the maximum time to which lattice is being evolved
 	:param startT: initial time at which lattice evolution is started
 	:return: the list of times
 	"""
-	return np.unique(np.geomspace(startT+3, maxT, round(10 * np.log10(maxT))).astype(int))
+	return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 def getListOfNs():
 	"""
@@ -210,7 +216,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius=None, bounda
 	# Initialize needed variables
 	integratedPDF = np.copy(occupancy) # should inehrit occupancy's dtype
 	if listOfTimes is None:
-		listOfTimes = getListOfTimes(maxT, startT=startT)
+		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int))
 	if listOfNs is None:
 		listOfNs = getListOfNs()
 	# Run the data and stats generation loop
@@ -257,7 +263,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	tArrival[:] = notYetArrived
 	tArrival[occupancy > 0] = 0
 	if listOfTimes is None:
-		listOfTimes = getListOfTimes(maxT, startT=startT)
+		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int))
 	# data and stats generation
 	for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, False, boundary=absorbingBoundary):
 		if tArrival.shape[0] != occ.shape[0]:
@@ -414,17 +420,32 @@ def getRoughnessMeanVar(path):
 		varIntegratedPDFStats = np.var(listOfIntegratedPDFStats)
 		return meanPDFStats, varPDFStats, meanIntegratedPDFStats, varIntegratedPDFStats  # return appropriate mean & var
 
-#TODO: get rid of np.wheres, use masks instead
-def getIndicesInsideSphere(occ, r):
-	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
-	xx, yy = np.meshgrid(x, x)
+def getDistFromCenter(L):
+	""" Take an occupancy array (or a numpy array) and create a meshgrid to get
+	the distance to center of every lattice point
+	:param occ: np array
+	:return x, y: the meshgrid
+	:return dist_from_center: np array with the distance from the center of each site as the val.
+	"""
+	temp = np.arange(-L, L+1)
+	x, y = np.meshgrid(temp, temp)
+	return x, y, np.sqrt(x**2+y**2)
 
-	dist_from_center = np.sqrt(xx ** 2 + yy ** 2)
-	indices = np.where(dist_from_center < r)
-	return indices
+#TODO: remove dependence on getDistFromCenter here because I want to do it before
+# i call all of these get()Mask functions
+# so getDistFromCenter returns x, y, and distFromCenter....
+# and I need get()Mask to take it distFromCenter
+def getInsideSphereMask(occ, r):
+	# x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
+	# xx, yy = np.meshgrid(x, x)
+	#
+	# dist_from_center = np.sqrt(xx ** 2 + yy ** 2)
+	dist_from_center = getDistFromCenter(occ.shape[0]//2)
+	mask = (dist_from_center < r)
+	return mask
 
 
-def getLineIndices(occ, r, axis=0):
+def getLineMask(occ, r, axis=0):
 	'''something here
 	:param occ: pass in occupancy array, should be np array
 	:param r: value at which the lines are
@@ -432,19 +453,22 @@ def getLineIndices(occ, r, axis=0):
 		if 1, line horizontal and get everything past it
 	:return indices: indices of occ which fulfill x or y >= r
 	'''
+	#TODO: transition to using getDistFromCenter? except thats not what I want here...
 	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
 	xx, yy = np.meshgrid(x, x)
 
 	if axis == 0:  # if asking for vertical line
-		mask = np.where(xx >= r)
+		mask = (xx >= r)
 	else:  # if asking for horizontal line
-		mask = np.where(yy >= r)
+		mask = (yy >= r)
 	return mask
 
 def getBoxMask(occ, line):
 	'''
 	use np.where in the x direction and y direction to get a box?
 	'''
+	# TODO: transition to using getDistFromCenter? except i dont want that, i just want
+	# x and y from the meshgrid..
 	temp = np.arange(-(occ.shape[0]//2), occ.shape[0]//2+1)
 	x, y = np.meshgrid(temp, temp)
 
@@ -492,24 +516,26 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 
-	x = np.arange(-L, L + 1)
-	xx, yy = np.meshgrid(x, x)
-	dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	boundary = dist_to_center <= R
+	# x = np.arange(-L, L + 1)
+	# xx, yy = np.meshgrid(x, x)
+	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+	dist_to_center = getDistFromCenter(L)
+	boundary = (dist_to_center <= R)
 
-	indices = [getIndicesInsideSphere(occ, r) for r in Rs]
-	line_indices = [getLineIndices(occ, r) for r in Rs]
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	masks = [getInsideSphereMask(occ, r) for r in Rs]
+	line_masks = [getLineMask(occ, r) for r in Rs]
+	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	ts = getListOfTimes(1,tMax)  # default num is 500
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts:
-			probs = [1 - np.sum(occ[idx]) for idx in indices]
+			probs = [1 - np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
 			# Get probabilities outside line
-			probs = [np.sum(occ[idx]) for idx in line_indices]
+			probs = [np.sum(occ[mask]) for mask in line_masks]
 			writer_line.writerow([t, *probs])
 			f_line.flush()
 
@@ -557,27 +583,29 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	
-	x = np.arange(-L, L+1)
-	xx, yy = np.meshgrid(x, x)
-	dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	boundary = dist_to_center <= R
+	# x = np.arange(-L, L+1)
+	# xx, yy = np.meshgrid(x, x)
+	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+	dist_to_center = getDistFromCenter(L)
+	boundary = (dist_to_center <= R)
 
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	ts = getListOfTimes(1,tMax)  #default is 500
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts: 
 			Rs = list(np.array(vs * t).astype(int))
 
-			indices = [getIndicesInsideSphere(occ, r) for r in Rs]
-			line_indices = [getLineIndices(occ, r) for r in Rs]
+			masks = [getInsideSphereMask(occ, r) for r in Rs]
+			line_masks = [getLineMask(occ, r) for r in Rs]
 
-			probs = [1-np.sum(occ[idx]) for idx in indices]
+			probs = [1-np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
 			# Get probabilities outside line
-			probs = [np.sum(occ[idx]) for idx in line_indices]
+			probs = [np.sum(occ[mask]) for mask in line_masks]
 			writer_line.writerow([t, *probs])
 			f_line.flush()
 
@@ -611,7 +639,8 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	params = 1/10
 	measureOnSphere(tMax, L, R, Rs, distribution, params, linefile)
 	'''
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	ts = getListOfTimes(1,tMax)  # num default is 500
 	vs = np.array(vs)
 
 	write_header = True
@@ -636,10 +665,11 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	
-	x = np.arange(-L, L+1)
-	xx, yy = np.meshgrid(x, x)
-	dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	boundary = dist_to_center <= R
+	# x = np.arange(-L, L+1)
+	# xx, yy = np.meshgrid(x, x)
+	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+	dist_to_center = getDistFromCenter(L)
+	boundary = (dist_to_center <= R)
 	
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, 
@@ -711,27 +741,29 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	
-	x = np.arange(-L, L+1)
-	xx, yy = np.meshgrid(x, x)
-	dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+	# x = np.arange(-L, L+1)
+	# xx, yy = np.meshgrid(x, x)
+	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+	dist_to_center = getDistFromCenter(L)
 	boundary = dist_to_center <= R
 
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
+	ts = getListOfTimes(1,tMax)  # default num=500
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts: 
 			Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
 
-			indices = [getIndicesInsideSphere(occ, r) for r in Rs]
-			line_indices = [getLineIndices(occ, r) for r in Rs]
+			masks = [getInsideSphereMask(occ, r) for r in Rs]
+			line_masks = [getLineMask(occ, r) for r in Rs]
 
-			probs = [1-np.sum(occ[idx]) for idx in indices]
+			probs = [1-np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
 			# Get probabilities outside line
-			probs = [np.sum(occ[idx]) for idx in line_indices]
+			probs = [np.sum(occ[mask]) for mask in line_masks]
 			writer_line.writerow([t, *probs])
 			f_line.flush()
 
@@ -748,17 +780,15 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	absorbingBoundary = prepareBoundary(L, R)
-	ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
-
+	#ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
+	ts = getListOfTimes(1,tMax)  # default num=500
 	# check if savefiles exist first
-	#TODO: get rid of the write_header boolean?
-	write_header = True
 	if os.path.exists(boxSaveFile):
 		data = pd.read_csv(boxSaveFile)
 		max_time = max(data['Time'].values)
 		# if file exists and is finished, exit
 		if max_time == ts[-2]:
-			print(f"File Finished{f}", flush=True)
+			print(f"File Finished", flush=True)
 			sys.exit()
 
 	# Set up writer and write header if save file doesn't exist,
@@ -768,12 +798,11 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		writer_hline = csv.writer(f_hline)  # prob. above moving horizontal line
 		writer_vline = csv.writer(f_vline)  # prob. past vertical line
 		writer_sphere = csv.writer(f_sphere)  # prob outside sphere
-		# only write data if savefile doesn't exist?
-		if write_header:
-			writer.writerow(["Time", *vs])
-			writer_hline.writerow(['Time', *vs])
-			writer_vline.writerow(['Time', *vs])
-			writer_sphere.writerow(["Time", *vs])
+		# write data (since we switched from 'a' to 'w' this is fine)
+		writer.writerow(["Time", *vs])
+		writer_hline.writerow(['Time', *vs])
+		writer_vline.writerow(['Time', *vs])
+		writer_sphere.writerow(["Time", *vs])
 
 		# generate data
 		for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
@@ -786,18 +815,20 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				# Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
 
 				RsScale = eval(barrierScale)
+				print(f"t: {t}, RsScale: {RsScale}")
 				# Rs = list(np.array(vs * RsScale).astype(int))
 
 				# remove the astype(int) because it's causing the data to "turn on"
 				# at weird spots, and is unnecessary because get(insertshape)Indices already
 				# implicitly takes into account the lattice spacing.
 				Rs = list(np.array(vs * RsScale))
+				# print(f"Rs: {Rs}")
 
 				# grab indices for box, past lines, and outside sphere
 				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
-				hline_masks = [getLineIndices(occ, r, axis=1) for r in Rs]  # below horizontal line
-				vline_masks = [getLineIndices(occ, r, axis=0) for r in Rs]  # past vertical line
-				sphere_indices = [getIndicesInsideSphere(occ, r) for r in Rs]  # outside sphere
+				hline_masks = [getLineMask(occ, r, axis=1) for r in Rs]  # below horizontal line
+				vline_masks = [getLineMask(occ, r, axis=0) for r in Rs]  # past vertical line
+				sphere_masks = [getInsideSphereMask(occ, r) for r in Rs]  # outside sphere
 
 				# get probabilities in quadrant
 				probs = [np.sum(occ[mask]) for mask in box_masks]
@@ -815,7 +846,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				f_vline.flush()
 
 				#get probabilities outside sphere
-				probs = [1-np.sum(occ[idx]) for idx in sphere_indices]
+				probs = [1-np.sum(occ[mask]) for mask in sphere_masks]
 				writer_sphere.writerow([t,*probs])
 				f_sphere.flush()
 

@@ -59,6 +59,8 @@ if __name__ == "__main__":
     # TODO: automate this?? or just have a fixed number... idk.
     # using eval(args) to avoid having a bunch of if elif statements
     vs = np.geomspace(eval(args.vmin), eval(args.vmax), 21)
+    #print(f"vs: {vs} \n vmin {args.vmin} and eval {eval(args.vmin)}\n vmax {args.vmax} and eval {eval(args.vmax)}")
+    #print(f"barrier scaling: {args.barrierScaling}")
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,
