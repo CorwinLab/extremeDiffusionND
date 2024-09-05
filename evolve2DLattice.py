@@ -140,7 +140,8 @@ def organizePDFStats(occ, integratedPDF, listOfNs, firstPDFStats, firstIntegrate
 	:param t, occ: the t, occ in the evolve2DLattice generator
 	:param integratedPDF: pass in the integratedPDF which is +=occ at every timestep
 	:param listOfNs: array; values of N at which you want to calc. roughness stats
-	:param firstPDFStats, firstIntegratedPDFStats: the initial stats that start the picket fence (?)
+	:param firstPDFStats: the initial stats that start the picket fence (?) needs
+	:param firstIntegratedPDFStats: the initial stats that start the picket fence (?) needs
 	:return: PDFstats, integratedPDFStats: two arrays;shape is (time, N's, stats); statsN0 = stats[:,0,:]
 		stats are: perimeter, area, roughness, radius moment 1,radius moment 2, N
 	"""
@@ -166,11 +167,12 @@ def organizeTArrivalStats(t, tArrival, firstStats):
 	stats = np.vstack((firstStats, tempstats))
 	return stats
 
-def getListOfTimes(maxT, startT=1,num=500):
+def getListOfTimes(maxT, startT=1, num=500):
 	"""
 	Generate a list of times, with approx. 10 times per decade (via np.geomspace), out to time maxT
 	:param maxT: the maximum time to which lattice is being evolved
 	:param startT: initial time at which lattice evolution is started
+	:param num: number of times you want
 	:return: the list of times
 	"""
 	return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
@@ -216,7 +218,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius=None, bounda
 	# Initialize needed variables
 	integratedPDF = np.copy(occupancy) # should inehrit occupancy's dtype
 	if listOfTimes is None:
-		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int))
+		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int)
 	if listOfNs is None:
 		listOfNs = getListOfNs()
 	# Run the data and stats generation loop
@@ -263,7 +265,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	tArrival[:] = notYetArrived
 	tArrival[occupancy > 0] = 0
 	if listOfTimes is None:
-		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int))
+		listOfTimes = getListOfTimes(maxT, startT=startT,num=round(10 * np.log10(maxT))).astype(int)
 	# data and stats generation
 	for t, occ in evolve2DLattice(occupancy, maxT, distribution, params, False, boundary=absorbingBoundary):
 		if tArrival.shape[0] != occ.shape[0]:
@@ -440,7 +442,8 @@ def getInsideSphereMask(occ, r):
 	# xx, yy = np.meshgrid(x, x)
 	#
 	# dist_from_center = np.sqrt(xx ** 2 + yy ** 2)
-	dist_from_center = getDistFromCenter(occ.shape[0]//2)
+	x,y, dist_from_center = getDistFromCenter(occ.shape[0]//2)
+	# print(dist_from_center)
 	mask = (dist_from_center < r)
 	return mask
 
@@ -519,7 +522,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	# x = np.arange(-L, L + 1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	dist_to_center = getDistFromCenter(L)
+	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
 
 	masks = [getInsideSphereMask(occ, r) for r in Rs]
@@ -586,7 +589,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 	# x = np.arange(-L, L+1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	dist_to_center = getDistFromCenter(L)
+	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
 
 	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
@@ -668,7 +671,7 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	# x = np.arange(-L, L+1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	dist_to_center = getDistFromCenter(L)
+	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
 	
 	# Need to make sure occ doesn't change size
@@ -744,7 +747,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	# x = np.arange(-L, L+1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
-	dist_to_center = getDistFromCenter(L)
+	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = dist_to_center <= R
 
 	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
@@ -815,7 +818,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				# Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
 
 				RsScale = eval(barrierScale)
-				print(f"t: {t}, RsScale: {RsScale}")
+				# print(f"t: {t}, RsScale: {RsScale}")
 				# Rs = list(np.array(vs * RsScale).astype(int))
 
 				# remove the astype(int) because it's causing the data to "turn on"
@@ -854,12 +857,13 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		f_vline.close()
 		f_hline.close()
 
-def getQuadrantMeanVar(path, filetype):
+def getQuadrantMeanVar(path, filetype, tCutOff=None):
 	"""
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
 	:param path: the path of the directory, /projects/jamming/fransces/data/quadrant/distribution/tMax
-	:filetype: string, 'box', 'hline', 'vline, 'sphere'
+	:param filetype: string, 'box', 'hline', 'vline, 'sphere'
+	:param tCutOff: default mmax val of time; otherwise the time at which you want to cut off the data to look at
 	:return: finalMom1: the first moment (mean) of log(probabilities)
 	:return finalMom2 - finalMom1**2: the variance of log(probabilities)
 	"""
@@ -872,22 +876,27 @@ def getQuadrantMeanVar(path, filetype):
 		files = glob.glob("hLine*",root_dir=path)
 	elif filetype == 'sphere':
 		files = glob.glob("sphere*",root_dir=path)
-	# print(files)
-	# initialize the moments & mask
-	# see below... trying to get mean and var across both?
-	# https://stackoverflow.com/questions/25057835/get-the-mean-across-multiple-pandas-dataframes
-	moment1, moment2 = None, None
-	for file in files:
+	# initialize the moments & mask, fence problem
+	# moment1, moment2 = None, None
+	firstData = pd.read_csv(f"{path}/{files[0]}")
+	if tCutOff is None:
+		tCutOff = np.max(firstData['Time'])
+	firstData = firstData[firstData.Time <= tCutOff]
+	firstData = firstData.values
+	#firstData = np.log(firstData.values)
+	moment1, moment2 = firstData, np.square(firstData)
+	# load in rest of files to do mean var calc, excluding the 0th file
+	for file in files[1:]:
 		data = pd.read_csv(f"{path}/{file}")
-		# data['Time'] = data['Time'].astype(int)
-		# data = np.log(data.values, where=(data.values!=0))
-		data = np.log(data.values)
-		if moment1 is None:
-			moment1 = data
-			moment2 = np.square(data)
-		else:
-			moment1 += data
-			moment2 += np.square(data)
+		data = data[data.Time <= tCutOff]
+		data = data.values
+		#data = np.log(data.values)
+		# if moment1 is None:
+		# 	moment1 = data
+		# 	moment2 = np.square(data)
+		# else:
+		moment1 += data
+		moment2 += np.square(data)
 	moment1 = moment1 / len(files)
 	moment2 = moment2 / len(files)
 	# Return the mean and the variance
