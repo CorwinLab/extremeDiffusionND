@@ -436,18 +436,12 @@ def getDistFromCenter(L):
 # i call all of these get()Mask functions
 # so getDistFromCenter returns x, y, and distFromCenter....
 # and I need get()Mask to take it distFromCenter
-def getInsideSphereMask(occ, r):
-	# x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
-	# xx, yy = np.meshgrid(x, x)
-	#
-	# dist_from_center = np.sqrt(xx ** 2 + yy ** 2)
-	x,y, dist_from_center = getDistFromCenter(occ.shape[0]//2)
-	# print(dist_from_center)
-	mask = (dist_from_center < r)
+def getInsideSphereMask(dist, r):
+	mask = (dist < r)
 	return mask
 
 
-def getLineMask(occ, r, axis=0):
+def getLineMask(x, y, r, axis=0):
 	'''something here
 	:param occ: pass in occupancy array, should be np array
 	:param r: value at which the lines are
@@ -455,27 +449,16 @@ def getLineMask(occ, r, axis=0):
 		if 1, line horizontal and get everything past it
 	:return indices: indices of occ which fulfill x or y >= r
 	'''
-	#TODO: transition to using getDistFromCenter? except thats not what I want here...
-	x = np.arange(-(occ.shape[0] // 2), occ.shape[0] // 2 + 1)
-	xx, yy = np.meshgrid(x, x)
-
 	if axis == 0:  # if asking for vertical line
-		mask = (xx >= r)
+		mask = (x >= r)
 	else:  # if asking for horizontal line
-		mask = (yy >= r)
+		mask = (y >= r)
 	return mask
 
-def getBoxMask(occ, line):
+def getBoxMask(x, y, line):
 	'''
 	use np.where in the x direction and y direction to get a box?
 	'''
-	# TODO: transition to using getDistFromCenter? except i dont want that, i just want
-	# x and y from the meshgrid..
-	temp = np.arange(-(occ.shape[0]//2), occ.shape[0]//2+1)
-	x, y = np.meshgrid(temp, temp)
-
-	# get the quadrant (positive x and positive y?)
-	# assumes that the line we're interested in is the same at x as it is y
 	mask = ((x>=line ) & (y >= line))
 	return mask
 
@@ -518,14 +501,12 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 
-	# x = np.arange(-L, L + 1)
-	# xx, yy = np.meshgrid(x, x)
-	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
 	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
 
-	masks = [getInsideSphereMask(occ, r) for r in Rs]
-	line_masks = [getLineMask(occ, r) for r in Rs]
+	# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
+	masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+	line_masks = [getLineMask(x, y, r) for r in Rs]
 	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
 	ts = getListOfTimes(1,tMax)  # default num is 500
 	# Need to make sure occ doesn't change size
@@ -584,10 +565,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 	# Create occupancy array
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
-	
-	# x = np.arange(-L, L+1)
-	# xx, yy = np.meshgrid(x, x)
-	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
+
 	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
 
@@ -599,8 +577,9 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 		if t in ts: 
 			Rs = list(np.array(vs * t).astype(int))
 
-			masks = [getInsideSphereMask(occ, r) for r in Rs]
-			line_masks = [getLineMask(occ, r) for r in Rs]
+			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
+			masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+			line_masks = [getLineMask(x, y, r) for r in Rs]
 
 			probs = [1-np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
@@ -757,8 +736,9 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 		if t in ts: 
 			Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
 
-			masks = [getInsideSphereMask(occ, r) for r in Rs]
-			line_masks = [getLineMask(occ, r) for r in Rs]
+			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
+			masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+			line_masks = [getLineMask(x, y, r) for r in Rs]
 
 			probs = [1-np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
@@ -779,11 +759,15 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 	string here
 	'''
 	# initialize occ with absorbing boundary,
-	occ = np.zeros((2 * L + 1, 2 * L + 1))
+	occ = np.zeros((2 * L + 1, 2 * L + 1),dtype=np.quad)
 	occ[L, L] = 1
-	absorbingBoundary = prepareBoundary(L, R)
 	#ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
 	ts = getListOfTimes(1,tMax)  # default num=500
+
+	# get meshgrid stuff since the size of occ never changes
+	x, y, dist_to_center = getDistFromCenter(L)
+	absorbingBoundary = (dist_to_center <= R)
+
 	# check if savefiles exist first
 	if os.path.exists(boxSaveFile):
 		data = pd.read_csv(boxSaveFile)
@@ -808,26 +792,18 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=absorbingBoundary):
 			# Get probabilities inside sphere
 			if t in ts:
-				# make lines/radius move with v*t^(1/2)
-				# Rs = list(np.array(vs * np.sqrt(t)).astype(int))  # get list of radii/lines whatever
-
-				# make lines/radii move with v* (t/sqrt(ln t) )
-				# Rs = list(np.array(vs * t/np.sqrt(np.log(t))).astype(int))  # get list of radii/lines whatever
-
 				RsScale = eval(barrierScale)
-				# print(f"t: {t}, RsScale: {RsScale}")
-				# Rs = list(np.array(vs * RsScale).astype(int))
 
 				# remove the astype(int) because it's causing the data to "turn on"
 				# at weird spots, and is unnecessary because get(insertshape)Indices already
 				# implicitly takes into account the lattice spacing.
 				Rs = list(np.array(vs * RsScale))
-				# print(f"Rs: {Rs}")
 
 				# grab indices for box, past lines, and outside sphere
-				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
-				vline_masks = [getLineMask(occ, r, axis=0) for r in Rs]  # past vertical line
-				sphere_masks = [getInsideSphereMask(occ, r) for r in Rs]  # outside sphere
+				# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
+				box_masks = [getBoxMask(x, y, r) for r in Rs]  # should be a list of masks
+				vline_masks = [getLineMask(x, y, r, axis=0) for r in Rs]  # past vertical line
+				sphere_masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]  # outside sphere
 
 				# get probabilities in quadrant
 				probs = [np.sum(occ[mask]) for mask in box_masks]
@@ -847,7 +823,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		f_sphere.close()
 		f_vline.close()
 
-def getQuadrantMeanVar(path, filetype, tCutOff=None):
+def getQuadrantMeanVar(path, filetype, tCutOff=None,takeLog=True):
 	"""
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
@@ -872,13 +848,19 @@ def getQuadrantMeanVar(path, filetype, tCutOff=None):
 	if tCutOff is None:
 		tCutOff = np.max(firstData['Time'])
 	firstData = firstData[firstData.Time <= tCutOff]
-	firstData = np.log(firstData.values)
+	if takeLog:
+		firstData = np.log(firstData.values)
+	else:
+		firstData = firstData.values
 	moment1, moment2 = firstData, np.square(firstData)
 	# load in rest of files to do mean var calc, excluding the 0th file
 	for file in files[1:]:
 		data = pd.read_csv(f"{path}/{file}")
 		data = data[data.Time <= tCutOff]
-		data = np.log(data.values)
+		if takeLog:
+			data = np.log(data.values)
+		else:
+			data = data.values
 		moment1 += data
 		moment2 += np.square(data)
 	moment1 = moment1 / len(files)
