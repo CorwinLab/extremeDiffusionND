@@ -436,8 +436,8 @@ def getDistFromCenter(L):
 # i call all of these get()Mask functions
 # so getDistFromCenter returns x, y, and distFromCenter....
 # and I need get()Mask to take it distFromCenter
-def getInsideSphereMask(dist, r):
-	mask = (dist < r)
+def getOutsideSphereMask(dist, r):
+	mask = (dist >= r)
 	return mask
 
 
@@ -505,7 +505,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	boundary = (dist_to_center <= R)
 
 	# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
-	masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+	masks = [getOutsideSphereMask(dist_to_center, r) for r in Rs]
 	line_masks = [getLineMask(x, y, r) for r in Rs]
 	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
 	ts = getListOfTimes(1,tMax)  # default num is 500
@@ -513,7 +513,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts:
-			probs = [1 - np.sum(occ[mask]) for mask in masks]
+			probs = [np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
@@ -578,10 +578,10 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 			Rs = list(np.array(vs * t).astype(int))
 
 			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
-			masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+			masks = [getOutsideSphereMask(dist_to_center, r) for r in Rs]
 			line_masks = [getLineMask(x, y, r) for r in Rs]
 
-			probs = [1-np.sum(occ[mask]) for mask in masks]
+			probs = [np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
@@ -737,10 +737,10 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 			Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
 
 			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
-			masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]
+			masks = [getOutsideSphereMask(dist_to_center, r) for r in Rs]
 			line_masks = [getLineMask(x, y, r) for r in Rs]
 
-			probs = [1-np.sum(occ[mask]) for mask in masks]
+			probs = [np.sum(occ[mask]) for mask in masks]
 			writer.writerow([t, *probs])
 			f.flush()
 
@@ -759,7 +759,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 	string here
 	'''
 	# initialize occ with absorbing boundary,
-	occ = np.zeros((2 * L + 1, 2 * L + 1),dtype=np.quad)
+	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
 	#ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))  # generate times
 	ts = getListOfTimes(1,tMax)  # default num=500
@@ -803,7 +803,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
 				box_masks = [getBoxMask(x, y, r) for r in Rs]  # should be a list of masks
 				vline_masks = [getLineMask(x, y, r, axis=0) for r in Rs]  # past vertical line
-				sphere_masks = [getInsideSphereMask(dist_to_center, r) for r in Rs]  # outside sphere
+				sphere_masks = [getOutsideSphereMask(dist_to_center, r) for r in Rs]  # outside sphere
 
 				# get probabilities in quadrant
 				probs = [np.sum(occ[mask]) for mask in box_masks]
@@ -816,7 +816,7 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				f_vline.flush()
 
 				#get probabilities outside sphere
-				probs = [1-np.sum(occ[mask]) for mask in sphere_masks]
+				probs = [np.sum(occ[mask]) for mask in sphere_masks]
 				writer_sphere.writerow([t,*probs])
 				f_sphere.flush()
 
