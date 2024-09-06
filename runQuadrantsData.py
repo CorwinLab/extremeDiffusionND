@@ -16,14 +16,13 @@ def runQuadrantsData(baseDirectory, sysID, tMax, L, R, vs, distribution, params,
     #TODO: figure out data saving structure because my brain is stalling
     os.makedirs(baseDirectory, exist_ok=True)
     boxSaveFile = os.path.join(baseDirectory,'Box'+str(sysID)+'.txt')
-    hLineSaveFile = os.path.join(baseDirectory, 'hLine'+str(sysID)+'.txt')
     vLineSaveFile = os.path.join(baseDirectory,'vLine'+str(sysID)+'.txt')
     sphereSaveFile = os.path.join(baseDirectory,'sphere'+str(sysID)+'.txt')
 
     # output: 4 files... but 1 directory?
     # ie give /projects/jamming/fransces/data/quadrants/
     ev.measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
-                   boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile)
+                   boxSaveFile, vLineSaveFile, sphereSaveFile)
 
 if __name__ == "__main__":
     # initialize argparse
@@ -48,19 +47,11 @@ if __name__ == "__main__":
     if args.R is None:
         args.R = args.L - 1
 
-    # argparse dumb so hard code in equally spaced velocities
-    # the min. velocity to check is the one where at t=tMax, the radius
-    # or moving line has moved exactly 1
-    # the max is when, at t=tmax, v sqrt(t) has crossed t exaclty once.
-    # vs = np.geomspace(1/np.sqrt(args.tMax),np.sqrt(args.tMax), 21)
-    # for radii going as vt, the max v = 1
-    # vs = np.geomspace(1/args.tMax, 1, 21)
-
-    # TODO: automate this?? or just have a fixed number... idk.
     # using eval(args) to avoid having a bunch of if elif statements
+    # TODO: currently this only works for vt because i manually set vmax=1 in the slurm script
     vs = np.geomspace(eval(args.vmin), eval(args.vmax), 21)
-    #print(f"vs: {vs} \n vmin {args.vmin} and eval {eval(args.vmin)}\n vmax {args.vmax} and eval {eval(args.vmax)}")
-    #print(f"barrier scaling: {args.barrierScaling}")
+    # TODO: bias towards large velocities?
+
 
     # call it once, instead of numSys
     runQuadrantsData(args.baseDirectory, args.sysID, args.tMax, args.L, args.R, vs,

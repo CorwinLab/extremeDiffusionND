@@ -1,7 +1,6 @@
 import numpy as np
 import os
 
-from numba.np.npdatetime import timedelta_maximum_impl
 from scipy.ndimage import morphology as m
 import csv
 import npquad
@@ -775,7 +774,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 
 # guess i'm writing code like jacob now
 def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
-				   boxSaveFile, hLineSaveFile, vLineSaveFile, sphereSaveFile):
+				   boxSaveFile, vLineSaveFile, sphereSaveFile):
 	'''
 	string here
 	'''
@@ -795,15 +794,13 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 			sys.exit()
 
 	# Set up writer and write header if save file doesn't exist,
-	with open(boxSaveFile, 'w') as f, open(hLineSaveFile, 'w') as f_hline, open(vLineSaveFile, 'w') as f_vline, open(sphereSaveFile, 'w') as f_sphere:
+	with open(boxSaveFile, 'w') as f, open(vLineSaveFile, 'w') as f_vline, open(sphereSaveFile, 'w') as f_sphere:
 		# create writers
 		writer = csv.writer(f)  # prob. in quadrant
-		writer_hline = csv.writer(f_hline)  # prob. above moving horizontal line
 		writer_vline = csv.writer(f_vline)  # prob. past vertical line
 		writer_sphere = csv.writer(f_sphere)  # prob outside sphere
 		# write data (since we switched from 'a' to 'w' this is fine)
 		writer.writerow(["Time", *vs])
-		writer_hline.writerow(['Time', *vs])
 		writer_vline.writerow(['Time', *vs])
 		writer_sphere.writerow(["Time", *vs])
 
@@ -829,7 +826,6 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 
 				# grab indices for box, past lines, and outside sphere
 				box_masks = [getBoxMask(occ, r) for r in Rs]  # should be a list of masks
-				hline_masks = [getLineMask(occ, r, axis=1) for r in Rs]  # below horizontal line
 				vline_masks = [getLineMask(occ, r, axis=0) for r in Rs]  # past vertical line
 				sphere_masks = [getInsideSphereMask(occ, r) for r in Rs]  # outside sphere
 
@@ -837,11 +833,6 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				probs = [np.sum(occ[mask]) for mask in box_masks]
 				writer.writerow([t, *probs])
 				f.flush()
-
-				# Get probabilities past horizontal line
-				probs = [np.sum(occ[mask]) for mask in hline_masks]
-				writer_hline.writerow([t, *probs])
-				f_hline.flush()
 
 				# get probabilities past veritcal line:
 				probs = [np.sum(occ[mask]) for mask in vline_masks]
@@ -855,7 +846,6 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 
 		f_sphere.close()
 		f_vline.close()
-		f_hline.close()
 
 def getQuadrantMeanVar(path, filetype, tCutOff=None):
 	"""
@@ -882,19 +872,13 @@ def getQuadrantMeanVar(path, filetype, tCutOff=None):
 	if tCutOff is None:
 		tCutOff = np.max(firstData['Time'])
 	firstData = firstData[firstData.Time <= tCutOff]
-	firstData = firstData.values
-	#firstData = np.log(firstData.values)
+	firstData = np.log(firstData.values)
 	moment1, moment2 = firstData, np.square(firstData)
 	# load in rest of files to do mean var calc, excluding the 0th file
 	for file in files[1:]:
 		data = pd.read_csv(f"{path}/{file}")
 		data = data[data.Time <= tCutOff]
-		data = data.values
-		#data = np.log(data.values)
-		# if moment1 is None:
-		# 	moment1 = data
-		# 	moment2 = np.square(data)
-		# else:
+		data = np.log(data.values)
 		moment1 += data
 		moment2 += np.square(data)
 	moment1 = moment1 / len(files)
