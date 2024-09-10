@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+import scipy.stats as ss
 from scipy.ndimage import morphology as m
 import csv
 import npquad
@@ -53,7 +54,8 @@ def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionParams=N
 	"""
 	Evolves 2Dlattice according to a distribution, with the option to evolve agents or the PDF
 	:param occupancy: the array you are working in or the initial occupancy
-	:param i, j = sites with agents in them/sites that are occupied
+	:param i: see below
+	:param j: = sites with agents in them/sites that are occupied
 	:param rng: numpy random number generator (should be np.random.default_rng() passed in)
 	:param distribution: string specifying distribution you are using to generate biases
 	:param isPDF: boolean; if true then multiplies biases; if false then draws multinomial\
@@ -240,7 +242,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 	:param distribution: string; specify distribution from which biases pulled
 	:param params: the parameters of the specified distribution
 	:param startT: optional arg, starts at 1
-	:param absorbingRadius: optional parameter to set location of absorbing boundary condition
+	:param absorbingRadius: None or float, optional parameter to set location of absorbing boundary condition
 	:param listOfTimes: array, list of times at which statistics calculated
 	:return occ: the final evolved occupancy array
 	:return tArrival: the array with the time of first arrival for every site in the occupancy array
@@ -381,12 +383,12 @@ def getTArrivalRoughness(tArrival, tau):
 
 def getContourRoughness(Array, N):
 	"""
-    Calculate roughness of an evolved CDF as a function of 1/NParticles by looking at contour of
-    probability >= 1/N. implicitly also a function of time goes inside the evolve2Dlattice generator loop
-    :param Array: 2D array
-    :param N: the number of particles for which you want probability to be >= 1/N
-    :return: perimeter, area, roughness, radius moment 1, adius moment 2, N
-    """
+	Calculate roughness of an evolved CDF as a function of 1/NParticles by looking at contour of
+	probability >= 1/N. implicitly also a function of time goes inside the evolve2Dlattice generator loop
+	:param Array: 2D array
+	:param N: the number of particles for which you want probability to be >= 1/N
+	:return: perimeter, area, roughness, radius moment 1, adius moment 2, N
+	"""
 	mask = (Array >= np.quad(1/N))  # binary image
 	roughnessStats = getStateRoughness(mask)  # get roughness vals for that specific 1/N
 	return roughnessStats + (N,)  # p, a, r, d, d2, N
@@ -424,7 +426,7 @@ def getRoughnessMeanVar(path):
 def getDistFromCenter(L):
 	""" Take an occupancy array (or a numpy array) and create a meshgrid to get
 	the distance to center of every lattice point
-	:param occ: np array
+	:param L: size of mesh grid you're creating (should be occ.shape[0]//2 usually, or maxT)
 	:return x, y: the meshgrid
 	:return dist_from_center: np array with the distance from the center of each site as the val.
 	"""
@@ -432,23 +434,20 @@ def getDistFromCenter(L):
 	x, y = np.meshgrid(temp, temp)
 	return x, y, np.sqrt(x**2+y**2)
 
-#TODO: remove dependence on getDistFromCenter here because I want to do it before
-# i call all of these get()Mask functions
-# so getDistFromCenter returns x, y, and distFromCenter....
-# and I need get()Mask to take it distFromCenter
 def getOutsideSphereMask(dist, r):
 	mask = (dist >= r)
 	return mask
 
 
 def getLineMask(x, y, r, axis=0):
-	'''something here
-	:param occ: pass in occupancy array, should be np array
+	""" something here
+	:param x: pass in the x from meshgrid
+	:param y: pass in the y from meshgrid
 	:param r: value at which the lines are
 	:param axis: if 0 (default), line is vertical, get everything to the right of it;
 		if 1, line horizontal and get everything past it
 	:return indices: indices of occ which fulfill x or y >= r
-	'''
+	"""
 	if axis == 0:  # if asking for vertical line
 		mask = (x >= r)
 	else:  # if asking for horizontal line
@@ -456,25 +455,31 @@ def getLineMask(x, y, r, axis=0):
 	return mask
 
 def getBoxMask(x, y, line):
-	'''
+	"""
 	use np.where in the x direction and y direction to get a box?
-	'''
+	"""
 	mask = ((x>=line ) & (y >= line))
 	return mask
 
 def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSaveFile):
-	'''
+	"""
 	Parameters
 	----------
-	L : int 
+	L : int
 		Radius of size of box
 
-	tMax : int 
+	tMax : int
 		Maximum time to iterate to
 
 	R : float
 		Radius of circle for circular boundary conditions
-	
+
+	Rs: numpy array (float)
+		list of radii for barrier of sphere
+
+	distribution: str
+		specify distrubiton from which probability is drawn
+
 	Example
 	-------
 	tMax = 100
@@ -486,7 +491,7 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 	distribution = 'dirichlet'
 	params = 1/10
 	measureOnSphere(tMax, L, R, Rs, distribution, params, savefile, linefile)
-	'''
+	"""
 
 	Rs.append(R)
 	f = open(sphereSaveFile, 'a')
@@ -527,13 +532,13 @@ def measureOnSphere(tMax, L, R, Rs, distribution, params, sphereSaveFile, lineSa
 
 
 def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, lineSaveFile):
-	'''
+	"""
 	Parameters
 	----------
-	L : int 
+	L : int
 		Radius of size of box
 
-	tMax : int 
+	tMax : int
 		Maximum time to iterate to
 
 	R : float
@@ -541,7 +546,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
 	vs : np array
 		list of velocities at which boundary moves?
-	
+
 	Example
 	-------
 	tMax = 100
@@ -553,8 +558,8 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 	distribution = 'dirichlet'
 	params = 1/10
 	measureAtVsOnSphere(tMax, L, R, vs, distribution, params, savefile, linefile)
-	'''
-	
+	"""
+
 	f = open(sphereSaveFile, 'a')
 	writer = csv.writer(f)
 	writer.writerow(["Time", *vs])
@@ -574,7 +579,7 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
-		if t in ts: 
+		if t in ts:
 			Rs = list(np.array(vs * t).astype(int))
 
 			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
@@ -595,13 +600,13 @@ def measureAtVsOnSphere(tMax, L, R, vs , distribution, params, sphereSaveFile, l
 
 
 def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
-	'''
+	"""
 	Parameters
 	----------
-	L : int 
+	L : int
 		Radius of size of box
 
-	tMax : int 
+	tMax : int
 		Maximum time to iterate to
 
 	R : float
@@ -619,7 +624,7 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	distribution = 'dirichlet'
 	params = 1/10
 	measureOnSphere(tMax, L, R, Rs, distribution, params, linefile)
-	'''
+	"""
 	# ts = np.unique(np.geomspace(1, tMax, num=500).astype(int))
 	ts = getListOfTimes(1,tMax)  # num default is 500
 	vs = np.array(vs)
@@ -645,15 +650,15 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 	# Create occupancy array, goes from 0 to 2L+1 in each dir.
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
-	
+
 	# x = np.arange(-L, L+1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
 	x, y, dist_to_center = getDistFromCenter(L)
 	boundary = (dist_to_center <= R)
-	
+
 	# Need to make sure occ doesn't change size
-	for t, occ in evolve2DLattice(occ, tMax, distribution, params, 
+	for t, occ in evolve2DLattice(occ, tMax, distribution, params,
 								  True, boundary=boundary):
 		# Get probabilities inside sphere
 		if t in ts:
@@ -675,7 +680,7 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 
 			probs = xCDF[indices]
 			probs[indices_outside_array] = 0
-			
+
 			# Don't do this line
 			# probs = [np.sum(occ[xx >= r]) for r in Rs]
 			writer.writerow([t, *probs])
@@ -685,18 +690,18 @@ def measureLineProb(tMax, L, R, vs, distribution, params, saveFile):
 
 
 def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, lineSaveFile):
-	'''
+	"""
 	Parameters
 	----------
-	L : int 
+	L : int
 		Radius of size of box
 
-	tMax : int 
+	tMax : int
 		Maximum time to iterate to
 
 	R : float
 		Radius of circle for circular boundary conditions
-	
+
 	Example
 	-------
 	tMax = 100
@@ -708,8 +713,8 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	distribution = 'dirichlet'
 	params = 1/10
 	measureOnSphere(tMax, L, R, Rs, distribution, params, savefile, linefile)
-	'''
-	
+	"""
+
 	f = open(sphereSaveFile, 'a')
 	writer = csv.writer(f)
 	writer.writerow(["Time", *alpha])
@@ -721,7 +726,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	# Create occupancy array
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
-	
+
 	# x = np.arange(-L, L+1)
 	# xx, yy = np.meshgrid(x, x)
 	# dist_to_center = np.sqrt(xx ** 2 + yy ** 2)
@@ -733,7 +738,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 	# Need to make sure occ doesn't change size
 	for t, occ in evolve2DLattice(occ, tMax, distribution, params, True, boundary=boundary):
 		# Get probabilities inside sphere
-		if t in ts: 
+		if t in ts:
 			Rs = list(np.array(1/2 * t**(np.array(alpha))).astype(int))
 
 			# pass in the x, y, and sqrt(x^2+y^2) from the getDistFromCenter meshgrid
@@ -755,9 +760,7 @@ def measureRegimes(tMax, L, R, alpha, distribution, params, sphereSaveFile, line
 # guess i'm writing code like jacob now
 def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 				   boxSaveFile, vLineSaveFile, sphereSaveFile):
-	'''
-	string here
-	'''
+	"""something here"""
 	# initialize occ with absorbing boundary,
 	occ = np.zeros((2 * L + 1, 2 * L + 1))
 	occ[L, L] = 1
@@ -823,15 +826,16 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		f_sphere.close()
 		f_vline.close()
 
-def getQuadrantMeanVar(path, filetype, tCutOff=None,takeLog=True):
+def getMeasurementMeanVarSkew(path, filetype='sphere', tCutOff=None,takeLog=True):
 	"""
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
 	:param path: the path of the directory, /projects/jamming/fransces/data/quadrant/distribution/tMax
 	:param filetype: string, 'box', 'hline', 'vline, 'sphere'
 	:param tCutOff: default mmax val of time; otherwise the time at which you want to cut off the data to look at
-	:return: finalMom1: the first moment (mean) of log(probabilities)
-	:return finalMom2 - finalMom1**2: the variance of log(probabilities)
+	:return: moment1: the first moment (mean) of log(probabilities)
+	:return variance: the variance of log(probabilities)
+	:return skew: the skew of log(probabilities)
 	"""
 	# grab the files in the data directory that are the Box data
 	if filetype == 'box':
@@ -843,7 +847,6 @@ def getQuadrantMeanVar(path, filetype, tCutOff=None,takeLog=True):
 	elif filetype == 'sphere':
 		files = glob.glob("sphere*",root_dir=path)
 	# initialize the moments & mask, fence problem
-	# moment1, moment2 = None, None
 	firstData = pd.read_csv(f"{path}/{files[0]}")
 	if tCutOff is None:
 		tCutOff = np.max(firstData['Time'])
@@ -852,7 +855,7 @@ def getQuadrantMeanVar(path, filetype, tCutOff=None,takeLog=True):
 		firstData = np.log(firstData.values)
 	else:
 		firstData = firstData.values
-	moment1, moment2 = firstData, np.square(firstData)
+	moment1, moment2, moment3 = firstData, np.square(firstData), np.power(firstData,3)
 	# load in rest of files to do mean var calc, excluding the 0th file
 	for file in files[1:]:
 		data = pd.read_csv(f"{path}/{file}")
@@ -863,9 +866,13 @@ def getQuadrantMeanVar(path, filetype, tCutOff=None,takeLog=True):
 			data = data.values
 		moment1 += data
 		moment2 += np.square(data)
+		moment3 += np.power(data, 3)
 	moment1 = moment1 / len(files)
 	moment2 = moment2 / len(files)
-	# Return the mean and the variance
+	moment3 = moment3 / len(files)
+	variance = moment2 - np.square(moment1)
+	skew = (moment3 - 3*moment1*variance-np.power(moment1,3))/(variance)**(3/2)
+	# Return the mean, variance, and skew
 	# note this also will take the mean and var of time. what you want is
 	# meanBox[:,1:] to get just the probs.
-	return moment1, moment2 - np.square(moment1)
+	return moment1, variance, skew
