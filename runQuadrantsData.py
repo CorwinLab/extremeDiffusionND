@@ -37,8 +37,8 @@ if __name__ == "__main__":
     parser.add_argument("L", type=int, help="specify dist. from origin to edge of occupancy")
     parser.add_argument("barrierScaling", type=str, help="specify the time scaling with which the barrier moves",
                         choices = ['t','np.sqrt(t)','t/np.sqrt(np.log(t))','t/np.log(t)'])
-    parser.add_argument("vmin",type=str,help='specify minimum velocity')
-    parser.add_argument("vmax",type=str,help='specify maximum velocity')
+    parser.add_argument("--vmin",type=str,default=None, help='specify minimum velocity, optional')
+    parser.add_argument("--vmax",type=str,default=None, help='specify maximum velocity, optional')
     parser.add_argument("--R",type=int, default=None, help="specify radius of absorbing boundary, default L-1")
     parser.add_argument('--params', help='specify the parameters of distribution (only dirichlet for now, 1/10)',
                         default=None)
@@ -49,8 +49,11 @@ if __name__ == "__main__":
 
     # using eval(args) to avoid having a bunch of if elif statements
     # TODO: currently this only works for vt because i manually set vmax=1 in the slurm script
-    vs = np.geomspace(eval(args.vmin), eval(args.vmax), 21)
     # TODO: bias towards large velocities?
+    if args.vmin is None and args.vmax is None:
+        vs = np.geomspace(10**(-3),10,21)
+    else:
+        vs = np.geomspace(eval(args.vmin), eval(args.vmax), 21)
 
 
     # call it once, instead of numSys
