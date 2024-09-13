@@ -826,6 +826,10 @@ def measureAtVsBox(tMax, L, R, vs, distribution, params, barrierScale,
 		f_sphere.close()
 		f_vline.close()
 
+
+#TODO: add in something that saves mean,var, skew as well. so i dont have to keep running it
+# since the runtime is going up with number of systems. the 50,000 took about half an hr ?
+# also add excess kurtosis to calc.
 def getMeasurementMeanVarSkew(path, filetype='sphere', tCutOff=None,takeLog=True):
 	"""
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
@@ -855,7 +859,7 @@ def getMeasurementMeanVarSkew(path, filetype='sphere', tCutOff=None,takeLog=True
 		firstData = np.log(firstData.values)
 	else:
 		firstData = firstData.values
-	moment1, moment2, moment3 = firstData, np.square(firstData), np.power(firstData,3)
+	moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData,3), np.power(firstData,4)
 	# load in rest of files to do mean var calc, excluding the 0th file
 	for file in files[1:]:
 		data = pd.read_csv(f"{path}/{file}")
@@ -867,12 +871,18 @@ def getMeasurementMeanVarSkew(path, filetype='sphere', tCutOff=None,takeLog=True
 		moment1 += data
 		moment2 += np.square(data)
 		moment3 += np.power(data, 3)
+		moment4 += np.power(data, 4)
 	moment1 = moment1 / len(files)
 	moment2 = moment2 / len(files)
 	moment3 = moment3 / len(files)
+	moment4 = moment4 / len(files)
 	variance = moment2 - np.square(moment1)
 	skew = (moment3 - 3*moment1*variance-np.power(moment1,3))/(variance)**(3/2)
+	kurtosis = (moment4 - 4*moment1*moment3 + 6*(moment1**2)*moment2-3*np.power(moment1,4))/(np.square(variance))
 	# Return the mean, variance, and skew
 	# note this also will take the mean and var of time. what you want is
 	# meanBox[:,1:] to get just the probs.
-	return moment1, variance, skew
+	np.savez_compressed(os.path.join(path,"stats.npz"), mean=moment1, variance=variance,
+						skew=skew, excessKurtosis=kurtosis-3)
+
+#	return moment1, variance, skew, kurtosis-3
