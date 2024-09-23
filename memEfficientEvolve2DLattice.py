@@ -147,45 +147,46 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
             # structure is (scaling, times, velocities)
             np.save(saveFile, probabilityFile)
 
+
+# mem efficient versino of runQuadrantsData.py???
+#Check for files, set everything up
+# set up occ and get list of ts, then calculate radii
+# TODO: put in function so can do python3 memEfficientEvolve2DLattice arg1 arg2 arg3 ??
+def runDirichlet(L, tMax, alphas, saveFile):
+    # setup
+    # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
+    alphas = np.array([alphas]*4)
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    ts = ev.getListOfTimes(1, tMax)  # array of times
+    # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
+    velocities = np.array([np.geomspace(10**(-3),10,21)])  # the extra np.array([]) outside is to get the correct shape
+    # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
+    listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts,velocities,np.sqrt),
+                            calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
+
+    # check if savefile exists already and is complete?
+    if os.path.exists(saveFile):
+        data = pd.read_csv(saveFile)
+        max_time = max(data['Time'].values)
+        if max_time == ts[-2]:
+            print(f"File Finished", flush=True)
+            sys.exit()
+    # actually run and save data
+    evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, saveFile)
+
+
 if __name__ == "__main__":
-    # mem efficient versino of runQuadrantsData.py???
-    #Check for files, set everything up
-    # set up occ and get list of ts, then calculate radii
-    # TODO: put in function so can do python3 memEfficientEvolve2DLattice arg1 arg2 arg3 ??
-    def runDirichlet(L, tMax, alphas, velocities, saveFile):
-        # setup
-        alphas = np.array(alphas)
-        occ = np.zeros((2 * L + 1, 2 * L + 1))
-        occ[L, L] = 1
-        ts = ev.getListOfTimes(1, tMax)  # array of times
-        # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1'
-        # for velocities: want... 10^-3 to 4?
-        #velocities = np.array([[]])  # needs to be (1, #ofVelocities) in shape?
-        if velocities is None:
-            velocities = np.array([np.geomspace(10**(-3),10,21)])  # the extra np.array([]) outside is to get the correct shape
-        # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
-        listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts,velocities,np.sqrt),
-                                calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
-
-        # check if savefile exists already and is complete?
-        if os.path.exists(saveFile):
-            data = pd.read_csv(saveFile)
-            max_time = max(data['Time'].values)
-            if max_time == ts[-2]:
-                print(f"File Finished", flush=True)
-                sys.exit()
-        # actually run and save data
-        evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, saveFile)
-
     # these should call sysargv now, or argparse
-    # L =
-    # tMax =
-    # alphas =
-    # velocities = np.array([velocitiy 1, velocity 2, velocity3])
-    # saveFile =
+    L = int(sys.argv[1])
+    tMax = int(sys.argv[2])
+    alphas = float(sys.argv[3])
+    saveFile = sys.argv[4]
     # initialize occ. & get list of t's
 
     # actually call runDirichlet here, inside the if __name__ == __main__
+    # python memEfficientEvolve2DLattice L tMax alphas velocities (None) saveFile
+    runDirichlet(L, tMax, alphas, saveFile)
 
 #
 # # TODO: turn this into the above shit
