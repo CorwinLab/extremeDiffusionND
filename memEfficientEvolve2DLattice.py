@@ -194,8 +194,9 @@ if __name__ == "__main__":
     tMax = int(sys.argv[2])
     alphas = float(sys.argv[3])
     saveFile = sys.argv[4]
+    systID = int(sys.argv[5])
     # initialize occ. & get list of t's
 
     # actually call runDirichlet here, inside the if __name__ == __main__
     # python memEfficientEvolve2DLattice L tMax alphas velocities (None) saveFile
-    runDirichlet(L, tMax, alphas, saveFile)
+    runDirichlet(L, tMax, alphas, saveFile,systID)
