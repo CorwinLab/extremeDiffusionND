@@ -181,6 +181,7 @@ def runDirichlet(L, tMax, alphas, saveFile):
         if max_time == ts[-2]:
             print(f"File Finished", flush=True)
             sys.exit()
+    os.makedirs(saveFile)
     # actually run and save data
     evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, saveFile)
 
