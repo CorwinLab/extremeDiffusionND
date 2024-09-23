@@ -10,7 +10,7 @@ import sys
 from numba import njit, vectorize
 from sympy.physics.units import velocity
 
-from evolve2DLattice import getListOfTimes
+#from evolve2DLattice import getListOfTimes
 
 
 #TODO: rename file to be more specific
@@ -124,6 +124,17 @@ def tOnSqrtLogT(time):
 
 def tOnLogT(time):
     return time / np.log(time)
+
+
+def getListOfTimes(maxT, startT=1, num=500):
+    """
+	Generate a list of times, with approx. 10 times per decade (via np.geomspace), out to time maxT
+	:param maxT: the maximum time to which lattice is being evolved
+	:param startT: initial time at which lattice evolution is started
+	:param num: number of times you want
+	:return: the list of times
+	"""
+    return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
 # # TODO: no, use npz and put the save inside the for t, occ in evolve2DDirichlet
