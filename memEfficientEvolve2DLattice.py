@@ -53,7 +53,9 @@ def updateOccupancy(occupancy, time, alphas):
     return occupancy
 
 
-@njit
+#@njit
+# doesn't need to be in numba because not actually doing anything slow
+# it's calling a function that takes time but we've already wrapped that  one in numba
 def evolve2DDirichlet(occupancy, maxT, alphas, startT=1):
     """ generator object, memory efficient version of evolve2DLattice
     note that there's no absorbingBoundary because of the way i and j are indexed
@@ -77,7 +79,7 @@ def dirichletWrapper(*args, **kwargs):
 
 
 @njit
-def integratedProbability(occupancy, distance, time):
+def integratedProbability(occupancy, distance):
     """
     calculate the probability past a sphere of radius distance
     effectively the same part os sphere_masks = [getOutsideSphereMask for r in Rs]
@@ -131,6 +133,7 @@ def tOnLogT(time):
 # # also pre-allocate memory for the probabilities file
 # also this should be the stuff that was originally in the part of
 # measureDirichletPastBox, starting with the with statement
+# also this doesn't need to be in numba because it's calling things already made fast by numba
 def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
     # pre-allocate memory for probability
     probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
@@ -138,19 +141,18 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
     for t, occ in evolve2DDirichlet(occupancy, tMax, alphas):
         if t in ts:
             # take measurements
-            probs = integratedProbability(occ, radiiList[:,t,:], t)
+            probs = integratedProbability(occ, radiiList[:,t,:])
             probabilityFile[:,t,:] = probs  # shape: (# scalings, # velocities)
             # save. note that this overwrites the file each time
             # structure is (scaling, times, velocities)
-            np.save(saveFile,probabilityFile)
-    # return occ, probabilityFile
+            np.save(saveFile, probabilityFile)
 
 if __name__ == "__main__":
     # mem efficient versino of runQuadrantsData.py???
     #Check for files, set everything up
     # set up occ and get list of ts, then calculate radii
     # TODO: put in function so can do python3 memEfficientEvolve2DLattice arg1 arg2 arg3 ??
-    def runDirichlet(L, tMax, alphas, saveFile):
+    def runDirichlet(L, tMax, alphas, velocities, saveFile):
         # setup
         alphas = np.array(alphas)
         occ = np.zeros((2 * L + 1, 2 * L + 1))
@@ -158,7 +160,10 @@ if __name__ == "__main__":
         ts = ev.getListOfTimes(1, tMax)  # array of times
         # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1'
         # for velocities: want... 10^-3 to 4?
-        velocities = np.array([[]])  # needs to be (1, #ofVelocities) in shape?
+        #velocities = np.array([[]])  # needs to be (1, #ofVelocities) in shape?
+        if velocities is None:
+            velocities = np.array([np.geomspace(10**(-3),10,21)])  # the extra np.array([]) outside is to get the correct shape
+        # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
         listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts,velocities,np.sqrt),
                                 calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
 
@@ -172,50 +177,52 @@ if __name__ == "__main__":
         # actually run and save data
         evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, saveFile)
 
+    # these should call sysargv now, or argparse
     # L =
     # tMax =
     # alphas =
+    # velocities = np.array([velocitiy 1, velocity 2, velocity3])
     # saveFile =
     # initialize occ. & get list of t's
 
     # actually call runDirichlet here, inside the if __name__ == __main__
 
-
-# TODO: turn this into the above shit
-def measureDirichletPastBox(tMax, L, vs, alphas, barrierScale, saveFile):
-    """ memory efficient version of measureAtVsBox
-    :param tMax: int, maximum time
-    :param L: dist. from origin to edge of occ array
-    :param vs: np array, list of velocities at which barrier is moving
-    :param alphas: np array, list of 4 values of alpha parameter for Dirichlet dist.
-    :param barrierScale: str, either 't' 't**(1/2)' or something
-    :param saveFile: str, path to which data is written
-    """
-    #initialize occupancyi
-    occ = np.zeros((2 * L + 1, 2 * L + 1))
-    occ[L, L] = 1
-    ts = ev.getListOfTimes(1, tMax)
-    print(f"ts: {ts}")
-    # check if savefile exists already and is complete?
-    if os.path.exists(saveFile):
-        data = pd.read_csv(saveFile)
-        max_time = max(data['Time'].values)
-        if max_time == ts[-2]:
-            print(f"File Finished", flush=True)
-            sys.exit()
-    # set up writer and write header if save file doesn't exist
-    with open(saveFile, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Time", *vs])
-        # generate data
-        for t, occ in evolve2DDirichlet(occ, tMax, alphas):
-            print(f"t in loop: {t}")
-            if t in ts:
-                # get list of radii dependent on velocities
-                RsScale = eval(barrierScale)
-                Rs = list(np.array(vs * RsScale))
-                # calculate probabilities & save them to file
-                probs = [integratedProbability(occ, r) for r in Rs]
-                writer.writerow([t, *probs])
-                f.flush()
-        f.close()
+#
+# # TODO: turn this into the above shit
+# def measureDirichletPastBox(tMax, L, vs, alphas, barrierScale, saveFile):
+#     """ memory efficient version of measureAtVsBox
+#     :param tMax: int, maximum time
+#     :param L: dist. from origin to edge of occ array
+#     :param vs: np array, list of velocities at which barrier is moving
+#     :param alphas: np array, list of 4 values of alpha parameter for Dirichlet dist.
+#     :param barrierScale: str, either 't' 't**(1/2)' or something
+#     :param saveFile: str, path to which data is written
+#     """
+#     #initialize occupancyi
+#     occ = np.zeros((2 * L + 1, 2 * L + 1))
+#     occ[L, L] = 1
+#     ts = ev.getListOfTimes(1, tMax)
+#     print(f"ts: {ts}")
+#     # check if savefile exists already and is complete?
+#     if os.path.exists(saveFile):
+#         data = pd.read_csv(saveFile)
+#         max_time = max(data['Time'].values)
+#         if max_time == ts[-2]:
+#             print(f"File Finished", flush=True)
+#             sys.exit()
+#     # set up writer and write header if save file doesn't exist
+#     with open(saveFile, 'w') as f:
+#         writer = csv.writer(f)
+#         writer.writerow(["Time", *vs])
+#         # generate data
+#         for t, occ in evolve2DDirichlet(occ, tMax, alphas):
+#             print(f"t in loop: {t}")
+#             if t in ts:
+#                 # get list of radii dependent on velocities
+#                 RsScale = eval(barrierScale)
+#                 Rs = list(np.array(vs * RsScale))
+#                 # calculate probabilities & save them to file
+#                 probs = [integratedProbability(occ, r) for r in Rs]
+#                 writer.writerow([t, *probs])
+#                 f.flush()
+#         f.close()
