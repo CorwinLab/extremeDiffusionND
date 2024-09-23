@@ -177,9 +177,9 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     # check if savefile exists already and is complete?
 
     os.makedirs(saveFile, exist_ok=True)
-    actualSaveFile = os.path.join(saveFile,str(systID))
-    if os.path.exists(saveFile):
-        data = pd.read_csv(saveFile)
+    actualSaveFile = os.path.join(saveFile, str(systID))
+    if os.path.exists(actualSaveFile):
+        data = pd.read_csv(actualSaveFile)
         max_time = max(data['Time'].values)
         if max_time == ts[-2]:
             print(f"File Finished", flush=True)
@@ -199,4 +199,4 @@ if __name__ == "__main__":
 
     # actually call runDirichlet here, inside the if __name__ == __main__
     # python memEfficientEvolve2DLattice L tMax alphas velocities (None) saveFile
-    runDirichlet(L, tMax, alphas, saveFile,systID)
+    runDirichlet(L, tMax, alphas, saveFile, systID)
