@@ -160,7 +160,7 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
 # mem efficient versino of runQuadrantsData.py???
 # Check for files, set everything up
 # set up occ and get list of ts, then calculate radii
-def runDirichlet(L, tMax, alphas, saveFile):
+def runDirichlet(L, tMax, alphas, saveFile, systID):
     # setup
     # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
     alphas = np.array([alphas] * 4)
@@ -175,15 +175,17 @@ def runDirichlet(L, tMax, alphas, saveFile):
                             calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
 
     # check if savefile exists already and is complete?
+
+    os.makedirs(saveFile, exist_ok=True)
+    actualSaveFile = os.path.join(saveFile,str(systID))
     if os.path.exists(saveFile):
         data = pd.read_csv(saveFile)
         max_time = max(data['Time'].values)
         if max_time == ts[-2]:
             print(f"File Finished", flush=True)
             sys.exit()
-    os.makedirs(saveFile)
     # actually run and save data
-    evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, saveFile)
+    evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, actualSaveFile)
 
 
 if __name__ == "__main__":
