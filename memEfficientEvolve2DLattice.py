@@ -8,7 +8,7 @@ import pandas as pd
 import sys
 # import glob
 from numba import njit, vectorize
-from sympy.physics.units import velocity
+
 
 #from evolve2DLattice import getListOfTimes
 
