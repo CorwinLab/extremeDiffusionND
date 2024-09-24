@@ -149,9 +149,10 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
     # data generation
     for t, occ in evolve2DDirichlet(occupancy, tMax, alphas):
         if t in ts:
+            idx = list(ts).index(t)
             # take measurements
-            probs = integratedProbability(occ, radiiList[:, list(ts).index(t), :])
-            probabilityFile[:, t, :] = probs  # shape: (# scalings, # velocities)
+            probs = integratedProbability(occ, radiiList[:, idx, :])
+            probabilityFile[:, idx, :] = probs  # shape: (# scalings, # velocities)
             # save. note that this overwrites the file each time
             # structure is (scaling, times, velocities)
             np.save(saveFile, probabilityFile)
