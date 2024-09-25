@@ -10,9 +10,6 @@ import sys
 from numba import njit, vectorize
 
 
-#from evolve2DLattice import getListOfTimes
-
-
 #TODO: rename file to be more specific
 
 # jacob's way of drawing random dirichlet numbers, but isn't needed because
@@ -90,7 +87,7 @@ def integratedProbability(occupancy, distances):
     :param distances: float or array, radius of sphere past which probability is being measured
     :return probability: float, the integrated/summed probability past radius above
     """
-    probability = np.zeros_like(distances)  # distance should be passed in as radiiList[:,timestep,:]
+    probability = np.zeros_like(distances)
     origin = [occupancy.shape[0] // 2, occupancy.shape[1] // 2]
     # iterate over the current occupancy
     for i in range(0, occupancy.shape[0]):
@@ -98,17 +95,21 @@ def integratedProbability(occupancy, distances):
             # iterate over the the radii that are passsed in
             for k in range(distances.shape[0]):
                 for l in range(distances.shape[1]):
-                    # check if past barrier for each radius, and if so, add the prob. from that site
-                    if np.square(distances[k, l]) >= np.square(i - origin[0]) + np.square(j - origin[1]):
+                    #<= because we have we want (distToCenter >= radii) to get outside sphere
+                    # and the line below has (radii <= dist)
+                    if np.square(distances[k, l]) <= np.square(i - origin[0]) + np.square(j - origin[1]):
                         probability[k, l] += occupancy[i, j]
     return probability
 
 
+#TODO: try/except to suppress warnings
+
 # i need a 3-index np array, time, velocity, scaling
 def calculateRadii(times, velocity, scalingFunction):
     """
-    get list of radii = v*(function of time) for barrier for given times
+    get list of radii = v*(function of time) for barrier for given times; returns array of (# times, # velocities)
     Ex: radii = calculateRadii(np.array([1,5,10]),np.array([[0.01,0.1,0.5]]),tOnLogT)
+    To get the original velocities, call radiiVT[0,:]
     """
     times = np.expand_dims(times, 1)  # turns ts into a column vector
     return velocity * scalingFunction(times)
@@ -134,7 +135,51 @@ def getListOfTimes(maxT, startT=1, num=500):
 	:param num: number of times you want
 	:return: the list of times
 	"""
+    # do maxT-1 because otherwise it includes tMax, which we don't want?
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
+
+
+def getMeasurementMeanVarSkew(path, takeLog=True):
+    """
+	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
+	Calculates progressively, since loading in every array will use too much memory
+	:param path: the path of the directory, /projects/jamming/fransces/data/quadrant/distribution/tMax
+	:param filetype: string, 'box', 'hline', 'vline, 'sphere'
+	:param tCutOff: default mmax val of time; otherwise the time at which you want to cut off the data to look at
+	:return: moment1: the first moment (mean) of log(probabilities)
+	:return variance: the variance of log(probabilities)
+	:return skew: the skew of log(probabilities)
+	"""
+    # grab the files in the data directory that are the Box data
+    files = os.listdir(path)
+    files.remove('info.npz')
+    # initialize the moments & mask, fence problem
+    firstData = np.load(f"{path}/{files[0]}")
+    if takeLog:
+        firstData = np.log(firstData)
+    moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData, 3), np.power(firstData, 4)
+    # load in rest of files to do mean var calc, excluding the 0th file
+    for file in files[1:]:
+        data = np.load(f"{path}/{file}")
+        if takeLog:
+            data = np.log(data)
+        moment1 += data
+        moment2 += np.square(data)
+        moment3 += np.power(data, 3)
+        moment4 += np.power(data, 4)
+    moment1 = moment1 / len(files)
+    moment2 = moment2 / len(files)
+    moment3 = moment3 / len(files)
+    moment4 = moment4 / len(files)
+    variance = moment2 - np.square(moment1)
+    skew = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance) ** (3 / 2)
+    kurtosis = (moment4 - 4 * moment1 * moment3 + 6 * (moment1 ** 2) * moment2 - 3 * np.power(moment1, 4)) / (
+        np.square(variance))
+    # Return the mean, variance, and skew, and excess kurtosis (kurtosis-3)
+    # note this also will take the mean and var of time. what you want is
+    # meanBox[:,1:] to get just the probs.
+    np.savez_compressed(os.path.join(path, "stats.npz"), mean=moment1, variance=variance,
+                        skew=skew, excessKurtosis=kurtosis - 3)
 
 
 # # TODO: no, use npz and put the save inside the for t, occ in evolve2DDirichlet
@@ -155,7 +200,13 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
             probabilityFile[:, idx, :] = probs  # shape: (# scalings, # velocities)
             # save. note that this overwrites the file each time
             # structure is (scaling, times, velocities)
+            # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
             np.save(saveFile, probabilityFile)
+
+            # #TODO: saving occupancy
+            # os.makedirs(os.path.join(saveFile,"states"),exist_ok=True)
+            # statesPath = os.path.join(saveFile, "states", str(t) + '.txt')
+            # np.savetxt(statesPath, occ)
 
 
 # mem efficient versino of runQuadrantsData.py???
@@ -167,7 +218,8 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     alphas = np.array([alphas] * 4)
     occ = np.zeros((2 * L + 1, 2 * L + 1))
     occ[L, L] = 1
-    ts = getListOfTimes(1, tMax)  # array of times
+    ts = getListOfTimes(1, tMax-1)  # array of times, tMax-1 because we don't want to include the last t
+    # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
     # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
     velocities = np.array(
         [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
@@ -179,12 +231,19 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
 
     os.makedirs(saveFile, exist_ok=True)
     actualSaveFile = os.path.join(saveFile, str(systID))
-    if os.path.exists(actualSaveFile):
-        data = pd.read_csv(actualSaveFile)
-        max_time = max(data['Time'].values)
+    if os.path.exists(os.path.join(saveFile,"info.npz")):
+        #todo: fix because saving as npy now and not txt
+        info = np.load(os.path.join(saveFile,"info.npz"))
+        times = info['times']
+        max_time = max(times)
         if max_time == ts[-2]:
             print(f"File Finished", flush=True)
             sys.exit()
+
+    #TODO: save additioanl file with list of times and list of velocities
+    # i think this is gonna run into
+    if not os.path.exists(os.path.join(saveFile,"info.npz")):
+        np.savez_compressed(os.path.join(saveFile,"info"), times=ts, velocities=velocities)
     # actually run and save data
     evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, actualSaveFile)
 
