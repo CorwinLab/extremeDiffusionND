@@ -152,7 +152,8 @@ def getMeasurementMeanVarSkew(path, takeLog=True):
 	"""
     # grab the files in the data directory that are the Box data
     files = os.listdir(path)
-    files.remove('info.npz')
+    if 'info.npz' in files:
+        files.remove('info.npz')
     # initialize the moments & mask, fence problem
     firstData = np.load(f"{path}/{files[0]}")
     if takeLog:
@@ -240,8 +241,6 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
             print(f"File Finished", flush=True)
             sys.exit()
 
-    #TODO: save additioanl file with list of times and list of velocities
-    # i think this is gonna run into
     if not os.path.exists(os.path.join(saveFile,"info.npz")):
         np.savez_compressed(os.path.join(saveFile,"info"), times=ts, velocities=velocities)
     # actually run and save data
