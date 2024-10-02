@@ -139,7 +139,7 @@ def getListOfTimes(maxT, startT=1, num=500):
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
-def getMeasurementMeanVarSkew(path, takeLog=True):
+def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     """
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
@@ -155,13 +155,22 @@ def getMeasurementMeanVarSkew(path, takeLog=True):
     if 'info.npz' in files:
         files.remove('info.npz')
     # initialize the moments & mask, fence problem
+    times = np.load(f"{path}/info.npz")['times']
     firstData = np.load(f"{path}/{files[0]}")
+    # if given some tCutoff:
+    if tCutOff is not None:
+        # find index val. of the closest tCutoff. this is a dumb way to do that
+        idx = list(times).index(times[times<tCutOff][-1])
+        # cut all data off to that val
+        firstData = firstData[:, :idx+1, :]
     if takeLog:
         firstData = np.log(firstData)
     moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData, 3), np.power(firstData, 4)
     # load in rest of files to do mean var calc, excluding the 0th file
     for file in files[1:]:
         data = np.load(f"{path}/{file}")
+        if tCutOff is not None:  # only chop data if you give it a cutoff time
+            data = data[:,:idx+1,:]
         if takeLog:
             data = np.log(data)
         moment1 += data
@@ -182,13 +191,8 @@ def getMeasurementMeanVarSkew(path, takeLog=True):
     np.savez_compressed(os.path.join(path, "stats.npz"), mean=moment1, variance=variance,
                         skew=skew, excessKurtosis=kurtosis - 3)
 
-
-# # TODO: no, use npz and put the save inside the for t, occ in evolve2DDirichlet
-# and at each timestep you basicaly overwrite the file?
-# # also pre-allocate memory for the probabilities file
-# also this should be the stuff that was originally in the part of
-# measureDirichletPastBox, starting with the with statement
-# also this doesn't need to be in numba because it's calling things already made fast by numba
+# this function is what originally went inside the "with" statement
+# it doesn't need numba because it's calling things that already use it
 def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
     # pre-allocate memory for probability
     probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
@@ -199,7 +203,7 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
             # take measurements
             probs = integratedProbability(occ, radiiList[:, idx, :])
             probabilityFile[:, idx, :] = probs  # shape: (# scalings, # velocities)
-            # save. note that this overwrites the file each time
+            # save. note that this overwrites the file at each time
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
             np.save(saveFile, probabilityFile)
@@ -219,7 +223,7 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     alphas = np.array([alphas] * 4)
     occ = np.zeros((2 * L + 1, 2 * L + 1))
     occ[L, L] = 1
-    ts = getListOfTimes(1, tMax-1)  # array of times, tMax-1 because we don't want to include the last t
+    ts = getListOfTimes(1, tMax - 1)  # array of times, tMax-1 because we don't want to include the last t
     # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
     # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
     velocities = np.array(
@@ -232,17 +236,17 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
 
     os.makedirs(saveFile, exist_ok=True)
     actualSaveFile = os.path.join(saveFile, str(systID))
-    if os.path.exists(os.path.join(saveFile,"info.npz")):
+    if os.path.exists(os.path.join(saveFile, "info.npz")):
         #todo: fix because saving as npy now and not txt
-        info = np.load(os.path.join(saveFile,"info.npz"))
+        info = np.load(os.path.join(saveFile, "info.npz"))
         times = info['times']
         max_time = max(times)
         if max_time == ts[-2]:
             print(f"File Finished", flush=True)
             sys.exit()
 
-    if not os.path.exists(os.path.join(saveFile,"info.npz")):
-        np.savez_compressed(os.path.join(saveFile,"info"), times=ts, velocities=velocities)
+    if not os.path.exists(os.path.join(saveFile, "info.npz")):
+        np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
     evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, actualSaveFile)
 
