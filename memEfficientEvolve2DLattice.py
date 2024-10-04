@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from time import time as wallTime # start = wallTime() to avoid issues with using time as variable
 # import scipy.stats as ss
 # from scipy.ndimage import morphology as m
 # import csv
@@ -137,8 +138,41 @@ def getListOfTimes(maxT, startT=1, num=500):
 	"""
     # do maxT-1 because otherwise it includes tMax, which we don't want?
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
+#TODO: finish writing this
+def saveOccupancyState(occ, t, saveFile):
+    """docstring
+    :param occ: np array, the occupancy array to be saved
+    :param t: int, the time at which occupancy is being saved
+    :param saveFile: string, the topDirectory where the probability measurements
+        from evolveAndMeasurePDF are being saved
+    """
+    # generate states directory?
+    # path/systemIDstates
+    os.makedirs(os.path.join(saveFile + "states"), exist_ok=True)
+    # path/systemIDstates/time.txt
+    statesPath = os.path.join(saveFile + "states", str(t) + '.txt')
+    np.savetxt(statesPath, occ)
+    # now delete the old state
+    files = os.listdir(statesPath)
+    if len(files) > 1: # if there's more than the file you just saved
+        # careful because it assumes there's always only 2 files
+        idx = files.index(statesPath)  # get index of file you just created
+        files.pop(idx)  # remove it from list so you grab the other file
+        fileToRemove = files[0]  #pull out of list
+        os.remove(os.path.join(statesPath, fileToRemove))  # actually remove the other file
 
 
+def restoreOccupancyState(states):
+    """
+    :param states: filelist of states path
+    """
+    # load in occupancy array
+    occ = np.loadtxt(states[0])
+    t = int(states[0][:-4])  # assumes filename is (int).txt
+    return t, occ
+
+
+#TODO: write in shit to ignore unfinished files
 def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     """
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
@@ -193,11 +227,12 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
 
 # this function is what originally went inside the "with" statement
 # it doesn't need numba because it's calling things that already use it
-def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile):
     # pre-allocate memory for probability
     probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
     # data generation
-    for t, occ in evolve2DDirichlet(occupancy, tMax, alphas):
+    startTime = wallTime()
+    for t, occ in evolve2DDirichlet(occupancy, tMax, alphas, startT=startT):
         if t in ts:
             idx = list(ts).index(t)
             # take measurements
@@ -206,13 +241,14 @@ def evolveAndMeasurePDF(ts, tMax, occupancy, radiiList, alphas, saveFile):
             # save. note that this overwrites the file at each time
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
+
+            # saves to path/systemID.npy
             np.save(saveFile, probabilityFile)
-
-            # #TODO: saving occupancy
-            # os.makedirs(os.path.join(saveFile,"states"),exist_ok=True)
-            # statesPath = os.path.join(saveFile, "states", str(t) + '.txt')
-            # np.savetxt(statesPath, occ)
-
+        # todo: also need to add in something that checks for an existing state
+        if wallTime() - startTime >= 10800:  # 3 hrs?
+            # this saves to path/systemIDstates/
+            saveOccupancyState(occ, t, saveFile)
+            startTime = wallTime()  # reset wallTime for new interval
 
 # mem efficient versino of runQuadrantsData.py???
 # Check for files, set everything up
@@ -221,34 +257,51 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     # setup
     # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
     alphas = np.array([alphas] * 4)
-    occ = np.zeros((2 * L + 1, 2 * L + 1))
-    occ[L, L] = 1
-    ts = getListOfTimes(1, tMax - 1)  # array of times, tMax-1 because we don't want to include the last t
-    # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
-    # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
-    velocities = np.array(
-        [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
+    # check thtat there is a state (and only one)
+    statesPath = os.path.join(saveFile + "states")
+    # only check for states if the path already exists
+    if os.path.exists(statesPath):
+        states = os.listdir(statesPath)  # i think this will fail if there are no states..
+        # only restore states if the states path exists AND it has the correct file number (1)
+        if len(states) == 1:
+            mostRecentTime, occ = restoreOccupancyState(states)
+            info = np.load(f"{saveFile}/info.npz")
+            ts = info['times']
+            velocities = info['velocities']
+    # otherwise generate occupancy, times, velocities as normal
+    else:
+        occ = np.zeros((2 * L + 1, 2 * L + 1))
+        occ[L, L] = 1
+        mostRecentTime = 1
+        ts = getListOfTimes(tMax - 1,1)  # array of times, tMax-1 because we don't want to include the last t
+        # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
+        # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
+        velocities = np.array(
+            [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
                             calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
 
     # check if savefile exists already and is complete?
-
     os.makedirs(saveFile, exist_ok=True)
-    actualSaveFile = os.path.join(saveFile, str(systID))
-    if os.path.exists(os.path.join(saveFile, "info.npz")):
-        #todo: fix because saving as npy now and not txt
-        info = np.load(os.path.join(saveFile, "info.npz"))
-        times = info['times']
-        max_time = max(times)
-        if max_time == ts[-2]:
+    actualSaveFile = os.path.join(saveFile, str(systID))  # this is system num.
+    # if the file exists and is complete, then exit
+    if os.path.exists(actualSaveFile):
+        # info = np.load(os.path.join(saveFile, "info.npz"))
+        temp = np.load(f"{actualSaveFile}")
+        #todo: make sure still works if everything does happen to be 0? idk
+        idx = np.max(np.nonzero(temp))  # get last nonzero element of 
+        # tMax shape -1 because of the way python indexes
+        if idx == (ts.shape[0]-1):
+        #if max_time == ts[-2]:
             print(f"File Finished", flush=True)
+            # if its done then exit
             sys.exit()
 
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
-    evolveAndMeasurePDF(ts, tMax, occ, listOfRadii, alphas, actualSaveFile)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, alphas, actualSaveFile)
 
 
 if __name__ == "__main__":
