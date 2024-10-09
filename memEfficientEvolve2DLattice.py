@@ -13,20 +13,20 @@ from numba import njit, vectorize
 
 #TODO: rename file to be more specific
 
-# jacob's way of drawing random dirichlet numbers, but isn't needed because
-# numba plays nice with np.random.dirichlet (but not rng.dirichlet
-@vectorize
-def gammaDist(alpha, scale):
-    return np.random.gamma(alpha, scale)
-
-
-@njit
-def randomDirichletNumba(alphas):
-    """ alphas is an array. there should be the same # of alphas as there are
-    biases we're pulling, that is, 4"""
-    gammas = gammaDist(alphas, np.ones(alphas.shape))
-    return gammas / np.sum(gammas)
-
+# # jacob's way of drawing random dirichlet numbers, but isn't needed because
+# # numba plays nice with np.random.dirichlet (but not rng.dirichlet
+# @vectorize
+# def gammaDist(alpha, scale):
+#     return np.random.gamma(alpha, scale)
+#
+#
+# @njit
+# def randomDirichletNumba(alphas):
+#     """ alphas is an array. there should be the same # of alphas as there are
+#     biases we're pulling, that is, 4"""
+#     gammas = gammaDist(alphas, np.ones(alphas.shape))
+#     return gammas / np.sum(gammas)
+#
 
 #TODO: make specific! not flexible
 @njit
@@ -39,6 +39,7 @@ def updateOccupancy(occupancy, time, alphas):
     """
     # start at 1 and go to shape-1 because otherwise at the boundary which we don't want
     # this is an effective way of implementing absorbing boundary conditions
+    # note that the boundary is square
     for i in range(1, occupancy.shape[0] - 1):  # down
         for j in range(1, occupancy.shape[1] - 1):  # across
             # the following conditions means you're on the checkerboard of occupied sites
@@ -148,27 +149,32 @@ def saveOccupancyState(occ, t, saveFile):
     """
     # generate states directory?
     # path/systemIDstates
-    os.makedirs(os.path.join(saveFile + "states"), exist_ok=True)
+    statesPath = os.path.join(saveFile+"states")  #directory/sysIDstates
+    os.makedirs(statesPath, exist_ok=True)
     # path/systemIDstates/time.txt
-    statesPath = os.path.join(saveFile + "states", str(t) + '.txt')
-    np.savetxt(statesPath, occ)
+    currentStatePath = os.path.join(statesPath, str(t) + '.txt')
+    np.savetxt(currentStatePath, occ)
     # now delete the old state
+    # get list of states
     files = os.listdir(statesPath)
     if len(files) > 1: # if there's more than the file you just saved
         # careful because it assumes there's always only 2 files
-        idx = files.index(statesPath)  # get index of file you just created
+        idx = files.index(f"{str(t)}.txt")  # get index of file you just created
         files.pop(idx)  # remove it from list so you grab the other file
         fileToRemove = files[0]  #pull out of list
         os.remove(os.path.join(statesPath, fileToRemove))  # actually remove the other file
 
 
-def restoreOccupancyState(states):
+def restoreOccupancyState(statesPath):
     """
     :param states: filelist of states path
     """
     # load in occupancy array
-    occ = np.loadtxt(states[0])
-    t = int(states[0][:-4])  # assumes filename is (int).txt
+    print(f"statesPath in restoreOcc: {statesPath}")
+    states = os.listdir(statesPath)  # i think this will fail if there are no states..
+    occ = np.loadtxt(f"{statesPath}/{states[0]}")
+    t = int(states[0][:-4])  # assumes filename is (int).
+    print(f"most recent t: {t}")
     return t, occ
 
 
@@ -242,12 +248,14 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
 
-            # saves to path/systemID.npy
+            # saves to directory/systemID.npy
             np.save(saveFile, probabilityFile)
         # todo: also need to add in something that checks for an existing state
-        if wallTime() - startTime >= 10800:  # 3 hrs?
+        #if wallTime() - startTime >= 10800:  # 3 hrs?
+        if wallTime() - startTime >= 60: #1 min
+            print(f"saving state at t = {t}")
             # this saves to path/systemIDstates/
-            saveOccupancyState(occ, t, saveFile)
+            saveOccupancyState(occ, t, saveFile)  #passes in directory/sysID
             startTime = wallTime()  # reset wallTime for new interval
 
 # mem efficient versino of runQuadrantsData.py???
@@ -258,18 +266,23 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
     alphas = np.array([alphas] * 4)
     # check thtat there is a state (and only one)
-    statesPath = os.path.join(saveFile + "states")
+    actualSaveFile = os.path.join(saveFile, str(systID))  # directory/systID
+    statesPath = os.path.join(actualSaveFile+ "states")
+    print(f"statespath {statesPath}")
     # only check for states if the path already exists
     if os.path.exists(statesPath):
         states = os.listdir(statesPath)  # i think this will fail if there are no states..
+        print(f"statespath exists! states: {states}")
         # only restore states if the states path exists AND it has the correct file number (1)
         if len(states) == 1:
-            mostRecentTime, occ = restoreOccupancyState(states)
+            print("there exists a savefile! loading")
+            mostRecentTime, occ = restoreOccupancyState(statesPath)
             info = np.load(f"{saveFile}/info.npz")
             ts = info['times']
             velocities = info['velocities']
     # otherwise generate occupancy, times, velocities as normal
     else:
+        print("no states saved ):")
         occ = np.zeros((2 * L + 1, 2 * L + 1))
         occ[L, L] = 1
         mostRecentTime = 1
@@ -284,7 +297,6 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
 
     # check if savefile exists already and is complete?
     os.makedirs(saveFile, exist_ok=True)
-    actualSaveFile = os.path.join(saveFile, str(systID))  # this is system num.
     # if the file exists and is complete, then exit
     if os.path.exists(actualSaveFile):
         # info = np.load(os.path.join(saveFile, "info.npz"))
