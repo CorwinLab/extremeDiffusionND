@@ -13,20 +13,20 @@ from numba import njit, vectorize
 
 #TODO: rename file to be more specific
 
-# # jacob's way of drawing random dirichlet numbers, but isn't needed because
-# # numba plays nice with np.random.dirichlet (but not rng.dirichlet
-# @vectorize
-# def gammaDist(alpha, scale):
-#     return np.random.gamma(alpha, scale)
-#
-#
-# @njit
-# def randomDirichletNumba(alphas):
-#     """ alphas is an array. there should be the same # of alphas as there are
-#     biases we're pulling, that is, 4"""
-#     gammas = gammaDist(alphas, np.ones(alphas.shape))
-#     return gammas / np.sum(gammas)
-#
+# jacob's way of drawing random dirichlet numbers, but isn't needed because
+# numba plays nice with np.random.dirichlet (but not rng.dirichlet
+@vectorize
+def gammaDist(alpha, scale):
+    return np.random.gamma(alpha, scale)
+
+
+@njit
+def randomDirichletNumba(alphas):
+    """ alphas is an array. there should be the same # of alphas as there are
+    biases we're pulling, that is, 4"""
+    gammas = gammaDist(alphas, np.ones(alphas.shape))
+    return gammas / np.sum(gammas)
+
 
 #TODO: make specific! not flexible
 @njit
@@ -137,9 +137,8 @@ def getListOfTimes(maxT, startT=1, num=500):
 	:param num: number of times you want
 	:return: the list of times
 	"""
-    # do maxT-1 because otherwise it includes tMax, which we don't want?
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
-#TODO: finish writing this
+
 def saveOccupancyState(occ, t, saveFile):
     """docstring
     :param occ: np array, the occupancy array to be saved
@@ -148,37 +147,34 @@ def saveOccupancyState(occ, t, saveFile):
         from evolveAndMeasurePDF are being saved
     """
     # generate states directory?
-    # path/systemIDstates
     statesPath = os.path.join(saveFile+"states")  #directory/sysIDstates
     os.makedirs(statesPath, exist_ok=True)
-    # path/systemIDstates/time.txt
-    currentStatePath = os.path.join(statesPath, str(t) + '.txt')
+    currentStatePath = os.path.join(statesPath, str(t) + '.txt')  # path/systemIDstates/time.txt
     np.savetxt(currentStatePath, occ)
     # now delete the old state
-    # get list of states
-    files = os.listdir(statesPath)
-    if len(files) > 1: # if there's more than the file you just saved
+    files = os.listdir(statesPath)  # get list of states
+    if len(files) > 1:  # if there's more than the file you just saved
         # careful because it assumes there's always only 2 files
         idx = files.index(f"{str(t)}.txt")  # get index of file you just created
         files.pop(idx)  # remove it from list so you grab the other file
-        fileToRemove = files[0]  #pull out of list
+        fileToRemove = files[0]  # pull out of list
         os.remove(os.path.join(statesPath, fileToRemove))  # actually remove the other file
 
 
 def restoreOccupancyState(statesPath):
     """
-    :param states: filelist of states path
+    :param statesPath: full path to where states are saved
     """
     # load in occupancy array
-    print(f"statesPath in restoreOcc: {statesPath}")
+    # print(f"statesPath in restoreOcc: {statesPath}")
     states = os.listdir(statesPath)  # i think this will fail if there are no states..
     occ = np.loadtxt(f"{statesPath}/{states[0]}")
     t = int(states[0][:-4])  # assumes filename is (int).
-    print(f"most recent t: {t}")
+    # print(f"most recent t: {t}")
     return t, occ
 
 
-#TODO: write in shit to ignore unfinished files
+#TODO!!: write in shit to ignore unfinished files
 def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     """
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
@@ -236,24 +232,20 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
 def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile):
     # pre-allocate memory for probability
     probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
-    # data generation
     startTime = wallTime()
+    # data generation
     for t, occ in evolve2DDirichlet(occupancy, tMax, alphas, startT=startT):
         if t in ts:
             idx = list(ts).index(t)
-            # take measurements
-            probs = integratedProbability(occ, radiiList[:, idx, :])
+            probs = integratedProbability(occ, radiiList[:, idx, :])  # take measurements
             probabilityFile[:, idx, :] = probs  # shape: (# scalings, # velocities)
             # save. note that this overwrites the file at each time
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
-
-            # saves to directory/systemID.npy
-            np.save(saveFile, probabilityFile)
-        # todo: also need to add in something that checks for an existing state
-        #if wallTime() - startTime >= 10800:  # 3 hrs?
-        if wallTime() - startTime >= 60: #1 min
-            print(f"saving state at t = {t}")
+            np.save(saveFile, probabilityFile)  # saves to directory/systemID.npy
+        if wallTime() - startTime >= 10800:  # 3 hrs?
+        # if wallTime() - startTime >= 60:  # 1 min
+            # print(f"saving state at t = {t}")
             # this saves to path/systemIDstates/
             saveOccupancyState(occ, t, saveFile)  #passes in directory/sysID
             startTime = wallTime()  # reset wallTime for new interval
@@ -267,30 +259,28 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     alphas = np.array([alphas] * 4)
     # check thtat there is a state (and only one)
     actualSaveFile = os.path.join(saveFile, str(systID))  # directory/systID
-    statesPath = os.path.join(actualSaveFile+ "states")
-    print(f"statespath {statesPath}")
+    statesPath = os.path.join(actualSaveFile+ "states")  # directory/systIDstates
+    # print(f"statespath {statesPath}")
     # only check for states if the path already exists
     if os.path.exists(statesPath):
-        states = os.listdir(statesPath)  # i think this will fail if there are no states..
-        print(f"statespath exists! states: {states}")
+        states = os.listdir(statesPath)
+        # print(f"statespath exists! states: {states}")
         # only restore states if the states path exists AND it has the correct file number (1)
-        if len(states) == 1:
-            print("there exists a savefile! loading")
+        if len(states) == 1:  # if state exists, load it and the time from which it was saved
+            # print("there exists a savefile! loading")
             mostRecentTime, occ = restoreOccupancyState(statesPath)
             info = np.load(f"{saveFile}/info.npz")
             ts = info['times']
             velocities = info['velocities']
     # otherwise generate occupancy, times, velocities as normal
     else:
-        print("no states saved ):")
+        # print("no states saved ):")
         occ = np.zeros((2 * L + 1, 2 * L + 1))
         occ[L, L] = 1
         mostRecentTime = 1
         ts = getListOfTimes(tMax - 1,1)  # array of times, tMax-1 because we don't want to include the last t
         # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
-        # TODO: fix velocity calc. to reflect the "want velocities kinda close to 1 but not quite at 1?
-        velocities = np.array(
-            [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
+        velocities = np.array([np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
                             calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
@@ -307,9 +297,8 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
         if idx == (ts.shape[0]-1):
         #if max_time == ts[-2]:
             print(f"File Finished", flush=True)
-            # if its done then exit
-            sys.exit()
-
+            sys.exit()  # if its done then exit
+    # if an info file doesn't exist, then create one. otherwise just continue with data gen.
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
