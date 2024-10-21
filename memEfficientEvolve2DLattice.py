@@ -11,14 +11,11 @@ import sys
 from numba import njit, vectorize
 
 
-#TODO: rename file to be more specific
-
 # jacob's way of drawing random dirichlet numbers, but isn't needed because
 # numba plays nice with np.random.dirichlet (but not rng.dirichlet
 @vectorize
 def gammaDist(alpha, scale):
     return np.random.gamma(alpha, scale)
-
 
 @njit
 def randomDirichletNumba(alphas):
@@ -28,7 +25,6 @@ def randomDirichletNumba(alphas):
     return gammas / np.sum(gammas)
 
 
-#TODO: make specific! not flexible
 @njit
 def updateOccupancy(occupancy, time, alphas):
     """
@@ -37,11 +33,21 @@ def updateOccupancy(occupancy, time, alphas):
     :param time: the timestep at which the moves are being executed (int)
     :param alphas: np array, list of 4 numbers > 0 for Dirichlet distribution
     """
-    # start at 1 and go to shape-1 because otherwise at the boundary which we don't want
-    # this is an effective way of implementing absorbing boundary conditions
-    # note that the boundary is square
-    for i in range(1, occupancy.shape[0] - 1):  # down
-        for j in range(1, occupancy.shape[1] - 1):  # across
+    origin = [occupancy.shape[0] // 2, occupancy.shape[1] // 2]
+    # for short times, only loop over the part of the array we expect to be occupied
+    #TODO: at some point implement "find indx of farthest occupied site
+    # and sweep over that square instead
+    if time < origin[0]:  # this has an upper limit since vt grows linearly with t.
+        startIdx = origin[0] - time
+        endIdx = origin[0] + time
+    else:
+        # start at 1 and go to shape-1 because otherwise at the boundary which we don't want
+        # this is an effective way of implementing absorbing boundary conditions
+        # note that the boundary is square and not circular
+        startIdx = 1
+        endIdx = occupancy.shape[0] - 1
+    for i in range(startIdx, endIdx):  # down
+        for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
                 # biases = randomDirichletNumba(alphas)
@@ -70,8 +76,6 @@ def evolve2DDirichlet(occupancy, maxT, alphas, startT=1):
         occupancy = updateOccupancy(occupancy, t, alphas)
         yield t, occupancy
 
-
-# don't use numba?
 def dirichletWrapper(*args, **kwargs):
     """ wrapper for evolve2DDirichlet with *args and **kwargs instead """
     for t, occ in evolve2DDirichlet(*args, **kwargs):
@@ -97,14 +101,14 @@ def integratedProbability(occupancy, distances):
             # iterate over the the radii that are passsed in
             for k in range(distances.shape[0]):
                 for l in range(distances.shape[1]):
-                    #<= because we have we want (distToCenter >= radii) to get outside sphere
+                    # <= because we have we want (distToCenter >= radii) to get outside sphere
                     # and the line below has (radii <= dist)
                     if np.square(distances[k, l]) <= np.square(i - origin[0]) + np.square(j - origin[1]):
                         probability[k, l] += occupancy[i, j]
     return probability
 
 
-#TODO: try/except to suppress warnings
+#TODO: try/except to suppress warning
 
 # i need a 3-index np array, time, velocity, scaling
 def calculateRadii(times, velocity, scalingFunction):
@@ -120,10 +124,8 @@ def calculateRadii(times, velocity, scalingFunction):
 def linear(time):
     return time
 
-
 def tOnSqrtLogT(time):
     return time / np.sqrt(np.log(time))
-
 
 def tOnLogT(time):
     return time / np.log(time)
@@ -139,6 +141,7 @@ def getListOfTimes(maxT, startT=1, num=500):
 	"""
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
+
 def saveOccupancyState(occ, t, saveFile):
     """docstring
     :param occ: np array, the occupancy array to be saved
@@ -149,10 +152,11 @@ def saveOccupancyState(occ, t, saveFile):
     # generate states directory?
     statesPath = os.path.join(saveFile+"states")  #directory/sysIDstates
     os.makedirs(statesPath, exist_ok=True)
-    currentStatePath = os.path.join(statesPath, str(t) + '.txt')  # path/systemIDstates/time.txt
-    np.savetxt(currentStatePath, occ)
+    currentStatePath = os.path.join(statesPath, str(t))  # path/systemIDstates/time
+    np.savez_compressed(currentStatePath, occ)  # path/systemIDstates/time.npz
     # now delete the old state
     files = os.listdir(statesPath)  # get list of states
+    #TODO: fix this because i need to be really carefully about how many states i have saved
     if len(files) > 1:  # if there's more than the file you just saved
         # careful because it assumes there's always only 2 files
         idx = files.index(f"{str(t)}.txt")  # get index of file you just created
@@ -166,11 +170,9 @@ def restoreOccupancyState(statesPath):
     :param statesPath: full path to where states are saved
     """
     # load in occupancy array
-    # print(f"statesPath in restoreOcc: {statesPath}")
     states = os.listdir(statesPath)  # i think this will fail if there are no states..
-    occ = np.loadtxt(f"{statesPath}/{states[0]}")
-    t = int(states[0][:-4])  # assumes filename is (int).
-    # print(f"most recent t: {t}")
+    occ = np.load(f"{statesPath}/{states[0]}")['arr_0']  # load back in saved state. assumes no keyword
+    t = int(states[0][:-4])  # assumes filename is (int).npz
     return t, occ
 
 
@@ -186,12 +188,13 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
 	:return variance: the variance of log(probabilities)
 	:return skew: the skew of log(probabilities)
 	"""
-    # grab the files in the data directory that are the Box data
-    files = os.listdir(path)
+    # grab the files in the data directory, ignoring subdirectories
+    # files = os.listdir(path)
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     if 'info.npz' in files:
         files.remove('info.npz')
-    # initialize the moments & mask, fence problem
     times = np.load(f"{path}/info.npz")['times']
+    # initialize the moments & mask, fence problem
     firstData = np.load(f"{path}/{files[0]}")
     # if given some tCutoff:
     if tCutOff is not None:
@@ -244,15 +247,15 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
             np.save(saveFile, probabilityFile)  # saves to directory/systemID.npy
         if wallTime() - startTime >= 10800:  # 3 hrs?
-        # if wallTime() - startTime >= 60:  # 1 min
+        #if wallTime() - startTime >= 60:  # 1 min
             # print(f"saving state at t = {t}")
             # this saves to path/systemIDstates/
             saveOccupancyState(occ, t, saveFile)  #passes in directory/sysID
             startTime = wallTime()  # reset wallTime for new interval
 
-# mem efficient versino of runQuadrantsData.py???
+# mem efficient versino of runQuadrantsData.dpy???
 # Check for files, set everything up
-# set up occ and get list of ts, then calculate radii
+# set up occ and get list of ts, then calculate radii]]
 def runDirichlet(L, tMax, alphas, saveFile, systID):
     # setup
     # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
