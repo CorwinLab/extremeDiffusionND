@@ -1,13 +1,13 @@
 import numpy as np
 import os
-from time import time as wallTime # start = wallTime() to avoid issues with using time as variable
+from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
 # import scipy.stats as ss
 # from scipy.ndimage import morphology as m
 # import csv
 # import npquad
 import pandas as pd
 import sys
-# import glob
+import glob
 from numba import njit, vectorize
 
 
@@ -16,6 +16,7 @@ from numba import njit, vectorize
 @vectorize
 def gammaDist(alpha, scale):
     return np.random.gamma(alpha, scale)
+
 
 @njit
 def randomDirichletNumba(alphas):
@@ -76,6 +77,7 @@ def evolve2DDirichlet(occupancy, maxT, alphas, startT=1):
         occupancy = updateOccupancy(occupancy, t, alphas)
         yield t, occupancy
 
+
 def dirichletWrapper(*args, **kwargs):
     """ wrapper for evolve2DDirichlet with *args and **kwargs instead """
     for t, occ in evolve2DDirichlet(*args, **kwargs):
@@ -124,8 +126,10 @@ def calculateRadii(times, velocity, scalingFunction):
 def linear(time):
     return time
 
+
 def tOnSqrtLogT(time):
     return time / np.sqrt(np.log(time))
+
 
 def tOnLogT(time):
     return time / np.log(time)
@@ -142,37 +146,148 @@ def getListOfTimes(maxT, startT=1, num=500):
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
-def saveOccupancyState(occ, t, saveFile):
-    """docstring
-    :param occ: np array, the occupancy array to be saved
-    :param t: int, the time at which occupancy is being saved
-    :param saveFile: string, the topDirectory where the probability measurements
-        from evolveAndMeasurePDF are being saved
+# def saveOccupancyState(occ, t, saveFile):
+#     """docstring
+#     :param occ: np array, the occupancy array to be saved
+#     :param t: int, the time at which occupancy is being saved
+#     :param saveFile: string, the topDirectory where the probability measurements
+#         from evolveAndMeasurePDF are being saved
+#     """
+#     # generate states directory?
+#     statesPath = os.path.join(saveFile+"states")  #directory/sysIDstates
+#     os.makedirs(statesPath, exist_ok=True)
+#     currentStatePath = os.path.join(statesPath, str(t))  # path/systemIDstates/time
+#     # todo: delete everyhing below this line & shove it into updateSaveFile
+#     np.savez_compressed(currentStatePath, occ)  # path/systemIDstates/time.npz
+#     # now delete the old state
+#     files = os.listdir(statesPath)  # get list of states
+#     #TODO: make "deleteState" a new function?
+#     #TODO: fix this because i need to be really carefully about how many states i have saved
+#     if len(files) > 1:  # if there's more than the file you just saved
+#         # careful because it assumes there's always only 2 files
+#         idx = files.index(f"{str(t)}.txt")  # get index of file you just created
+#         files.pop(idx)  # remove it from list so you grab the other file
+#         fileToRemove = files[0]  # pull out of list
+#         os.remove(os.path.join(statesPath, fileToRemove))  # actually remove the other file
+#     #TODO: delete file if completely done
+
+# TODO: change so it doesn't do statePath and os.makedirs inside
+# save occupancy at time t
+def saveOccupancyState(occ, time, saveFile, temp=True):
+    # saveFile is just directory, like "/home/fransces/Documents/code/extremeDiffusionND/temp"
+    # generate states directory
+    statesPath = os.path.join(saveFile + "states")  #directory/sysIDstates
+    #os.makedirs(statesPath, exist_ok=True)
+    if temp:
+        # path/systemIDstates/time.temp.
+        currentStatePath = os.path.join(statesPath, str(time)+".temp")
+    else:
+        # path/systemIDstates/time
+        currentStatePath = os.path.join(statesPath, str(time))
+    # saves either path/systemIDstates/time.temp.npz or path/systemIDstates/time.npz
+    np.savez_compressed(currentStatePath, occ)  # assumes arr_0 is label
+
+
+# delete a given stateFile
+def deleteOccupancyState(fileName):
+    # fileName should be directory/sysIDstates/time.npz
+    # delete a single state file: directory/sysIDstates/time.npz
+    os.remove(fileName)
+
+
+#TODO: replace saveOccupancyState with this
+# implement atomic whatever here
+# this goes inside evolveAndMeasure
+def updateSavedState(occ, t, tMax, saveFile):
     """
-    # generate states directory?
-    statesPath = os.path.join(saveFile+"states")  #directory/sysIDstates
-    os.makedirs(statesPath, exist_ok=True)
-    currentStatePath = os.path.join(statesPath, str(t))  # path/systemIDstates/time
-    np.savez_compressed(currentStatePath, occ)  # path/systemIDstates/time.npz
-    # now delete the old state
-    files = os.listdir(statesPath)  # get list of states
-    #TODO: fix this because i need to be really carefully about how many states i have saved
-    if len(files) > 1:  # if there's more than the file you just saved
-        # careful because it assumes there's always only 2 files
-        idx = files.index(f"{str(t)}.txt")  # get index of file you just created
-        files.pop(idx)  # remove it from list so you grab the other file
-        fileToRemove = files[0]  # pull out of list
-        os.remove(os.path.join(statesPath, fileToRemove))  # actually remove the other file
+    there should only ever be 0 or 1 file insie the directory "saveFile+states"
+    if 0 then a state is being saved for the first time, so # files 0 --> 1
+    if 1 then there was an old state and a new state is being written
+        old file exists (# file = 1)
+        save new file to temporary name (# files 1 --> 2)
+        rename new file from temp to fll name ( # files = 2)
+        delete old file (# files 2 --> 1)
+    if t = tmax:
+        delete saved state(s) (files 1 or 2 --> 0)
+    """
+    # saveFile is directory, i.e. /home/fransces/Documents/code/temp/sysID or something
+    statesPath = os.path.join(saveFile + "states")  #directory/sysIDstates
+    # there should only ever be 0 or 1 file in this directory when this function is called
+    os.makedirs(statesPath,exist_ok=True)
+    files = os.listdir(statesPath)
+    print(f"files @ start of updateSavedState: {files}")
+    if len(files) == 0:
+        print(f"no states, saving now")
+        saveOccupancyState(occ, t, saveFile)
+    # if file completely finished, delete saved states
+    if t == (tMax - 1):  # because of the way python indexes
+        print(f"t = {t}, deleting {files}")
+        for file in files:
+            deleteOccupancyState(os.path.join(statesPath,file))
+        # todo: delete 0states directory too
+    else:
+        # if existing file (say oldtime.npz)
+        if len(files) == 1:
+            # if files = ['oldTime.npz'] then statesPathOldTime = directory/sysIDstates/oldtime.npz
+            statesPathOldTime = os.path.join(statesPath,files[0])
+            # directory/systemIDstates/time.temp.npz
+            tempFileName = os.path.join(statesPath, str(t)+".temp.npz")
+            saveOccupancyState(occ, t, saveFile, temp=True)
+            print(f"temp file saved {tempFileName}")
+            # rename to path/systemIDstates/time.npz, to indicate completion
+            completedFileName = os.path.join(statesPath, str(t)+".npz")
+            os.rename(tempFileName, completedFileName)
+            print(f"completed file {completedFileName}")
+            # delete oldtime.npz
+            deleteOccupancyState(statesPathOldTime)
+            print(f"temp file deleted")
+    # if filecompletely finished, delete any/all saved states
+    # if t == (tMax-1):
+        # TODO: fix because I think depending on where this go    # f file completely finished, delete any/all saved states
+    # if t == (tMax-1):
+        # TODO: fix because I think depending on where this goes
+        #  the state named finalTime.npz will not have been saved...                                                            # delete time.npz
+        # deleteOccupancyState(statesPath, t)
+        # write like this in case there happens to be a temp file?? idk
+        # for file in files:
+            # remove directory/sysIDstates/filesInStates.npz
+            # deleteOccupancyState(file)es
+        #  the state named finalTime.npz will not have been saved...
+        # delete time.npz
+        # deleteOccupancyState(statesPath, t)
+        # write like this in case there happens to be a temp file?? idk
+        # for file in files:
+            # remove directory/sysIDstates/filesInStates.npz
+            # deleteOccupancyState(file)
 
 
+# TODO: this goes in runDirichlet, before evolveAndMeasure
 def restoreOccupancyState(statesPath):
     """
-    :param statesPath: full path to where states are saved
+    :param statesPath: full path to where states are saved, directory/sysIDstates
     """
-    # load in occupancy array
-    states = os.listdir(statesPath)  # i think this will fail if there are no states..
-    occ = np.load(f"{statesPath}/{states[0]}")['arr_0']  # load back in saved state. assumes no keyword
-    t = int(states[0][:-4])  # assumes filename is (int).npz
+    # old way
+    # # load in occupancy array
+    # states = os.listdir(statesPath)  # i think this will fail if there are no states..
+    # occ = np.load(f"{statesPath}/{states[0]}")['arr_0']  # load back in saved state. assumes no keyword
+    # t = int(states[0][:-4])  # assumes filename is (int).npz
+    # return t, occ
+
+    # new logic: if tehre's a temp file then restore the non-temp file
+    # TODO: carefull, assumes only 1 non-temp file
+    files = os.listdir(statesPath)
+    # if there's temporary files then restore the old file
+    tempFiles = glob.glob("*temp.npz", root_dir=statesPath)
+    if len(tempFiles) != 0:
+        for file in tempFiles:
+            # delete any temporary file(s)
+            deleteOccupancyState(os.path.join(statesPath, file))
+            # and remove it from the list of files
+            files.remove(file)
+            # by this point there should only be one 1 entry in files
+    # otherwise there should only be one file time.npz
+    occ = np.load(f"{statesPath}/{files[0]}")["arr_0"]
+    t = int(files[0][:-4])  # assumpes (time).npz
     return t, occ
 
 
@@ -199,9 +314,9 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     # if given some tCutoff:
     if tCutOff is not None:
         # find index val. of the closest tCutoff. this is a dumb way to do that
-        idx = list(times).index(times[times<tCutOff][-1])
+        idx = list(times).index(times[times < tCutOff][-1])
         # cut all data off to that val
-        firstData = firstData[:, :idx+1, :]
+        firstData = firstData[:, :idx + 1, :]
     if takeLog:
         firstData = np.log(firstData)
     moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData, 3), np.power(firstData, 4)
@@ -209,7 +324,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     for file in files[1:]:
         data = np.load(f"{path}/{file}")
         if tCutOff is not None:  # only chop data if you give it a cutoff time
-            data = data[:,:idx+1,:]
+            data = data[:, :idx + 1, :]
         if takeLog:
             data = np.log(data)
         moment1 += data
@@ -230,6 +345,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     np.savez_compressed(os.path.join(path, "stats.npz"), mean=moment1, variance=variance,
                         skew=skew, excessKurtosis=kurtosis - 3)
 
+
 # this function is what originally went inside the "with" statement
 # it doesn't need numba because it's calling things that already use it
 def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile):
@@ -246,61 +362,54 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
             np.save(saveFile, probabilityFile)  # saves to directory/systemID.npy
-        if wallTime() - startTime >= 10800:  # 3 hrs?
-        #if wallTime() - startTime >= 60:  # 1 min
-            # print(f"saving state at t = {t}")
+        # if wallTime() - startTime >= 10800:  # 3 hrs?
+        if (wallTime() - startTime >= 30) or (t==tMax-1):  # 1 min
             # this saves to path/systemIDstates/
-            saveOccupancyState(occ, t, saveFile)  #passes in directory/sysID
+            # saveOccupancyState(occ, t, saveFile)  #passes in directory/sysID
+            updateSavedState(occ, t, tMax, saveFile)
             startTime = wallTime()  # reset wallTime for new interval
+
 
 # mem efficient versino of runQuadrantsData.dpy???
 # Check for files, set everything up
 # set up occ and get list of ts, then calculate radii]]
 def runDirichlet(L, tMax, alphas, saveFile, systID):
     # setup
-    # this assumes alphpa1=alpha2=alpha3=alpha4 which is ok because that's what we're working with\
+    # assumes alphpa1=alpha2=alpha3=alpha4
     alphas = np.array([alphas] * 4)
-    # check thtat there is a state (and only one)
+    # check thtat there is a state path that isn't empty
     actualSaveFile = os.path.join(saveFile, str(systID))  # directory/systID
-    statesPath = os.path.join(actualSaveFile+ "states")  # directory/systIDstates
-    # print(f"statespath {statesPath}")
-    # only check for states if the path already exists
-    if os.path.exists(statesPath):
-        states = os.listdir(statesPath)
-        # print(f"statespath exists! states: {states}")
-        # only restore states if the states path exists AND it has the correct file number (1)
-        if len(states) == 1:  # if state exists, load it and the time from which it was saved
-            # print("there exists a savefile! loading")
-            mostRecentTime, occ = restoreOccupancyState(statesPath)
-            info = np.load(f"{saveFile}/info.npz")
-            ts = info['times']
-            velocities = info['velocities']
+    statesPath = os.path.join(actualSaveFile + "states")  # directory/systIDstates
+    # only restore states if the states path exists and isn't empty
+    if (os.path.exists(statesPath)) and (len(os.listdir(statesPath)) != 0):
+        mostRecentTime, occ = restoreOccupancyState(statesPath)
+        info = np.load(f"{saveFile}/info.npz")
+        ts = info['times']
+        velocities = info['velocities']
     # otherwise generate occupancy, times, velocities as normal
     else:
-        # print("no states saved ):")
         occ = np.zeros((2 * L + 1, 2 * L + 1))
         occ[L, L] = 1
         mostRecentTime = 1
-        ts = getListOfTimes(tMax - 1,1)  # array of times, tMax-1 because we don't want to include the last t
+        # array of times, tMax-1 because we don't want to include the last t
         # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
-        velocities = np.array([np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
+        ts = getListOfTimes(tMax - 1, 1)
+        velocities = np.array(
+            [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
                             calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
-
     # check if savefile exists already and is complete?
     os.makedirs(saveFile, exist_ok=True)
     # if the file exists and is complete, then exit
-    if os.path.exists(actualSaveFile):
-        # info = np.load(os.path.join(saveFile, "info.npz"))
-        temp = np.load(f"{actualSaveFile}")
-        #todo: make sure still works if everything does happen to be 0? idk
-        idx = np.max(np.nonzero(temp))  # get last nonzero element of 
+    if os.path.exists(os.path.join(actualSaveFile+".npy")): # directory/systID.npy
+        temp = np.load(f"{os.path.join(actualSaveFile+'.npy')}")
+        # get last nonzero element; if finished idx should match the shape of the list of times
+        idx = np.max(np.nonzero(temp))
         # tMax shape -1 because of the way python indexes
-        if idx == (ts.shape[0]-1):
-        #if max_time == ts[-2]:
+        if idx == (ts.shape[0] - 1):
             print(f"File Finished", flush=True)
-            sys.exit()  # if its done then exit
+            sys.exit()
     # if an info file doesn't exist, then create one. otherwise just continue with data gen.
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
