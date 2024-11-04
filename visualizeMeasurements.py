@@ -7,6 +7,42 @@ from scipy.stats import norm
 import os
 import time
 
+def collapseAlphaAndVar(paths,alphaList, scaling=3):
+    """
+    assumes stats.npz files are already created
+
+    paths: list of strs defining where to get data
+    alphaList: list of floats defining the alphas; order corresponds to paths
+    scaling: int (0-3) corresponding to scaling vt, vt^1/2, vt/ln(t), vt/sqrt(ln(t)
+        defaults to vt/sqrt(ln(t))
+
+    returns plot with expected scaling of var(ln(prob) / (v^2 / (2pi^3*alpha))
+    """
+    plt.figure(figsize=[9.6, 7.2])
+    plt.yscale("log")
+    plt.xscale("log")
+    # assumes /data/memwhatever/dirichlet/ALPHAsomething/L5000/tMax10000
+    for i in len(paths):
+        info = np.load(f"{paths[i]}/info.npz")  # times, velocities..
+        times = info['times']
+        velocities = info['velocities'].flatten()
+        temp = np.load(f"{path}/stats.npz")
+        # get the tMax var for scaling we're interested in, for every velocity
+        lastVars = temp['variance'][scaling,-1,:]
+        # TODO: easy way to get alpha info?
+        # label =
+        plt.plot(velocities,lastVars/(velocities**2/(2*alphaList[i]*np.pi**3)),
+                 label=f"alpha = {alphaList[i]}")
+        # means.append(temp['mean'])
+        # vars.append(temp['variance'])
+    plt.xlabel("velocities")
+    plt.ylabel("r$\frac{2\pi^3\alpha\cdot var(\log(p))}{v^2}$")
+    plt.title(f"prob past sphere moving at scaling idx {scaling} for L=5000 tMax=10000"
+              f"\n dirichlet distribution")
+
+
+
+# to get histograms of ln(probs)
 def visualizeDistribution(path,velocity,t,savePath):
     if not os.path.isdir(savePath):
         os.makedirs(savePath)

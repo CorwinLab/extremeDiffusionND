@@ -25,6 +25,16 @@ def randomDirichletNumba(alphas):
     gammas = gammaDist(alphas, np.ones(alphas.shape))
     return gammas / np.sum(gammas)
 
+@njit
+def randomDelta():
+    """
+    choose 2 out of 4 directions at random and set those directions to move with
+    prob = 1/2 each.
+    """
+    biases = np.array([0,0,0.5,0.5])
+    np.random.shuffle(biases)
+    return biases
+
 
 @njit
 def updateOccupancy(occupancy, time, alphas):
@@ -194,6 +204,8 @@ def updateSavedState(occ, t, tMax, saveFile):
     os.makedirs(statesPath, exist_ok=True)  # make states path if doesn't already exist
     files = os.listdir(statesPath)
     if len(files) == 0:  # if no files, then at start of evolution
+        # note that this one doesn't have a temp --> complete. so the first file
+        # is always named temp... unless i change it. idk.
         saveOccupancyState(occ, t, saveFile)
     # if file completely finished, delete saved states & states directory
     if t == (tMax - 1):  # because of the way python indexes
@@ -256,7 +268,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
 	"""
     # grab the files in the data directory, ignoring subdirectories
     # files = os.listdir(path)
-    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    files = [f for f in os.listdir(path) if (os.path.isfile(os.path.join(path, f))) and (not f.startswith('.'))]
     if 'info.npz' in files:
         files.remove('info.npz')
     times = np.load(f"{path}/info.npz")['times']
@@ -273,6 +285,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData, 3), np.power(firstData, 4)
     # load in rest of files to do mean var calc, excluding the 0th file
     for file in files[1:]:
+        # print(f"file: {file}")
         data = np.load(f"{path}/{file}")
         if tCutOff is not None:  # only chop data if you give it a cutoff time
             data = data[:, :idx + 1, :]

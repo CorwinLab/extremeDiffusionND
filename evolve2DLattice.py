@@ -879,7 +879,7 @@ def getMeasurementMeanVarSkew(path, filetype='sphere', tCutOff=None,takeLog=True
 	variance = moment2 - np.square(moment1)
 	skew = (moment3 - 3*moment1*variance-np.power(moment1,3))/(variance)**(3/2)
 	kurtosis = (moment4 - 4*moment1*moment3 + 6*(moment1**2)*moment2-3*np.power(moment1,4))/(np.square(variance))
-	# Return the mean, variance, and skew
+	# Return the mean, variance, and skew, and excess kurtosis (kurtosis-3)
 	# note this also will take the mean and var of time. what you want is
 	# meanBox[:,1:] to get just the probs.
 	np.savez_compressed(os.path.join(path,"stats.npz"), mean=moment1, variance=variance,
