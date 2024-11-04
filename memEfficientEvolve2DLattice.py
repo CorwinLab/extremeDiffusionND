@@ -17,7 +17,6 @@ from numba import njit, vectorize
 def gammaDist(alpha, scale):
     return np.random.gamma(alpha, scale)
 
-
 @njit
 def randomDirichletNumba(alphas):
     """ alphas is an array. there should be the same # of alphas as there are
@@ -35,15 +34,49 @@ def randomDelta():
     np.random.shuffle(biases)
     return biases
 
+@njit
+def dirichletArray(alphas):
+    biases = np.zeros(shape=(3,3))
+    vals = randomDirichletNumba(alphas)
+    biases[1, 0] = vals[0]
+    biases[0, 1] = vals[1]
+    biases[1, 2] = vals[2]
+    biases[2, 1] = vals[3]
+    return biases
 
 @njit
-def updateOccupancy(occupancy, time, alphas):
+def deltaArray(params):
+    biases = np.zeros(shape=(3,3))
+    vals = randomDelta()
+    biases[1, 0] = vals[0]
+    biases[0, 1] = vals[1]
+    biases[1, 2] = vals[2]
+    biases[2, 1] = vals[3]
+    return biases
+
+@njit
+def updateOccupancyArray(occupancy, time, distribution, params=np.array([]), width=1):
     """
     memory efficient version of executeMoves from evolve2DLattice
     :param occupancy: np array of size L
     :param time: the timestep at which the moves are being executed (int)
     :param alphas: np array, list of 4 numbers > 0 for Dirichlet distribution
+    :param width: int, width of the bias array
+
+    Examples:
+    ---------
+    from matplotlib import pyplot as plt
+    L = 10
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    for t in range(1000):
+        occ = updateOccupancyArray(occ, t, np.array([1]*4))
+    
+    fig, ax = plt.subplots()
+    ax.imshow(occ)
+    fig.savefig("Occ.png", bbox_inches='tight')
     """
+
     origin = [occupancy.shape[0] // 2, occupancy.shape[1] // 2]
     # for short times, only loop over the part of the array we expect to be occupied
     #TODO: at some point implement "find indx of farthest occupied site
@@ -57,24 +90,32 @@ def updateOccupancy(occupancy, time, alphas):
         # note that the boundary is square and not circular
         startIdx = 1
         endIdx = occupancy.shape[0] - 1
+    
+    if distribution == 'dirichlet':
+        randValsFunction = dirichletArray
+    elif distribution == 'delta':
+        randValsFunction = deltaArray
+
     for i in range(startIdx, endIdx):  # down
         for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
-                # biases = randomDirichletNumba(alphas)
-                biases = np.random.dirichlet(alphas)
-                occupancy[i, j - 1] += occupancy[i, j] * biases[0]  # left
-                occupancy[i + 1, j] += occupancy[i, j] * biases[1]  # down
-                occupancy[i, j + 1] += occupancy[i, j] * biases[2]  # right
-                occupancy[i - 1, j] += occupancy[i, j] * biases[3]  # up
-                occupancy[i, j] = 0  # zero out the original site
-    return occupancy
+                biases = randValsFunction(params)
+                for k in range(biases.shape[0]):
+                    for l in range(biases.shape[1]):
+                        if biases[k, l] == 0:
+                            continue
+                        else: 
+                            occupancy[i + k - width, j + l - width] += biases[k, l] * occupancy[i, j]
 
+                occupancy[i, j] = 0  # zero out the original site
+
+    return occupancy
 
 #@njit
 # doesn't need to be in numba because not actually doing anything slow
 # it's calling a function that takes time but we've already wrapped that  one in numba
-def evolve2DDirichlet(occupancy, maxT, alphas, startT=1):
+def evolve2DDirichlet(occupancy, maxT, distribution, params=np.array([]), width=1, startT=1):
     """ generator object, memory efficient version of evolve2DLattice
     note that there's no absorbingBoundary because of the way i and j are indexed
     in updateOccupancy
@@ -84,7 +125,7 @@ def evolve2DDirichlet(occupancy, maxT, alphas, startT=1):
     :param startT: optional int default 1, the time at which you want to start evolution
     """
     for t in range(startT, maxT):
-        occupancy = updateOccupancy(occupancy, t, alphas)
+        occupancy = updateOccupancyArray(occupancy, t, distribution, params, width)
         yield t, occupancy
 
 
@@ -203,6 +244,7 @@ def updateSavedState(occ, t, tMax, saveFile):
     statesPath = os.path.join(saveFile + "states")
     os.makedirs(statesPath, exist_ok=True)  # make states path if doesn't already exist
     files = os.listdir(statesPath)
+    
     if len(files) == 0:  # if no files, then at start of evolution
         # note that this one doesn't have a temp --> complete. so the first file
         # is always named temp... unless i change it. idk.
@@ -311,7 +353,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
 
 
 # it doesn't need numba because it's calling things that already use it
-def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, distribution, params, width, saveFile):
     """
     evolves occupancy lattice and makes probability lattice, through the generator loop
 
@@ -327,7 +369,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile
     probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
     startTime = wallTime()  # start timer
     # data generation
-    for t, occ in evolve2DDirichlet(occupancy, tMax, alphas, startT=startT):
+    for t, occ in evolve2DDirichlet(occupancy, tMax, distribution, params, width, startT=startT):
         if t in ts:
             idx = list(ts).index(t)
             probs = integratedProbability(occ, radiiList[:, idx, :])  # take measurements
@@ -342,7 +384,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, alphas, saveFile
             startTime = wallTime()  # reset wallTime for new interval
 
 
-def runDirichlet(L, tMax, alphas, saveFile, systID):
+def runDirichlet(L, tMax, distribution, params, width, saveFile, systID):
     """
     memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
     instead of vectorization, to avoid making copies of the array, to save memory.
@@ -354,7 +396,6 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     systID: int, number which identifies system
     """
     # setup
-    alphas = np.array([alphas] * 4)
     # check that there is a state path that isn't empty
     actualSaveFile = os.path.join(saveFile, str(systID))  # directory/systID
     statesPath = os.path.join(actualSaveFile + "states")  # directory/systIDstates
@@ -394,17 +435,14 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, alphas, actualSaveFile)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, distribution, params, width, actualSaveFile)
 
-
-if __name__ == "__main__":
-    # these should call sysargv now, or argparse
-    L = int(sys.argv[1])
-    tMax = int(sys.argv[2])
-    alphas = float(sys.argv[3])
-    saveFile = sys.argv[4]
-    systID = int(sys.argv[5])
-
-    # actually call runDirichlet here, inside the if __name__ == __main__
-    # python memEfficientEvolve2DLattice L tMax alphas saveFile sysID
-    runDirichlet(L, tMax, alphas, saveFile, systID)
+if __name__ == '__main__':
+    L = 100
+    tMax = 1000
+    distribution = 'dirichlet'
+    params = np.array([1]*4)
+    width = 1 
+    saveFile = os.path.abspath('./data/')
+    systID = 0
+    runDirichlet(L, tMax, distribution, params, width, saveFile, systID)
