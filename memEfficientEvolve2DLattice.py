@@ -54,6 +54,16 @@ def deltaArray(params):
     biases[2, 1] = vals[3]
     return biases
 
+@njit 
+def symmetricDirichletArray(alphas):
+    biases = np.zeros(shape=(3,3))
+    vals = randomDirichletNumba(alphas)
+    biases[1, 0] = (vals[0] + vals[2]) / 2
+    biases[0, 1] = (vals[1] + vals[3]) / 2
+    biases[1, 2] = (vals[0] + vals[2]) / 2
+    biases[2, 1] = (vals[1] + vals[3]) / 2
+    return biases
+
 @njit
 def updateOccupancyArray(occupancy, time, distribution, params=np.array([]), width=1):
     """
@@ -91,10 +101,13 @@ def updateOccupancyArray(occupancy, time, distribution, params=np.array([]), wid
         startIdx = 1
         endIdx = occupancy.shape[0] - 1
     
+    # Choose what distribution to use
     if distribution == 'dirichlet':
         randValsFunction = dirichletArray
     elif distribution == 'delta':
         randValsFunction = deltaArray
+    elif distribution == 'symmetricDirichlet':
+        randValsFunction = symmetricDirichletArray
 
     for i in range(startIdx, endIdx):  # down
         for j in range(startIdx, endIdx):  # across
