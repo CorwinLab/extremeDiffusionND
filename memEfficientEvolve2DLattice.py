@@ -418,8 +418,7 @@ def runDirichlet(L, tMax, distribution, params, width, saveFile, systID):
         velocities = np.array(
             [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
-    listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
-                            calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
+    listOfRadii = np.array([calculateRadii(ts, velocities, tOnSqrtLogT)])
     # check if savefile exists already and is complete?
     os.makedirs(saveFile, exist_ok=True)
     # if the file exists and is complete, then exit
@@ -438,11 +437,22 @@ def runDirichlet(L, tMax, distribution, params, width, saveFile, systID):
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, distribution, params, width, actualSaveFile)
 
 if __name__ == '__main__':
-    L = 100
-    tMax = 1000
-    distribution = 'dirichlet'
-    params = np.array([1]*4)
-    width = 1 
-    saveFile = os.path.abspath('./data/')
-    systID = 0
+    # these should call sysargv now, or argparse
+    L = int(sys.argv[1])
+    tMax = int(sys.argv[2])
+    distribution = str(sys.argv[3])
+    params = sys.argv[4]
+    if params == 'None':
+        params = np.array([])
+    else:
+        params = params.split(",")
+        params = np.array(params).astype(float)
+
+    width = int(sys.argv[5])
+    saveFile = sys.argv[6]
+    systID = int(sys.argv[7])
+    
+    # Test code
+    # L, tMax, distribution, params, width, saveFile, systID = 100, 1000, 'delta', np.array([]), 1, './', 0
+
     runDirichlet(L, tMax, distribution, params, width, saveFile, systID)
