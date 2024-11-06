@@ -6,6 +6,7 @@ from time import time as wallTime  # start = wallTime() to avoid issues with usi
 # import csv
 # import npquad
 import pandas as pd
+from tqdm import tqdm
 import sys
 import glob
 from numba import njit, vectorize
@@ -310,7 +311,7 @@ def restoreOccupancyState(statesPath):
 
 
 #TODO!!: write in shit to ignore unfinished files
-def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
+def getMeasurementMeanVarSkew(path, dist, tCutOff=None, takeLog=True):
     """
 	Takes a directory filled  arrays and finds the mean and variance of cumulative probs. past various geometries
 	Calculates progressively, since loading in every array will use too much memory
@@ -337,23 +338,46 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
         firstData = firstData[:, :idx + 1, :]
     if takeLog:
         firstData = np.log(firstData)
+    # print(firstData[0][:, 0])
     moment1, moment2, moment3, moment4 = firstData, np.square(firstData), np.power(firstData, 3), np.power(firstData, 4)
     # load in rest of files to do mean var calc, excluding the 0th file
-    for file in files[1:]:
+    nFiles = 1
+    times = []
+    for file in (files[1:]):
         # print(f"file: {file}")
         data = np.load(f"{path}/{file}")
+        sysID = file.replace(".npy", "")
+        timeFile = os.listdir(os.path.join(path, f"{sysID}states"))[0]
+        time = int(timeFile.replace(".npz", ""))
+        if time < 5000:
+            continue
+
         if tCutOff is not None:  # only chop data if you give it a cutoff time
             data = data[:, :idx + 1, :]
         if takeLog:
-            data = np.log(data)
+            try:
+                data = np.log(data)
+            except:
+                continue
+
+        if np.sum(np.isneginf(data[0][:, 0])) > 300:
+            print("continuing")
+            continue
+        
         moment1 += data
+        if np.sum(np.isneginf(moment1[0][:, 0])) > 50:
+            print(data[0][:, 0], np.sum(np.isneginf(moment1[0][:, 0])))
+            raise TypeError
+        
         moment2 += np.square(data)
         moment3 += np.power(data, 3)
         moment4 += np.power(data, 4)
-    moment1 = moment1 / len(files)
-    moment2 = moment2 / len(files)
-    moment3 = moment3 / len(files)
-    moment4 = moment4 / len(files)
+        nFiles += 1 
+
+    moment1 = moment1 / nFiles
+    moment2 = moment2 / nFiles
+    moment3 = moment3 / nFiles
+    moment4 = moment4 / nFiles
     variance = moment2 - np.square(moment1)
     skew = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance) ** (3 / 2)
     kurtosis = (moment4 - 4 * moment1 * moment3 + 6 * (moment1 ** 2) * moment2 - 3 * np.power(moment1, 4)) / (
@@ -361,7 +385,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     # Return the mean, variance, and skew, and excess kurtosis (kurtosis-3)
     # note this also will take the mean and var of time. what you want is
     # meanBox[:,1:] to get just the probs.
-    np.savez_compressed(os.path.join(path, "stats.npz"), mean=moment1, variance=variance,
+    np.savez_compressed(os.path.join('./Data/', f"{dist}stats.npz"), mean=moment1, variance=variance,
                         skew=skew, excessKurtosis=kurtosis - 3)
 
 
@@ -451,21 +475,28 @@ def runDirichlet(L, tMax, distribution, params, width, saveFile, systID):
 
 if __name__ == '__main__':
     # these should call sysargv now, or argparse
-    L = int(sys.argv[1])
-    tMax = int(sys.argv[2])
-    distribution = str(sys.argv[3])
-    params = sys.argv[4]
-    if params == 'None':
-        params = np.array([])
-    else:
-        params = params.split(",")
-        params = np.array(params).astype(float)
+    # L = int(sys.argv[1])
+    # tMax = int(sys.argv[2])
+    # distribution = str(sys.argv[3])
+    # params = sys.argv[4]
+    # if params == 'None':
+    #     params = np.array([])
+    # else:
+    #     params = params.split(",")
+    #     params = np.array(params).astype(float)
 
-    width = int(sys.argv[5])
-    saveFile = sys.argv[6]
-    systID = int(sys.argv[7])
+    # width = int(sys.argv[5])
+    # saveFile = sys.argv[6]
+    # systID = int(sys.argv[7])
     
-    # Test code
-    # L, tMax, distribution, params, width, saveFile, systID = 100, 1000, 'delta', np.array([]), 1, './', 0
+    # # Test code
+    # # L, tMax, distribution, params, width, saveFile, systID = 100, 1000, 'delta', np.array([]), 1, './', 0
 
-    runDirichlet(L, tMax, distribution, params, width, saveFile, systID)
+    # runDirichlet(L, tMax, distribution, params, width, saveFile, systID)
+    biases = randomDelta()
+    mean = 0
+    num_samples = 10000
+    for _ in range(num_samples):
+        biases = randomDelta()
+        mean += biases[0] * biases[0]
+    print(mean / num_samples, 1/8)
