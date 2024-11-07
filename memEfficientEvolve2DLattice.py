@@ -27,6 +27,16 @@ def randomSymmetricDirichlet(alphas):
     rand_vals = np.random.dirichlet(alphas)
     return (rand_vals + np.flip(rand_vals)) / 2
 
+@njit
+def randomLogNormal(params):
+    rand_vals = np.random.lognormal(params[0], params[1], size=4)
+    return rand_vals / np.sum(rand_vals)
+
+@njit
+def randomLogUniform(scale):
+    randVals = np.exp(np.random.uniform(-scale, scale, size=4))
+    return randVals / np.sum(randVals)
+
 def getRandomDistribution(distName, params=''):
     """Get the function to run the random distribution we'll use."""
     # Need to convert numpy array to list to be properly
@@ -418,6 +428,7 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
+    print(func())
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, func, actualSaveFile)
 
 
@@ -436,7 +447,7 @@ if __name__ == "__main__":
         params = np.array(params).astype(float)
 
     # Test code to make sure things run correctly
-    # L, tMax, distribution, params, width, saveFile, systID = 100, 1000, 'Dirichlet', np.array([1, 1, 1, 1]), 1, './', 0
-
+    # L, tMax, distName, params, saveFile, systID = 100, 1000, 'LogNormal', np.array([1, 1]), './', 0
+    
     # python memEfficientEvolve2DLattice L tMax alphas saveFile sysID
     runDirichlet(L, tMax, distName, params, saveFile, systID)
