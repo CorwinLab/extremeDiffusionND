@@ -1,4 +1,5 @@
 import evolve2DLattice as ev
+import memEfficientEvolve2DLattice as m
 import glob
 import numpy as np
 from matplotlib import pyplot as plt
@@ -6,6 +7,27 @@ import pandas as pd
 from scipy.stats import norm
 import os
 import time
+
+def generateGifRWRE(occupancy, maxT, alphas, startT,listOfTimes=None):
+    if listOfTimes is None:
+        listOfTimes = np.unique(np.geomspace(startT, maxT, num=10).astype(int))
+    for t in range(startT, maxT):
+        occupancy = m.updateOccupancy(occupancy, t, alphas)
+        if t in listOfTimes:
+            a = np.copy(occupancy)
+            #a[np.isinf(a)] = np.nan
+            plt.imshow(a)
+            plt.savefig(f'/home/fransces/Documents/code/RWREgif/{t}.png',bbox_inches='tight')
+    #return listOfTimes, np.array(PDFS)
+
+
+def generateGifSSRW(occupancy, maxT, distribution, params, isPDF,boundary):
+    listoftimes = np.unique(np.geomspace(1,maxT,num=10).astype(int))
+    for t, occ in ev.evolve2DLattice(occupancy, maxT, distribution, params, isPDF,boundary=boundary):
+        if t in listoftimes:
+            a = np.copy(occ)
+            plt.imshow(a)
+            plt.savefig(f"/home/fransces/Documents/code/SSRWgif/{t}.png",bbox_inches='tight')
 
 def collapseAlphaAndVar(paths,alphaList, scaling=3):
     """

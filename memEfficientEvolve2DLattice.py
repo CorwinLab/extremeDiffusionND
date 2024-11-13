@@ -36,7 +36,7 @@ def randomDelta():
     return biases
 
 
-@njit
+# @njit
 def updateOccupancy(occupancy, time, alphas):
     """
     memory efficient version of executeMoves from evolve2DLattice
@@ -61,8 +61,24 @@ def updateOccupancy(occupancy, time, alphas):
         for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
-                # biases = randomDirichletNumba(alphas)
-                biases = np.random.dirichlet(alphas)
+                # in niche cases where we have alpha around 0.1, np.random.dirichlet sometimes
+                # will return biases as all 0 and the tries to normalize by the
+                # sum of the biases, which is 0. which throws a ZeroDivsionError
+                # in this case, we redraw the biases  until they're not all 0
+                goodDirichlet = False
+                while not goodDirichlet:
+                    # biases = randomDirichletNumba(alphas)
+                    try:
+                        #biases = np.random.dirichlet(alphas)
+                        biases = np.array([1/4,1/4,1/4,1/4])  # to get SSRW 
+                        if np.isnan(biases.any()):
+                            print('biases are nans')
+                        # if this doesn't throw ZeroDivisonError, continue codde
+                        goodDirichlet = True
+                    # if error is thrown, keep trying
+                    except ZeroDivisionError:
+                        print("ZeroDivisionError thrown by dirichlet")
+                        goodDirichlet = False
                 occupancy[i, j - 1] += occupancy[i, j] * biases[0]  # left
                 occupancy[i + 1, j] += occupancy[i, j] * biases[1]  # down
                 occupancy[i, j + 1] += occupancy[i, j] * biases[2]  # right
@@ -120,7 +136,6 @@ def integratedProbability(occupancy, distances):
     return probability
 
 
-#TODO: try/except to suppress warning
 
 # i need a 3-index np array, time, velocity, scaling
 def calculateRadii(times, velocity, scalingFunction):
@@ -136,7 +151,7 @@ def calculateRadii(times, velocity, scalingFunction):
 def linear(time):
     return time
 
-
+# TODO: fix
 def tOnSqrtLogT(time):
     return time / np.sqrt(np.log(time))
 
@@ -206,11 +221,17 @@ def updateSavedState(occ, t, tMax, saveFile):
     if len(files) == 0:  # if no files, then at start of evolution
         # note that this one doesn't have a temp --> complete. so the first file
         # is always named temp... unless i change it. idk.
-        saveOccupancyState(occ, t, saveFile)
+        print(f"saving at t = {t}")
+        saveOccupancyState(occ, t, saveFile,temp=False)
     # if file completely finished, delete saved states & states directory
     if t == (tMax - 1):  # because of the way python indexes
+        print(f"at tMax")
+        # TODO: apparently if you only save once and then time finishes
+        # this doesn't work properly?
         for file in files:
+            print(f"deleting {os.path.join(statesPath,file)}")
             deleteOccupancyState(os.path.join(statesPath, file))
+        print(f"removing {statesPath} directory")
         os.rmdir(statesPath)
     else:  # otherwise if file in the middle of evolving, go thru process of saving new state
         # if existing file (say oldtime.npz)
@@ -219,11 +240,14 @@ def updateSavedState(occ, t, tMax, saveFile):
             statesPathOldTime = os.path.join(statesPath,files[0])
             # directory/systemIDstates/time.temp.npz
             tempFileName = os.path.join(statesPath, str(t)+".temp.npz")
+            print(f"saving {tempFileName}")
             saveOccupancyState(occ, t, saveFile)  # defaults to temp=True
             # rename to path/systemIDstates/time.npz, to indicate completion
             completedFileName = os.path.join(statesPath, str(t)+".npz")
+            print(f"renaming to {completedFileName}")
             os.rename(tempFileName, completedFileName)
             # delete oldtime.npz
+            print(f"deleting {statesPathOldTime}")
             deleteOccupancyState(statesPathOldTime)
 
 
@@ -249,6 +273,7 @@ def restoreOccupancyState(statesPath):
             # by this point there should only be one 1 entry in files
     # either we've deleted the old temp files and loaded in the old saved state
     # or there was only one saved state to load in, here
+    print(f"restoring {statesPath}/{files[0]}")
     occ = np.load(f"{statesPath}/{files[0]}")["arr_0"]
     t = int(files[0][:-4])  # assumpes (time).npz
     return t, occ
@@ -395,6 +420,7 @@ def runDirichlet(L, tMax, alphas, saveFile, systID):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, alphas, actualSaveFile)
+
 
 
 if __name__ == "__main__":

@@ -66,7 +66,7 @@ def executeMoves(occupancy, i, j, rng, distribution, isPDF, distributionParams=N
 	biases = getRandVals(distribution, rng, i.shape[0], distributionParams)
 	# On newer numpy we can vectorize to compute the moves
 	if isPDF:  # if doing PDF then multiply by biases as npquads
-		moves = occupancy[i, j].reshape(-1, 1) * biases.astype(np.quad)
+		moves = occupancy[i, j].reshape(-1, 1) * biases#.astype(np.quad)
 	else:
 		if i.shape[0] == 1:
 			moves = rng.multinomial(occupancy[i,j].astype(int),biases.squeeze())
@@ -205,7 +205,7 @@ def evolvePDF(maxT, distribution, params, startT=1, absorbingRadius=None, bounda
 	:return integratedPDFStats: the roughness stats of the CDF for list of times and list of Ns
 	:return listofTimes: the times generated/used at which to roughness stats calculated
 	"""
-	occupancy = np.zeros((2*maxT+1, 2*maxT+1), dtype=np.quad)  # initialize occupancy
+	occupancy = np.zeros((2*maxT+1, 2*maxT+1), dtype=float)  # initialize occupancy
 	occupancy[maxT, maxT] = 1
 	# No boundary mask
 	if absorbingRadius < 0:
@@ -273,7 +273,7 @@ def evolveAgents(occupancy, maxT, distribution, params, startT=1, absorbingRadiu
 			# Note: this is fragile, we assume that doubling tArrival will always work
 			tArrival = changeArraySize(tArrival, 2*tArrival.shape[0], fillval=notYetArrived)
 		tArrival[(occ > 0) & (np.isnan(tArrival))] = t  # update tArrival array
-		if t == startT+1:  # initialize stats
+		if t == startT:  # initialize stats
 			stats = np.array(getTArrivalRoughness(tArrival, t))  # p, a, r, d, d2, t
 		elif t in listOfTimes:
 			stats = organizeTArrivalStats(t, tArrival, stats)
