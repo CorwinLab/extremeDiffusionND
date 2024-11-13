@@ -70,7 +70,7 @@ def updateOccupancy(occupancy, time, alphas):
                     # biases = randomDirichletNumba(alphas)
                     try:
                         #biases = np.random.dirichlet(alphas)
-                        biases = np.array([1/4,1/4,1/4,1/4])  # to get SSRW 
+                        biases = np.array([1/4,1/4,1/4,1/4])  # to get SSRW
                         if np.isnan(biases.any()):
                             print('biases are nans')
                         # if this doesn't throw ZeroDivisonError, continue codde
