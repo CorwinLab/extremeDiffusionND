@@ -9,6 +9,7 @@ import os
 import time
 
 def generateGifRWRE(occupancy, maxT, alphas, startT,listOfTimes=None):
+    os.makedirs("/home/fransces/Documents/code/RWREgifnew/",exist_ok=True)
     if listOfTimes is None:
         listOfTimes = np.unique(np.geomspace(startT, maxT, num=10).astype(int))
     for t in range(startT, maxT):
@@ -17,11 +18,12 @@ def generateGifRWRE(occupancy, maxT, alphas, startT,listOfTimes=None):
             a = np.copy(occupancy)
             #a[np.isinf(a)] = np.nan
             plt.imshow(a)
-            plt.savefig(f'/home/fransces/Documents/code/RWREgif/{t}.png',bbox_inches='tight')
+            plt.savefig(f'/home/fransces/Documents/code/RWREgifnew/{t}.png',bbox_inches='tight')
     #return listOfTimes, np.array(PDFS)
 
 
 def generateGifSSRW(occupancy, maxT, distribution, params, isPDF,boundary):
+    os.makedirs("/home/fransces/Documents/code/SSRWgifnew/",exist_ok=True)
     listoftimes = np.unique(np.geomspace(1,maxT,num=10).astype(int))
     for t, occ in ev.evolve2DLattice(occupancy, maxT, distribution, params, isPDF,boundary=boundary):
         if t in listoftimes:
