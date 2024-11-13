@@ -182,7 +182,8 @@ def tOnLogT(time):
 
 def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
-    return 1
+
+    return np.full_like(time,fill_val=1)
 
 
 def getListOfTimes(maxT, startT=1, num=500):
@@ -466,6 +467,7 @@ if __name__ == "__main__":
     saveFile = sys.argv[5]
     systID = int(sys.argv[6])
 
+    # if no params, need to give it "" (empty string)
     # Need to parse params into an array unless it is an empty string
     if params != '':
         params = params.split(",")
