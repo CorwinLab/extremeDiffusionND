@@ -16,6 +16,11 @@ def randomDelta():
     return biases
 
 @njit
+def randomOneQuarter():
+    biases = np.array([0.25,0.25,0.25,0.25])
+    return biases
+
+@njit
 def randomDirichlet(alphas):
      return np.random.dirichlet(alphas)
 
@@ -174,6 +179,10 @@ def tOnSqrtLogT(time):
 
 def tOnLogT(time):
     return time / np.log(time)
+
+def constantRadius(time):
+    # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
+    return 1
 
 
 def getListOfTimes(maxT, startT=1, num=500):
@@ -388,7 +397,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, func, saveFile):
             updateSavedState(occ, t, tMax, saveFile)
             startTime = wallTime()  # reset wallTime for new interval
 
-
+#TODO: saveFile --> savePath
 def runDirichlet(L, tMax, distName, params, saveFile, systID):
     """
     memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
@@ -427,7 +436,8 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
             [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
-                            calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT)])
+                            calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT),
+                            calculateRadii(ts, velocities, constantRadius)])
     # check if savefile exists already and is complete?
     os.makedirs(saveFile, exist_ok=True)
     # if the file exists and is complete, then exit
@@ -462,6 +472,7 @@ if __name__ == "__main__":
         params = np.array(params).astype(float)
 
     # Test code to make sure things run correctly
+    # actually params should be like 1,1
     # L, tMax, distName, params, saveFile, systID = 100, 1000, 'LogNormal', np.array([1, 1]), './', 0
 
     # python memEfficientEvolve2DLattice L tMax alphas saveFile sysID
