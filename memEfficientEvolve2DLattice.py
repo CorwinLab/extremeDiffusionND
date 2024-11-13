@@ -183,7 +183,7 @@ def tOnLogT(time):
 def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
 
-    return np.full_like(time,fill_val=1)
+    return np.full_like(time.astype(float),fill_value=1,dtype=float)
 
 
 def getListOfTimes(maxT, startT=1, num=500):
