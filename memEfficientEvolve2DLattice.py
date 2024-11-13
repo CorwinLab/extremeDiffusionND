@@ -69,8 +69,8 @@ def updateOccupancy(occupancy, time, alphas):
                 while not goodDirichlet:
                     # biases = randomDirichletNumba(alphas)
                     try:
-                        #biases = np.random.dirichlet(alphas)
-                        biases = np.array([1/4,1/4,1/4,1/4])  # to get SSRW
+                        biases = np.random.dirichlet(alphas)
+                        #biases = np.array([1/4,1/4,1/4,1/4])  # to get SSRW
                         if np.isnan(biases.any()):
                             print('biases are nans')
                         # if this doesn't throw ZeroDivisonError, continue codde
@@ -296,9 +296,12 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     files = [f for f in os.listdir(path) if (os.path.isfile(os.path.join(path, f))) and (not f.startswith('.'))]
     if 'info.npz' in files:
         files.remove('info.npz')
+    if 'stats.npz' in files:
+        files.remove('stats.npz')
     times = np.load(f"{path}/info.npz")['times']
     # initialize the moments & mask, fence problem
     firstData = np.load(f"{path}/{files[0]}")
+    #print(f"firstData type:{type(firstData)},{firstData.dtype}")
     # if given some tCutoff:
     if tCutOff is not None:
         # find index val. of the closest tCutoff. this is a dumb way to do that
@@ -312,6 +315,7 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     for file in files[1:]:
         # print(f"file: {file}")
         data = np.load(f"{path}/{file}")
+        #print(f"data type & dtype: {type(data)},{data.dtype}")
         if tCutOff is not None:  # only chop data if you give it a cutoff time
             data = data[:, :idx + 1, :]
         if takeLog:
@@ -331,7 +335,11 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
     # Return the mean, variance, and skew, and excess kurtosis (kurtosis-3)
     # note this also will take the mean and var of time. what you want is
     # meanBox[:,1:] to get just the probs.
-    np.savez_compressed(os.path.join(path, "stats.npz"), mean=moment1, variance=variance,
+    if not takeLog:
+        temp = "statsNoLog.npz"
+    else:
+        temp = "stats.npz"
+    np.savez_compressed(os.path.join(path, temp), mean=moment1, variance=variance,
                         skew=skew, excessKurtosis=kurtosis - 3)
 
 
