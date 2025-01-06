@@ -38,8 +38,8 @@ def randomLogNormal(params):
     return rand_vals / np.sum(rand_vals)
 
 @njit
-def randomLogUniform(scale):
-    randVals = np.exp(np.random.uniform(-scale, scale, size=4))
+def randomLogUniform(params):
+    randVals = np.exp(np.random.uniform(-params[0], params[0], size=4))
     return randVals / np.sum(randVals)
 
 def getRandomDistribution(distName, params=''):
@@ -456,6 +456,29 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
     # actually run and save data
     print(func())
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, func, actualSaveFile)
+
+def getExpVarX(distName, params):
+    '''
+    Examples
+    --------
+    alpha = 0.1
+    var = getExpVarX('Dirichlet', [alpha] * 4)
+    print(var, 1 / (1 + 4 * float(alpha)))
+    '''
+
+    func = getRandomDistribution(distName, params)
+
+    ExpX = 0
+    xvals = np.array([-1, -1, 1, 1])
+
+    num_samples = 100000
+    for _ in range(num_samples):
+        rand_vals = func()
+        ExpX += np.sum(xvals * rand_vals) ** 2
+        
+    ExpX /= num_samples
+
+    return ExpX
 
 
 if __name__ == "__main__":
