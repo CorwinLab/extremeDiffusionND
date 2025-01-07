@@ -4,53 +4,7 @@ from time import time as wallTime  # start = wallTime() to avoid issues with usi
 import sys
 import glob
 from numba import njit
-
-@njit
-def randomDelta():
-    """
-    choose 2 out of 4 directions at random and set those directions to move with
-    prob = 1/2 each.
-    """
-    biases = np.array([0,0,0.5,0.5])
-    np.random.shuffle(biases)
-    return biases
-
-@njit
-def randomOneQuarter():
-    biases = np.array([0.25,0.25,0.25,0.25])
-    return biases
-
-@njit
-def randomDirichlet(alphas):
-     return np.random.dirichlet(alphas)
-
-@njit
-def randomSymmetricDirichlet(alphas):
-    """
-    Create a dirichlet distribution which is symmetric about its center
-    """
-    rand_vals = np.random.dirichlet(alphas)
-    return (rand_vals + np.flip(rand_vals)) / 2
-
-@njit
-def randomLogNormal(params):
-    rand_vals = np.random.lognormal(params[0], params[1], size=4)
-    return rand_vals / np.sum(rand_vals)
-
-@njit
-def randomLogUniform(params):
-    randVals = np.exp(np.random.uniform(-params[0], params[0], size=4))
-    return randVals / np.sum(randVals)
-
-def getRandomDistribution(distName, params=''):
-    """Get the function to run the random distribution we'll use."""
-    # Need to convert numpy array to list to be properly
-    # Converted to a string
-    if isinstance(params, np.ndarray):
-        params = list(params)
-
-    code = f'random{distName}'
-    return eval(f'njit(lambda : {code}({params}))')
+from randNumberGeneration import getRandomDistribution
 
 @njit
 def updateOccupancy(occupancy, time, func):
@@ -58,7 +12,7 @@ def updateOccupancy(occupancy, time, func):
     memory efficient version of executeMoves from evolve2DLattice
     :param occupancy: np array of size L
     :param time: the timestep at which the moves are being executed (int)
-    :param alphas: np array, list of 4 numbers > 0 for Dirichlet distribution
+    :param func: function that returns random numbers
 
     Examples
     --------
@@ -107,30 +61,18 @@ def updateOccupancy(occupancy, time, func):
 
     return occupancy
 
-
-#@njit
-# doesn't need to be in numba because not actually doing anything slow
-# it's calling a function that takes time but we've already wrapped that  one in numba
 def evolve2DDirichlet(occupancy, maxT, func, startT=1):
     """ generator object, memory efficient version of evolve2DLattice
     note that there's no absorbingBoundary because of the way i and j are indexed
     in updateOccupancy
     :param occupancy: np array, inital occupancy
     :param maxT: int, the final time to which system is evolved
-    :param alphas: np array of size (4,), the alphas of the dirichlet dist.
+    :param func: function that returns random numbers
     :param startT: optional int default 1, the time at which you want to start evolution
     """
     for t in range(startT, maxT):
         occupancy = updateOccupancy(occupancy, t, func)
         yield t, occupancy
-
-
-def dirichletWrapper(*args, **kwargs):
-    """ wrapper for evolve2DDirichlet with *args and **kwargs instead """
-    for t, occ in evolve2DDirichlet(*args, **kwargs):
-        pass
-    return t, occ
-
 
 @njit
 def integratedProbability(occupancy, distances):
@@ -156,9 +98,6 @@ def integratedProbability(occupancy, distances):
                         probability[k, l] += occupancy[i, j]
     return probability
 
-
-
-# i need a 3-index np array, time, velocity, scaling
 def calculateRadii(times, velocity, scalingFunction):
     """
     get list of radii = v*(function of time) for barrier for given times; returns array of (# times, # velocities)
@@ -215,7 +154,7 @@ def saveOccupancyState(occ, time, saveFile, temp=True):
         # path/systemIDstates/time
         currentStatePath = os.path.join(statesPath, str(time))
     # saves either path/systemIDstates/time.temp.npz or path/systemIDstates/time.npz
-    np.savez_compressed(currentStatePath, occ)  # assumes arr_0 is label
+    np.savez_compressed(currentStatePath, occ)
 
 # delete a given stateFile
 def deleteOccupancyState(fileName):
@@ -434,11 +373,12 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
         # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
         ts = getListOfTimes(tMax - 1, 1)
         velocities = np.array(
-            [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
-    # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
+            [np.geomspace(10 ** (-5), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
+    
+    # get list of radii, scaling order goes linear, sqrt, tOnSqrtLogT, constant
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
-                            calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT),
-                            calculateRadii(ts, velocities, constantRadius)])
+                            calculateRadii(ts, velocities, tOnSqrtLogT)])
+    
     # check if savefile exists already and is complete?
     os.makedirs(saveFile, exist_ok=True)
     # if the file exists and is complete, then exit
@@ -454,7 +394,6 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
     if not os.path.exists(os.path.join(saveFile, "info.npz")):
         np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
     # actually run and save data
-    print(func())
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, func, actualSaveFile)
 
 def getExpVarX(distName, params):
