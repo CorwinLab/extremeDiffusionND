@@ -5,6 +5,8 @@ import sys
 import glob
 from numba import njit
 from randNumberGeneration import getRandomDistribution
+import json
+from datetime import date
 
 @njit
 def updateOccupancy(occupancy, time, func):
@@ -30,13 +32,16 @@ def updateOccupancy(occupancy, time, func):
         occ = updateOccupancy(occ, t, func)
     print(time.time() - start)
     """
-    origin = [occupancy.shape[0] // 2, occupancy.shape[1] // 2]
-    # for short times, only loop over the part of the array we expect to be occupied
-    #TODO: at some point implement "find indx of farthest occupied site
+
+    origin = occupancy.shape[0] // 2
+
+    # TODO: at some point implement "find indx of farthest occupied site
     # and sweep over that square instead
-    if time < origin[0]:  # this has an upper limit since vt grows linearly with t.
-        startIdx = origin[0] - time
-        endIdx = origin[0] + time
+    # this has an upper limit since vt grows linearly with t.
+    # for short times, only loop over the part of the array we expect to be occupied
+    if time < origin:  
+        startIdx = origin- time
+        endIdx = origin + time
     else:
         # start at 1 and go to shape-1 because otherwise at the boundary which we don't want
         # this is an effective way of implementing absorbing boundary conditions
@@ -48,16 +53,15 @@ def updateOccupancy(occupancy, time, func):
         for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
-                # biases = np.random.dirichlet(np.array([1, 1, 1, 1]))
-                # biases = getRandVals(distribution, params)
                 biases = func()
-                # biases = randomDirichlet(np.array([1, 1, 1, 1]))
-                # Changed the order of these to make symmetry easier to deal with.
+
                 occupancy[i, j - 1] += occupancy[i, j] * biases[0]  # left
                 occupancy[i + 1, j] += occupancy[i, j] * biases[1]  # down
                 occupancy[i - 1, j] += occupancy[i, j] * biases[2]  # up
                 occupancy[i, j + 1] += occupancy[i, j] * biases[3]  # right
-                occupancy[i, j] = 0  # zero out the original site
+
+                # set original site to 0
+                occupancy[i, j] = 0 
 
     return occupancy
 
@@ -107,14 +111,11 @@ def calculateRadii(times, velocity, scalingFunction):
     times = np.expand_dims(times, 1)  # turns ts into a column vector
     return velocity * scalingFunction(times)
 
-
 def linear(time):
     return time
 
-
 def tOnSqrtLogT(time):
     return time / np.sqrt(np.log(time))
-
 
 def tOnLogT(time):
     return time / np.log(time)
@@ -123,7 +124,6 @@ def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
 
     return np.full_like(time.astype(float),fill_value=1,dtype=float)
-
 
 def getListOfTimes(maxT, startT=1, num=500):
     """
@@ -134,7 +134,6 @@ def getListOfTimes(maxT, startT=1, num=500):
 	:return: the list of times
 	"""
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
-
 
 # save occupancy at time t
 def saveOccupancyState(occ, time, saveFile, temp=True):
@@ -156,12 +155,6 @@ def saveOccupancyState(occ, time, saveFile, temp=True):
     # saves either path/systemIDstates/time.temp.npz or path/systemIDstates/time.npz
     np.savez_compressed(currentStatePath, occ)
 
-# delete a given stateFile
-def deleteOccupancyState(fileName):
-    """ deletes a file with a saved state"""
-    # fileName should be directory/sysIDstates/time.npz
-    os.remove(fileName)
-
 # atomic ops. for saving states; this goes inside evolveAndMeasure
 def updateSavedState(occ, t, tMax, saveFile):
     """
@@ -179,6 +172,7 @@ def updateSavedState(occ, t, tMax, saveFile):
     tMax: int;  the time to which state is being evolved
     saveFile: the base directory like "/home/fransces/Documents/code/extremeDiffusionND/temp"
     """
+    # TODO: saveFile is now a file not a directory
     # saveFile is directory, i.e. /home/fransces/Documents/code/temp/sysID
     statesPath = os.path.join(saveFile + "states")
     os.makedirs(statesPath, exist_ok=True)  # make states path if doesn't already exist
@@ -195,7 +189,7 @@ def updateSavedState(occ, t, tMax, saveFile):
         # this doesn't work properly?
         for file in files:
             print(f"deleting {os.path.join(statesPath,file)}")
-            deleteOccupancyState(os.path.join(statesPath, file))
+            os.remove(os.path.join(statesPath, file))
         print(f"removing {statesPath} directory")
         os.rmdir(statesPath)
     else:  # otherwise if file in the middle of evolving, go thru process of saving new state
@@ -213,8 +207,7 @@ def updateSavedState(occ, t, tMax, saveFile):
             os.rename(tempFileName, completedFileName)
             # delete oldtime.npz
             print(f"deleting {statesPathOldTime}")
-            deleteOccupancyState(statesPathOldTime)
-
+            os.remove(statesPathOldTime)
 
 # this goes in runDirichlet, before evolveAndMeasure
 def restoreOccupancyState(statesPath):
@@ -238,10 +231,15 @@ def restoreOccupancyState(statesPath):
             # by this point there should only be one 1 entry in files
     # either we've deleted the old temp files and loaded in the old saved state
     # or there was only one saved state to load in, here
-    print(f"restoring {statesPath}/{files[0]}")
+    print(f"restoring {statesPath}/{files[0]}", flush=True)
     occ = np.load(f"{statesPath}/{files[0]}")["arr_0"]
     t = int(files[0][:-4])  # assumpes (time).npz
-    return t, occ
+
+    info = np.load(f"{directory}/info.npz")
+    ts = info['times']
+    velocities = info['velocities']
+
+    return t, occ, ts, velocities
 
 # it doesn't need numba because it's calling things that already use it
 def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, func, saveFile):
@@ -257,10 +255,13 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, func, saveFile):
     saveFile: str; base directory to save data to
     """
     # pre-allocate memory for probability
-    probabilityFile = np.zeros_like(radiiList)  # should inherit the shape (#scalings, #times, #velocities)
-    startTime = wallTime()  # start timer
-    # data generation
-    for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT=startT):
+    # should inherit the shape (#scalings, #times, #velocities)
+    probabilityFile = np.zeros_like(radiiList) 
+    
+    # start timer
+    startTime = wallTime()
+    
+    for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
         if t in ts:
             idx = list(ts).index(t)
             probs = integratedProbability(occ, radiiList[:, idx, :])  # take measurements
@@ -269,19 +270,21 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, func, saveFile):
             # structure is (scaling, times, velocities)
             # scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
             np.save(saveFile, probabilityFile)  # saves to directory/systemID.npy
+
         if (wallTime() - startTime >= 10800) or (t == tMax-1):  # 3 hrs or at final time
             # this saves to path/systemIDstates/
             updateSavedState(occ, t, tMax, saveFile)
             startTime = wallTime()  # reset wallTime for new interval
 
 #TODO: saveFile --> savePath
-def runDirichlet(L, tMax, distName, params, saveFile, systID):
+def runDirichlet(L, ts, velocities, distName, params, directory, systID):
     """
     memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
     instead of vectorization, to avoid making copies of the array, to save memory.
 
     L: int, distance from origin to edge of array
-    tmax: int, time to which occupancy is evolved
+    ts: numpy array, times to save at 
+    velocities: numpy array, velocities to measure at 
     distname: string, name of distribution ('Dirichlet', 'Delta', 'SymmetricDirichlet')
     params: string, parameters for the corresponding distribution
     saveFile: str, base directory to which data is saved
@@ -290,48 +293,38 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
 
     # setup random distribution
     func = getRandomDistribution(distName, params)
+    tMax = max(ts)
+
     # check that there is a state path that isn't empty
-    actualSaveFile = os.path.join(saveFile, str(systID))  # directory/systID
-    statesPath = os.path.join(actualSaveFile + "states")  # directory/systIDstates
-    # only restore states if the states path exists and isn't empty
+    saveFile = os.path.join(directory, f"{str(systID)}.npy")
+    statesPath = os.path.join(directory, f"{str(systID)}states")  # directory/systIDstates
+
+    # Check if state has already been saved
     if (os.path.exists(statesPath)) and (len(os.listdir(statesPath)) != 0):
-        mostRecentTime, occ = restoreOccupancyState(statesPath)
-        # if there's already a saved state, then the info file with times & velocities already exists
-        info = np.load(f"{saveFile}/info.npz")
-        ts = info['times']
-        velocities = info['velocities']
-    # otherwise generate occupancy, times, velocities as normal
+        mostRecentTime, occ, ts, velocities = restoreOccupancyState(statesPath)
     else:
         # initialzie occupancy, list of times, list of velocities, list of radii
         occ = np.zeros((2 * L + 1, 2 * L + 1))
         occ[L, L] = 1
         mostRecentTime = 1
-        # array of times, tMax-1 because we don't want to include the last t
-        # this isn't an issue with evolve2Dlattice bc we're initializing probabiityFile differently
-        ts = getListOfTimes(tMax - 1, 1)
-        velocities = np.array(
-            [np.geomspace(10 ** (-5), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
     
     # get list of radii, scaling order goes linear, sqrt, tOnSqrtLogT, constant
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
                             calculateRadii(ts, velocities, tOnSqrtLogT)])
     
-    # check if savefile exists already and is complete?
-    os.makedirs(saveFile, exist_ok=True)
     # if the file exists and is complete, then exit
-    if os.path.exists(os.path.join(actualSaveFile+".npy")): # directory/systID.npy
-        temp = np.load(f"{os.path.join(actualSaveFile+'.npy')}")
+    if os.path.exists(saveFile): 
+        temp = np.load(saveFile)
         # get last nonzero element; if finished idx should match the shape of the list of times
+        # TODO: I think this has unindented side effects. temp is the probability array
         idx = np.max(np.nonzero(temp))
         # tMax shape -1 because of the way python indexes
         if idx == (ts.shape[0] - 1):
             print(f"File Finished", flush=True)
             sys.exit()
-    # if an info file doesn't exist, then create one. otherwise just continue with data gen.
-    if not os.path.exists(os.path.join(saveFile, "info.npz")):
-        np.savez_compressed(os.path.join(saveFile, "info"), times=ts, velocities=velocities)
+    
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, func, actualSaveFile)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, listOfRadii, func, saveFile)
 
 def getExpVarX(distName, params):
     '''
@@ -356,25 +349,54 @@ def getExpVarX(distName, params):
 
     return ExpX
 
+def saveVars(vars, save_file):
+    """
+    Save experiment variables to a file along with date it was ran
+    """
+    for key, item in vars.items():
+        if isinstance(item, np.ndarray):
+            vars[key] = item.tolist()
+    
+    with open(save_file, "w+") as file:
+        json.dump(vars, file)
 
 if __name__ == "__main__":
-    # these should call sysargv now, or argparse
+    # Test Code
+    # L, tMax, distName, params, directory, systID = 100, 1000, 'LogNormal', '1,1', './', 0
+
     L = int(sys.argv[1])
     tMax = int(sys.argv[2])
     distName = sys.argv[3]
     params = sys.argv[4]
-    saveFile = sys.argv[5]
+    directory = sys.argv[5]
     systID = int(sys.argv[6])
 
-    # if no params, need to give it "" (empty string)
     # Need to parse params into an array unless it is an empty string
-    if params != '':
+    if params == 'None':
+        params = ''
+    else:
         params = params.split(",")
         params = np.array(params).astype(float)
 
-    # Test code to make sure things run correctly
-    # actually params should be like 1,1
-    # L, tMax, distName, params, saveFile, systID = 100, 1000, 'LogNormal', np.array([1, 1]), './', 0
+    ts = getListOfTimes(tMax - 1, 1)
+    # This shape needs to be fixed
+    velocities = np.geomspace(10 ** (-5), 10, 21)
 
-    # python memEfficientEvolve2DLattice L tMax alphas saveFile sysID
-    runDirichlet(L, tMax, distName, params, saveFile, systID)
+    vars = {'L': L, 
+            'ts': ts,
+            'velocities': velocities,
+            'distName': distName, 
+            'params': params,
+            'directory': directory,
+            'systID': systID}
+
+    vars_file = os.path.join(directory, "variables.json")
+    today = date.today()
+    text_date = today.strftime("%b-%d-%Y")
+
+    if systID == 0:
+        vars.update({"Date": text_date})
+        saveVars(vars, vars_file)
+        vars.pop("Date")
+    
+    runDirichlet(**vars)
