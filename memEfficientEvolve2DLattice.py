@@ -108,8 +108,10 @@ def calculateRadii(times, velocity, scalingFunction):
     Ex: radii = calculateRadii(np.array([1,5,10]),np.array([[0.01,0.1,0.5]]),tOnLogT)
     To get the original velocities, call radiiVT[0,:]
     """
-    times = np.expand_dims(times, 1)  # turns ts into a column vector
-    return velocity * scalingFunction(times)
+
+    funcVals = eval(f'{scalingFunction}({list(times)})')
+    funcVals = np.expand_dims(funcVals, 1)
+    return velocity * funcVals
 
 def linear(time):
     return time
@@ -124,6 +126,9 @@ def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
 
     return np.full_like(time.astype(float),fill_value=1,dtype=float)
+
+def sqrt(time):
+    return np.sqrt(time)
 
 def getListOfTimes(maxT, startT=1, num=500):
     """
@@ -293,10 +298,12 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 
     # setup random distribution
     func = getRandomDistribution(distName, params)
+    ts = np.array(ts)
+    velocities = np.array(velocities)
     tMax = max(ts)
 
-    # check that there is a state path that isn't empty
-    saveFile = os.path.join(directory, f"{str(systID)}.npy")
+    # Create Save File
+    saveFile= os.path.join(directory, f"{str(systID)}.npy")
     statesPath = os.path.join(directory, f"{str(systID)}states")  # directory/systIDstates
 
     # Check if state has already been saved
@@ -309,9 +316,9 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
         mostRecentTime = 1
     
     # get list of radii, scaling order goes linear, sqrt, tOnSqrtLogT, constant
-    listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
-                            calculateRadii(ts, velocities, tOnSqrtLogT)])
-    
+    regimes = ['linear', 'sqrt', 'tOnSqrtLogT']
+    listOfRadii = np.array([calculateRadii(ts, velocities, regime) for regime in regimes])
+
     # if the file exists and is complete, then exit
     if os.path.exists(saveFile): 
         temp = np.load(saveFile)
@@ -379,7 +386,6 @@ if __name__ == "__main__":
         params = np.array(params).astype(float)
 
     ts = getListOfTimes(tMax - 1, 1)
-    # This shape needs to be fixed
     velocities = np.geomspace(10 ** (-5), 10, 21)
 
     vars = {'L': L, 
@@ -394,6 +400,7 @@ if __name__ == "__main__":
     today = date.today()
     text_date = today.strftime("%b-%d-%Y")
 
+    # Only save the variables file if on the first system
     if systID == 0:
         vars.update({"Date": text_date})
         saveVars(vars, vars_file)
