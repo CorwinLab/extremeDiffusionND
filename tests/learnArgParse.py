@@ -1,8 +1,10 @@
-import evolve2DLattice as ev
 import sys
+sys.path.append("../")
+import evolve2DLattice as ev
 import os
 import numpy as np
 import argparse as ap
+
 def runDataAndAnalysisTEMP(directory, sysID, occupancy, MaxT, distribution, params, PDF, absorbingradius):
     path = f"{directory}"
     if PDF:  # to better label directories
