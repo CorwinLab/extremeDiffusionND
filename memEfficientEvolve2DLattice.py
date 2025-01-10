@@ -1,13 +1,12 @@
 import numpy as np
 import os
 from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
-import sys
-import glob
 from numba import njit
 from randNumberGeneration import getRandomDistribution
 import json
 from datetime import date
 import h5py
+import sys
 
 @njit
 def updateOccupancy(occupancy, time, func):
@@ -109,14 +108,15 @@ def integratedProbability(occupancy, distances, time):
 	# iterate over the current occupancy
 	for i in range(startIdx, endIdx):
 		for j in range(startIdx, endIdx):
+			if probability[i, j] == 0:
+				continue
 			# iterate over the the radii that are passsed in
-			if (i + j + time) % 2 == 1:
-				for k in range(distances.shape[0]):
-					for l in range(distances.shape[1]):
-						# <= because we have we want (distToCenter >= radii) to get outside sphere
-						# and the line below has (radii <= dist)
-						if np.square(distances[k, l]) <= np.square(i - origin[0]) + np.square(j - origin[1]):
-							probability[k, l] += occupancy[i, j]
+			for k in range(distances.shape[0]):
+				for l in range(distances.shape[1]):
+					# <= because we have we want (distToCenter >= radii) to get outside sphere
+					# and the line below has (radii <= dist)
+					if np.square(distances[k, l]) <= np.square(i - origin[0]) + np.square(j - origin[1]):
+						probability[k, l] += occupancy[i, j]
 	return probability
 
 def calculateRadii(times, velocity, scalingFunction):
@@ -177,7 +177,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 	saveFile: h5 object; this is the file we are going to be saving data to
 	"""
 	startTime = wallTime()
-	
+
 	for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
 		if t in ts:
 			# First need to pull out radii at current time we want
@@ -205,7 +205,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 			saveFile.attrs['currentOccupancyTime'] = t
 			saveFile['currentOccupancy'][:] = occ
 			startTime = wallTime()
-		
+			
 		hours = 3
 		seconds = hours * 3600
 		# Save at final time and if haven't saved for XX hours
@@ -240,9 +240,6 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	velocities = np.array(velocities)
 	tMax = max(ts)
 
-	# Create Save File
-	# TODO: Check if data file is already created and finished
-	# Shouldn't do create_dataset if it already exists
 	saveFileName = os.path.join(directory, f"{str(systID)}.h5")
 	saveFile = h5py.File(saveFileName, 'a')
 
@@ -254,19 +251,20 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 		if regime.__name__ not in saveFile.keys():
 			saveFile.create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
 			saveFile[regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
-			print('Created Regimes')
 
 	# Load save if occupancy is already saved
+	# Eric says the following should be a function.
 	if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
-		mostRecentTime, occ = restoreOccupancyState(saveFile)
+		mostRecentTime = saveFile.attrs['currentOccupancyTime']
+		occ = saveFile['currentOccupancy'][:]
 	else:
 		# Otherwise, initialize as normal
-		occ = np.zeros((2 * L + 1, 2 * L + 1))
+		occ = np.zeros((2*L+1, 2*L+1))
 		occ[L, L] = 1
 		mostRecentTime = 1
-		saveFile.create_dataset('currentOccupancy', data=occ)
+		saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip')
 		saveFile.attrs['currentOccupancyTime'] = mostRecentTime
-	
+
 	# actually run and save data
 	evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFile)
 	del saveFile['currentOccupancy']
@@ -308,14 +306,14 @@ def saveVars(vars, save_file):
 
 if __name__ == "__main__":
 	# Test Code
-	L, tMax, distName, params, directory, systID = 5000, 1000, 'LogNormal', '1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
 
-	# L = int(sys.argv[1])
-	# tMax = int(sys.argv[2])
-	# distName = sys.argv[3]
-	# params = sys.argv[4]
-	# directory = sys.argv[5]
-	# systID = int(sys.argv[6])
+	L = int(sys.argv[1])
+	tMax = int(sys.argv[2])
+	distName = sys.argv[3]
+	params = sys.argv[4]
+	directory = sys.argv[5]
+	systID = int(sys.argv[6])
 
 	# Need to parse params into an array unless it is an empty string
 	if params == 'None':
