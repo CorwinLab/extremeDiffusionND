@@ -179,16 +179,15 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 	startTime = wallTime()
 
 	for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
+		print(t)
 		if t in ts:
 			# First need to pull out radii at current time we want
 			idx = list(ts).index(t)
 			radiiAtTimeT = []
-			regimeNames = list(saveFile.keys())
-			regimeNames.remove("currentOccupancy")
 
 			# Change because radii are now attached to the save file
-			for regimeName in regimeNames:
-				radii = saveFile[regimeName].attrs['radii']
+			for regimeName in saveFile['regimes'].keys():
+				radii = saveFile['regimes'][regimeName].attrs['radii']
 				regimeRadiiAtTimeT = radii[idx, :]
 				radiiAtTimeT.append(regimeRadiiAtTimeT)
 			
@@ -197,8 +196,8 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 			probs = integratedProbability(occ, radiiAtTimeT, t)
 			
 			# Now save data to file
-			for count, regimeName in enumerate(regimeNames):
-				saveFile[regimeName][idx, :] = probs[count, :]
+			for count, regimeName in enumerate(saveFile['regimes'].keys()):
+				saveFile['regimes'][regimeName][idx, :] = probs[count, :]
 			
 			# For ease, we will save the occupancy every time we 
 			# write data to the file
@@ -219,7 +218,6 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 			# Reset the timer
 			startTime = wallTime()
 
-#TODO: Need to make another layer of heigherarcy for current occupancy versus regimes
 def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	"""
 	memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
@@ -246,11 +244,13 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	# Define the regimes we want to study
 	regimes = [linear, np.sqrt, tOnSqrtLogT]
 	
-	# first create datasets for each regime where each row is a time and column is velocity
-	for regime in regimes: 
-		if regime.__name__ not in saveFile.keys():
-			saveFile.create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
-			saveFile[regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
+	# Check if "regimes" group has been made and create otherwise
+	if 'regimes' not in saveFile.keys():
+		saveFile.create_group("regimes")
+
+		for regime in regimes: 
+			saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
+			saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
 	# Load save if occupancy is already saved
 	# Eric says the following should be a function.
@@ -342,5 +342,7 @@ if __name__ == "__main__":
 		vars.update({"Date": text_date})
 		saveVars(vars, vars_file)
 		vars.pop("Date")
-	
+
+	start = wallTime()
 	runDirichlet(**vars)
+	print(wallTime() - start)
