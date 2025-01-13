@@ -108,8 +108,10 @@ def integratedProbability(occupancy, distances, time):
 	# iterate over the current occupancy
 	for i in range(startIdx, endIdx):
 		for j in range(startIdx, endIdx):
-			if probability[i, j] == 0:
+			# Move to next site if there's no probability
+			if occupancy[i, j] == 0:
 				continue
+
 			# iterate over the the radii that are passsed in
 			for k in range(distances.shape[0]):
 				for l in range(distances.shape[1]):
@@ -179,7 +181,6 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 	startTime = wallTime()
 
 	for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
-		print(t)
 		if t in ts:
 			# First need to pull out radii at current time we want
 			idx = list(ts).index(t)
@@ -306,7 +307,7 @@ def saveVars(vars, save_file):
 
 if __name__ == "__main__":
 	# Test Code
-	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 250, 100, 'Dirichlet', '1,1,1,1', './', 0
 
 	L = int(sys.argv[1])
 	tMax = int(sys.argv[2])
@@ -345,4 +346,4 @@ if __name__ == "__main__":
 
 	start = wallTime()
 	runDirichlet(**vars)
-	print(wallTime() - start)
+	print(wallTime() - start, flush=True)
