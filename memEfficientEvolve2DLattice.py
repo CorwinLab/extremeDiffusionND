@@ -161,12 +161,7 @@ def getListOfTimes(maxT, startT=1, num=500):
 	"""
 	return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
-def restoreOccupancyState(saveFile):
-	t = saveFile.attrs['currentOccupancyTime']
-	occ = saveFile['currentOccupancy'][:]
-	return t, occ
-
-def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
 	"""
 	evolves occupancy lattice and makes probability lattice, through the generator loop
 
@@ -186,25 +181,26 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 			idx = list(ts).index(t)
 			radiiAtTimeT = []
 
-			# Change because radii are now attached to the save file
-			for regimeName in saveFile['regimes'].keys():
-				radii = saveFile['regimes'][regimeName].attrs['radii']
-				regimeRadiiAtTimeT = radii[idx, :]
-				radiiAtTimeT.append(regimeRadiiAtTimeT)
-			
-			# Shape of resulting array is (regimes, velocities)
-			radiiAtTimeT = np.vstack(radiiAtTimeT)
-			probs = integratedProbability(occ, radiiAtTimeT, t)
-			
-			# Now save data to file
-			for count, regimeName in enumerate(saveFile['regimes'].keys()):
-				saveFile['regimes'][regimeName][idx, :] = probs[count, :]
-			
-			# For ease, we will save the occupancy every time we 
-			# write data to the file
-			saveFile.attrs['currentOccupancyTime'] = t
-			saveFile['currentOccupancy'][:] = occ
-			startTime = wallTime()
+			with h5py.File(saveFileName, 'r+') as saveFile:
+				# Change because radii are now attached to the save file
+				for regimeName in saveFile['regimes'].keys():
+					radii = saveFile['regimes'][regimeName].attrs['radii']
+					regimeRadiiAtTimeT = radii[idx, :]
+					radiiAtTimeT.append(regimeRadiiAtTimeT)
+				
+				# Shape of resulting array is (regimes, velocities)
+				radiiAtTimeT = np.vstack(radiiAtTimeT)
+				probs = integratedProbability(occ, radiiAtTimeT, t)
+				
+				# Now save data to file
+				for count, regimeName in enumerate(saveFile['regimes'].keys()):
+					saveFile['regimes'][regimeName][idx, :] = probs[count, :]
+				
+				# For ease, we will save the occupancy every time we 
+				# write data to the file
+				saveFile.attrs['currentOccupancyTime'] = t
+				saveFile['currentOccupancy'][:] = occ
+				startTime = wallTime()
 			
 		hours = 3
 		seconds = hours * 3600
@@ -213,8 +209,9 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFile):
 		# save times
 		if (wallTime() - startTime >= seconds) or (t == tMax-1):
 			# Save current time and occupancy to make restartable
-			saveFile.attrs['currentOccupancyTime'] = t
-			saveFile['currentOccupancy'][:] = occ
+			with h5py.File(saveFileName, 'r+') as saveFile:
+				saveFile.attrs['currentOccupancyTime'] = t
+				saveFile['currentOccupancy'][:] = occ
 			
 			# Reset the timer
 			startTime = wallTime()
@@ -240,36 +237,37 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	tMax = max(ts)
 
 	saveFileName = os.path.join(directory, f"{str(systID)}.h5")
-	saveFile = h5py.File(saveFileName, 'a')
 
-	# Define the regimes we want to study
-	regimes = [linear, np.sqrt, tOnSqrtLogT]
-	
-	# Check if "regimes" group has been made and create otherwise
-	if 'regimes' not in saveFile.keys():
-		saveFile.create_group("regimes")
+	with h5py.File(saveFileName, 'a') as saveFile: 
+		# Define the regimes we want to study
+		regimes = [linear, np.sqrt, tOnSqrtLogT]
+		# Check if "regimes" group has been made and create otherwise
+		if 'regimes' not in saveFile.keys():
+			saveFile.create_group("regimes")
 
-		for regime in regimes: 
-			saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
-			saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
+			for regime in regimes: 
+				saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
+				saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
-	# Load save if occupancy is already saved
-	# Eric says the following should be a function.
-	if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
-		mostRecentTime = saveFile.attrs['currentOccupancyTime']
-		occ = saveFile['currentOccupancy'][:]
-	else:
-		# Otherwise, initialize as normal
-		occ = np.zeros((2*L+1, 2*L+1))
-		occ[L, L] = 1
-		mostRecentTime = 1
-		saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip')
-		saveFile.attrs['currentOccupancyTime'] = mostRecentTime
+		# Load save if occupancy is already saved
+		# Eric says the following should be a function.
+		if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
+			mostRecentTime = saveFile.attrs['currentOccupancyTime']
+			occ = saveFile['currentOccupancy'][:]
+		else:
+			# Otherwise, initialize as normal
+			occ = np.zeros((2*L+1, 2*L+1))
+			occ[L, L] = 1
+			mostRecentTime = 1
+			saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip')
+			saveFile.attrs['currentOccupancyTime'] = mostRecentTime
 
 	# actually run and save data
-	evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFile)
-	del saveFile['currentOccupancy']
-	saveFile.close()
+	evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName)
+
+	# To save space we delete the occupancy when done
+	with h5py.File(saveFileName, 'r+') as saveFile:
+		del saveFile['currentOccupancy']
 
 def getExpVarX(distName, params):
 	'''
@@ -307,7 +305,7 @@ def saveVars(vars, save_file):
 
 if __name__ == "__main__":
 	# Test Code
-	# L, tMax, distName, params, directory, systID = 250, 100, 'Dirichlet', '1,1,1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
 
 	L = int(sys.argv[1])
 	tMax = int(sys.argv[2])
