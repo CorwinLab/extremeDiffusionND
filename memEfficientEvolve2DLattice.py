@@ -182,7 +182,7 @@ def tOnLogT(time):
 
 def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
-
+    # but the shape needs to match that of time.shape
     return np.full_like(time.astype(float),fill_value=1,dtype=float)
 
 
@@ -324,6 +324,8 @@ def getMeasurementMeanVarSkew(path, tCutOff=None, takeLog=True):
         files.remove('info.npz')
     if 'stats.npz' in files:
         files.remove('stats.npz')
+    if 'statsNoLog.npz' in files:
+        files.remove('statsNoLog.npz')
     times = np.load(f"{path}/info.npz")['times']
     # initialize the moments & mask, fence problem
     firstData = np.load(f"{path}/{files[0]}")
@@ -398,7 +400,28 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, radiiList, func, saveFile):
             updateSavedState(occ, t, tMax, saveFile)
             startTime = wallTime()  # reset wallTime for new interval
 
+def getExpVarX(distName,params):
+    '''
+    Examples
+    --------
+    alpha = 0.1
+    var = getExpVarX('Dirichlet', [alpha] * 4)
+    print(var, 1 / (1 + 4 * float(alpha)))
+    '''
+    func = getRandomDistribution(distName, params)
+    ExpX = 0
+    xvals = np.array([-1, -1, 1, 1])
+    num_samples = 100000
+    for _ in range(num_samples):
+        rand_vals = func()
+        ExpX += np.sum(xvals * rand_vals) ** 2
+    ExpX /= num_samples
+    return ExpX
+
+
 #TODO: saveFile --> savePath
+#TODO: add in really tiny v?
+# i don't wanna rerun a bunch tho..
 def runDirichlet(L, tMax, distName, params, saveFile, systID):
     """
     memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
@@ -435,7 +458,8 @@ def runDirichlet(L, tMax, distName, params, saveFile, systID):
         ts = getListOfTimes(tMax - 1, 1)
         velocities = np.array(
             [np.geomspace(10 ** (-3), 10, 21)])  # the extra np.array([]) outside is to get the correct shape
-    # get list of radii, scaling order goes linear, sqrt, tOnLogT, tOnSqrtLogT
+    # get list of radii, scaling order goes
+    # linear, sqrt, tOnLogT, tOnSqrtLogT, constant (with v)
     listOfRadii = np.array([calculateRadii(ts, velocities, linear), calculateRadii(ts, velocities, np.sqrt),
                             calculateRadii(ts, velocities, tOnLogT), calculateRadii(ts, velocities, tOnSqrtLogT),
                             calculateRadii(ts, velocities, constantRadius)])
