@@ -320,6 +320,7 @@ if __name__ == "__main__":
 	else:
 		params = params.split(",")
 		params = np.array(params).astype(float)
+		print(f"params: {params}")
 
 	ts = getListOfTimes(tMax - 1, 1)
 	velocities = np.geomspace(10 ** (-5), 10, 21)
@@ -331,13 +332,16 @@ if __name__ == "__main__":
 			'params': params,
 			'directory': directory,
 			'systID': systID}
-
+	print(f"vars: {vars}")
+	os.makedirs(directory,exist_ok=True)  # without this, gets mad that directory might not fully exist yet
 	vars_file = os.path.join(directory, "variables.json")
+	print(f"vars_file is {vars_file}")
 	today = date.today()
 	text_date = today.strftime("%b-%d-%Y")
 
 	# Only save the variables file if on the first system
 	if systID == 0:
+		print(f"systID is {systID}")
 		vars.update({"Date": text_date})
 		saveVars(vars, vars_file)
 		vars.pop("Date")
