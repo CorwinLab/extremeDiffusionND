@@ -21,6 +21,7 @@ RandDistribution::RandDistribution(const std::vector<double> _alpha)
 	theta.resize(4);
 }
 
+// Need to define get alpha method
 std::vector<RealType> RandDistribution::getRandomNumbers()
 {
 	if (isinf(alpha[0]))

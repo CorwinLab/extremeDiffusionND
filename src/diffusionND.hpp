@@ -28,6 +28,7 @@ class RandDistribution{
     RandDistribution(const std::vector<double> _alpha);
     ~RandDistribution(){};
 
+    std::vector<double> getAlpha() { return alpha; };
     std::vector<RealType> getRandomNumbers();
 };
 
@@ -47,6 +48,8 @@ public:
   DiffusionND(const std::vector<double> _alpha, unsigned int _L);
   ~DiffusionND(){};
 
+  // Should consider doing lexical_cast<std::string> to convert to float128 to string to view in Python. 
+  // Could also help to save the occupancy into the file
   std::vector<std::vector<RealType> > getPDF() { return PDF; };
   void setPDF(std::vector<std::vector<RealType> > _PDF){ PDF = _PDF; };
 

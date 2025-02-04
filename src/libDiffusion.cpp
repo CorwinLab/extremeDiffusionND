@@ -14,6 +14,7 @@ PYBIND11_MODULE(libDiffusion, m)
 {
   py::class_<RandDistribution>(m, "RandDistribution")
       .def(py::init<const std::vector<double>>())
+      .def("getAlpha", &RandDistribution::getAlpha)
       .def("getRandomNumbers", &RandDistribution::getRandomNumbers);
       
   py::class_<DiffusionND, RandDistribution>(m, "DiffusionND")
