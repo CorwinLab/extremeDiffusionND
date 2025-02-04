@@ -1,5 +1,6 @@
 from lDiffusionLink import libDiffusion
 import numpy as np
+import npquad
 
 class DiffusionND(libDiffusion.DiffusionND):
     def __init__(self, alphas, size):
@@ -45,5 +46,4 @@ if __name__ == '__main__':
     for t in range(time):
         R = 1
         d.iterateTimestep()
-    print(d.getPDFString())
         

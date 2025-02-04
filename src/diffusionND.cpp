@@ -148,16 +148,3 @@ std::vector<std::vector<double> > DiffusionND::logIntegratedProbability(std::vec
 	}
 	return logProbabilities;
 }
-
-std::vector<std::vector<std::string> > DiffusionND::getPDFString(){
-	std::vector<std::vector<std::string> > PDFString(PDF.size(), std::vector<std::string>(PDF.at(0).size()));
-
-	for (unsigned long int i=0; i < 2 * L + 1; i++){
-		for (unsigned long int j=0; j < 2*L+1; j++){
-			std::string str_num = PDF.at(i).at(j).str();
-			std::cout << str_num << "," << PDF.at(i).at(j) << std::endl; 
-			// PDFString.at(i).at(j) = pdfStringVal;
-		}
-	}
-	return PDFString;
-}

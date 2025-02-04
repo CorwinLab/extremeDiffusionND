@@ -1,8 +1,12 @@
 import numpy as np
+import npquad
 from pyDiffusionND import DiffusionND
 import sys 
 import h5py
-from time import time as wallTime 
+import os
+import json
+from datetime import date
+from time import time as wallTime
 
 def linear(time):
 	return time
@@ -73,7 +77,8 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 				
 				# Shape of resulting array is (regimes, velocities)
 				radiiAtTimeT = np.vstack(radiiAtTimeT)
-				probs = Diff.logIntegratedProbability(radiiAtTimeT)
+				probs = Diff.integratedProbability(radiiAtTimeT)
+				print(t, probs)
 				
 				# Now save data to file
 				for count, regimeName in enumerate(saveFile['regimes'].keys()):
@@ -82,7 +87,7 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 				# For ease, we will save the occupancy every time we 
 				# write data to the file
 				saveFile.attrs['currentOccupancyTime'] = t
-				saveFile['currentOccupancy'][:] = occ
+				saveFile['currentOccupancy'][:] = Diff.PDF
 				startTime = wallTime()
 				
 		hours = 3
@@ -94,14 +99,14 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 			# Save current time and occupancy to make restartable
 			with h5py.File(saveFileName, 'r+') as saveFile:
 				saveFile.attrs['currentOccupancyTime'] = t
-				saveFile['currentOccupancy'][:] = occ
+				saveFile['currentOccupancy'][:] = Diff.PDF
 			
 			# Reset the timer
 			startTime = wallTime()
 
 		Diff.iterateTimestep()
 
-def runDirichlet(L, ts, velocities, distName, params, directory, systID):
+def runDirichlet(L, ts, velocities, params, directory, systID):
 	"""
 	memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
 	instead of vectorization, to avoid making copies of the array, to save memory.
@@ -116,7 +121,6 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	"""
 
 	# setup random distribution
-	func = getRandomDistribution(distName, params)
 	ts = np.array(ts)
 	velocities = np.array(velocities)
 	tMax = max(ts)
@@ -139,16 +143,15 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 		if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
 			mostRecentTime = saveFile.attrs['currentOccupancyTime']
 			occ = saveFile['currentOccupancy'][:]
+			# Need to set occupancy and most recent time and params
 		else:
 			# Otherwise, initialize as normal
-			occ = np.zeros((2*L+1, 2*L+1))
-			occ[L, L] = 1
-			mostRecentTime = 1
-			saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip')
-			saveFile.attrs['currentOccupancyTime'] = mostRecentTime
+			Diff = DiffusionND(params, L)
+			saveFile.create_dataset('currentOccupancy', data=Diff.PDF, compression='gzip')
+			saveFile.attrs['currentOccupancyTime'] = 0
 
 	# actually run and save data
-	evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName)
+	evolveAndMeasurePDF(ts, tMax, Diff, saveFileName)
 
 	# To save space we delete the occupancy when done
 	with h5py.File(saveFileName, 'r+') as saveFile:
@@ -190,7 +193,7 @@ def saveVars(vars, save_file):
 
 if __name__ == "__main__":
 	# Test Code
-	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 1000, 10000, 'Dirichlet', '1,1,1,1', './', 0
 
 	L = int(sys.argv[1])
 	tMax = int(sys.argv[2])
@@ -208,29 +211,29 @@ if __name__ == "__main__":
 		print(f"params: {params}")
 
 	ts = getListOfTimes(tMax - 1, 1)
-	velocities = np.geomspace(10 ** (-5), 10, 21)
+	velocities = np.geomspace(10 ** (-3), 10, 21)
 
 	vars = {'L': L, 
 			'ts': ts,
 			'velocities': velocities,
-			'distName': distName, 
 			'params': params,
 			'directory': directory,
 			'systID': systID}
 	print(f"vars: {vars}")
-	os.makedirs(directory,exist_ok=True)  # without this, gets mad that directory might not fully exist yet
+
 	vars_file = os.path.join(directory, "variables.json")
 	print(f"vars_file is {vars_file}")
+
 	today = date.today()
 	text_date = today.strftime("%b-%d-%Y")
 
 	# Only save the variables file if on the first system
 	if systID == 0:
-		print(f"systID is {systID}")
 		vars.update({"Date": text_date})
 		saveVars(vars, vars_file)
 		vars.pop("Date")
 
 	start = wallTime()
+	# runDirichlet(L, ts, velocities, params, directory, systID)
 	runDirichlet(**vars)
 	print(wallTime() - start, flush=True)
