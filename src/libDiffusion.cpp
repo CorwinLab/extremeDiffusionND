@@ -26,5 +26,6 @@ PYBIND11_MODULE(libDiffusion, m)
       .def("getTime", &DiffusionND::getTime)
       .def("getL", &DiffusionND::getL)
       .def("integratedProbability", &DiffusionND::integratedProbability)
-      .def("logIntegratedProbability", &DiffusionND::logIntegratedProbability);
+      .def("logIntegratedProbability", &DiffusionND::logIntegratedProbability)
+      .def("getPDFString", &DiffusionND::getPDFString);
 }

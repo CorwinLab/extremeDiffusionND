@@ -57,7 +57,7 @@ public:
   unsigned int getL() { return L; }
   std::vector<std::vector<RealType> > integratedProbability(std::vector<std::vector<double> >);
   std::vector<std::vector<double> > logIntegratedProbability(std::vector<std::vector<double> >);
-
+  std::vector<std::vector<std::string> > getPDFString();
   void iterateTimestep();
 };
 

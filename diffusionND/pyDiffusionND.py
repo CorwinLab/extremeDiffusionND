@@ -37,7 +37,7 @@ class DiffusionND(libDiffusion.DiffusionND):
 if __name__ == '__main__':
     L = 3
     d = DiffusionND([1, 1, 1, 1], 3)
-    time =  50
+    time =  1000
     xvals = np.arange(-L, L+1)
     xx, yy = np.meshgrid(xvals, xvals)
     distArray = np.sqrt(xx ** 2 + yy ** 2)
@@ -45,5 +45,5 @@ if __name__ == '__main__':
     for t in range(time):
         R = 1
         d.iterateTimestep()
-        print(d.logIntegratedProbability([[R]]))
+    print(d.getPDFString())
         
