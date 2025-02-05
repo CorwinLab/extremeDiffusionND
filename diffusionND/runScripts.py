@@ -78,7 +78,6 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 				# Shape of resulting array is (regimes, velocities)
 				radiiAtTimeT = np.vstack(radiiAtTimeT)
 				probs = Diff.integratedProbability(radiiAtTimeT)
-				print(t, probs)
 				
 				# Now save data to file
 				for count, regimeName in enumerate(saveFile['regimes'].keys()):
@@ -143,7 +142,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 		if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
 			mostRecentTime = saveFile.attrs['currentOccupancyTime']
 			occ = saveFile['currentOccupancy'][:]
-			# Need to set occupancy and most recent time and params
+			Diff = DiffusionND.fromOccupancy(params, L, occ, mostRecentTime)
 		else:
 			# Otherwise, initialize as normal
 			Diff = DiffusionND(params, L)
@@ -193,7 +192,7 @@ def saveVars(vars, save_file):
 
 if __name__ == "__main__":
 	# Test Code
-	# L, tMax, distName, params, directory, systID = 1000, 10000, 'Dirichlet', '1,1,1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
 
 	L = int(sys.argv[1])
 	tMax = int(sys.argv[2])
@@ -208,7 +207,6 @@ if __name__ == "__main__":
 	else:
 		params = params.split(",")
 		params = np.array(params).astype(float)
-		print(f"params: {params}")
 
 	ts = getListOfTimes(tMax - 1, 1)
 	velocities = np.geomspace(10 ** (-3), 10, 21)
@@ -219,10 +217,8 @@ if __name__ == "__main__":
 			'params': params,
 			'directory': directory,
 			'systID': systID}
-	print(f"vars: {vars}")
 
 	vars_file = os.path.join(directory, "variables.json")
-	print(f"vars_file is {vars_file}")
 
 	today = date.today()
 	text_date = today.strftime("%b-%d-%Y")
