@@ -1,4 +1,4 @@
-from lDiffusionLink import libDiffusion
+from .lDiffusionLink import libDiffusion
 import numpy as np
 import npquad
 

@@ -1,6 +1,6 @@
 import numpy as np
 import npquad
-from pyDiffusionND import DiffusionND
+from .pyDiffusionND import DiffusionND
 import sys 
 import h5py
 import os
