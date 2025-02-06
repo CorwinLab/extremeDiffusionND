@@ -41,6 +41,7 @@ PYBIND11_MODULE(libDiffusion, m)
   py::class_<RandDistribution>(m, "RandDistribution")
       .def(py::init<const std::vector<double>>())
       .def("getAlpha", &RandDistribution::getAlpha)
+      .def("setAlpha", &RandDistribution::setAlpha)
       .def("getRandomNumbers", &RandDistribution::getRandomNumbers);
       
   py::class_<DiffusionND, RandDistribution>(m, "DiffusionND")
@@ -52,6 +53,7 @@ PYBIND11_MODULE(libDiffusion, m)
       .def("saveOccupancy", &DiffusionND::saveOccupancy)
       .def("loadOccupancy", &DiffusionND::loadOccupancy)
       .def("getTime", &DiffusionND::getTime)
+      .def("setTime", &DiffusionND::setTime)
       .def("getL", &DiffusionND::getL)
       .def("integratedProbability", &DiffusionND::integratedProbability)
       .def("logIntegratedProbability", &DiffusionND::logIntegratedProbability);

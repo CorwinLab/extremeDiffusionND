@@ -234,8 +234,10 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	func = getRandomDistribution(distName, params)
 	ts = np.array(ts)
 	velocities = np.array(velocities)
-	tMax = max(ts)
-
+	tMax = max(ts) + 1  # without the +1, this returns tMax (from bash file)-1
+	# and then it gets passed into evolveAndMeasure(..,tMax,..) which then uses it
+	# in "for t in range(startT, tMax))" but that will run to 1 less than the parameter given
+	# hence 1998
 	saveFileName = os.path.join(directory, f"{str(systID)}.h5")
 
 	with h5py.File(saveFileName, 'a') as saveFile: 

@@ -12,6 +12,11 @@
 #include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
 
 #define _USE_MATH_DEFINES
 
@@ -69,10 +74,21 @@ DiffusionND::DiffusionND(const std::vector<double> _alpha, unsigned int _L) : Ra
 
 void DiffusionND::iterateTimestep()
 {
-
-	for (unsigned long int i = 1; i < 2 * L; i++)
+	// Configure to only iterate over range which is nonzero
+	unsigned long int startIdx;
+	unsigned long int endIdx;
+	if (t < L){
+		startIdx = L - t - 1; 
+		endIdx = L + t + 1;
+	}
+	else{
+		startIdx = 1;
+		endIdx = 2 * L;
+	}
+	
+	for (unsigned long int i = startIdx; i < endIdx; i++)
 	{ // i is the columns
-		for (unsigned long int j = 1; j < 2 * L; j++)
+		for (unsigned long int j = startIdx; j < endIdx; j++)
 		{ // j is the row
 			if ((i + j + t) % 2 == 1)
 			{

@@ -11,8 +11,14 @@
 #include <vector>
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11; 
 
 typedef boost::multiprecision::float128 RealType;
+
 
 #ifndef DIFFUSIONPDF_HPP_
 #define DIFFUSIONPDF_HPP_
@@ -29,6 +35,7 @@ class RandDistribution{
     ~RandDistribution(){};
 
     std::vector<double> getAlpha() { return alpha; };
+    void setAlpha(std::vector<double> _alpha){ alpha = _alpha; };
     std::vector<RealType> getRandomNumbers();
 };
 
@@ -41,7 +48,6 @@ protected:
 
   std::random_device rd;
   boost::random::mt19937_64 gen;
-
   std::vector<RealType> biases;
 
 public:
@@ -54,6 +60,7 @@ public:
   void setPDF(std::vector<std::vector<RealType> > _PDF){ PDF = _PDF; };
 
   unsigned long int getTime(){ return t; };
+  void setTime(unsigned long int _t){ t = _t; }; 
   unsigned int getL() { return L; }
   std::vector<std::vector<RealType> > integratedProbability(std::vector<std::vector<double> >);
   std::vector<std::vector<double> > logIntegratedProbability(std::vector<std::vector<double> >);
