@@ -8,6 +8,8 @@
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -147,4 +149,28 @@ std::vector<std::vector<double> > DiffusionND::logIntegratedProbability(std::vec
 		}
 	}
 	return logProbabilities;
+}
+
+void DiffusionND::saveOccupancy(std::string fileName){
+	std::fstream myFile;
+	myFile.open(fileName, std::ios::out|std::ios::binary);
+	myFile.write((char*)&PDF[0][0], PDF.size() * PDF[0].size() * sizeof(RealType));
+	myFile.close();
+}
+
+std::vector<std::vector<RealType> > DiffusionND::loadOccupancy(std::string fileName, unsigned long int L){
+	std::vector<std::vector<RealType> > occupancy(2*L+1, std::vector<RealType>(2*L+1));
+	
+	std::ifstream file(fileName, std::ios::binary);
+	for (int i = 0; i < 2*L+1; i++) {
+        for (int j = 0; j < 2*L+1; j++) {
+			char* buffer = new char [sizeof(RealType)];
+            file.read(buffer, sizeof(RealType));
+			RealType* x = reinterpret_cast<RealType*>(buffer);
+			std::cout << &x << std::endl;
+        }
+    }
+	file.close();
+
+	return occupancy;
 }

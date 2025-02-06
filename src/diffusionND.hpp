@@ -58,6 +58,9 @@ public:
   std::vector<std::vector<RealType> > integratedProbability(std::vector<std::vector<double> >);
   std::vector<std::vector<double> > logIntegratedProbability(std::vector<std::vector<double> >);
 
+  void saveOccupancy(std::string);
+  std::vector<std::vector<RealType> > loadOccupancy(std::string, unsigned long int);
+
   void iterateTimestep();
 };
 
