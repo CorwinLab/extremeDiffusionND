@@ -34,9 +34,9 @@ class DiffusionND(libDiffusion.DiffusionND):
         return self.getL()
     
     @classmethod
-    def fromOccupancy(cls, alphas, size, occ, time):
+    def fromOccupancy(cls, alphas, size, saveOccupancyFileName, time):
         d = cls(alphas, size)
-        d.PDF = occ
+        d.loadOccupancy(saveOccupancyFileName)
         d.time = time 
         return d
     

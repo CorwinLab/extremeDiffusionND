@@ -7,7 +7,7 @@ from datetime import date
 
 if __name__ == '__main__':
 	# Test Code
-	# L, tMax, distName, params, directory, systID = 5000, 10000, 'Dirichlet', '1,1,1,1', './', 0
+	# L, tMax, distName, params, directory, systID = 1000, 50, 'Dirichlet', '1,1,1,1', './', 0
 
 	L = int(sys.argv[1])
 	tMax = int(sys.argv[2])

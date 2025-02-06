@@ -170,8 +170,8 @@ std::vector<std::vector<double> > DiffusionND::logIntegratedProbability(std::vec
 void DiffusionND::saveOccupancy(std::string fileName){
 	std::fstream myFile;
 	myFile.open(fileName, std::ios::out|std::ios::binary);
-	for (int i=0; i < 2 * L+1; i++){
-		for (int j=0; j<2*L+1; j++){
+	for (unsigned long int i=0; i < 2 * L+1; i++){
+		for (unsigned long int j=0; j<2*L+1; j++){
 			myFile.write(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
 		}
 	}
@@ -179,17 +179,12 @@ void DiffusionND::saveOccupancy(std::string fileName){
 	myFile.close();
 }
 
-std::vector<std::vector<RealType> > DiffusionND::loadOccupancy(std::string fileName, unsigned long int L){
-	std::vector<std::vector<RealType> > occupancy(2*L+1, std::vector<RealType>(2*L+1));
-	
+void DiffusionND::loadOccupancy(std::string fileName){
 	std::ifstream file(fileName, std::ios::binary);
-	for (int i = 0; i < 2*L+1; i++) {
-        for (int j = 0; j < 2*L+1; j++) {
-            file.read(reinterpret_cast<char*>(&occupancy[i][j]), sizeof(RealType));
-			std::cout << std::setprecision(30) << occupancy[i][j] << std::endl;
+	for (unsigned long int i = 0; i < 2*L+1; i++) {
+        for (unsigned long int j = 0; j < 2*L+1; j++) {
+            file.read(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
         }
     }
 	file.close();
-
-	return occupancy;
 }

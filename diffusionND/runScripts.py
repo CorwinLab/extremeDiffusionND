@@ -48,7 +48,7 @@ def getListOfTimes(maxT, startT=1, num=500):
 	"""
 	return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
-def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
+def evolveAndMeasurePDF(ts, mostRecentTime, tMax, Diff, saveFileName, saveOccupancyFileName):
 	"""
 	evolves occupancy lattice and makes probability lattice, through the generator loop
 
@@ -61,11 +61,14 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 	saveFile: h5 object; this is the file we are going to be saving data to
 	"""
 	startTime = wallTime()
-	
-	for t in range(tMax):
-		if t in ts:
+	hours = 3
+	seconds = hours * 3600
+
+	while Diff.time < tMax:
+		Diff.iterateTimestep()
+		if Diff.time in ts:
 			# First need to pull out radii at current time we want
-			idx = list(ts).index(t)
+			idx = list(ts).index(Diff.time)
 			radiiAtTimeT = []
 
 			with h5py.File(saveFileName, 'r+') as saveFile:
@@ -85,25 +88,21 @@ def evolveAndMeasurePDF(ts, tMax, Diff, saveFileName):
 				
 				# For ease, we will save the occupancy every time we 
 				# write data to the file
-				saveFile.attrs['currentOccupancyTime'] = t
-				saveFile['currentOccupancy'][:] = Diff.PDF
+				saveFile.attrs['currentOccupancyTime'] = Diff.time
+				Diff.saveOccupancy(saveOccupancyFileName)
 				startTime = wallTime()
 				
-		hours = 3
-		seconds = hours * 3600
 		# Save at final time and if haven't saved for XX hours
 		# Because it might take longer than 3 hours to go between
 		# save times
-		if (wallTime() - startTime >= seconds) or (t == tMax-1):
+		if (wallTime() - startTime >= seconds) or (Diff.time == tMax-1):
 			# Save current time and occupancy to make restartable
 			with h5py.File(saveFileName, 'r+') as saveFile:
-				saveFile.attrs['currentOccupancyTime'] = t
-				saveFile['currentOccupancy'][:] = Diff.PDF
+				saveFile.attrs['currentOccupancyTime'] = Diff.time
+				Diff.saveOccupancy(saveOccupancyFileName)
 			
 			# Reset the timer
 			startTime = wallTime()
-
-		Diff.iterateTimestep()
 
 def runDirichlet(L, ts, velocities, params, directory, systID):
 	"""
@@ -125,6 +124,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 	tMax = max(ts)
 
 	saveFileName = os.path.join(directory, f"{str(systID)}.h5")
+	saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
 
 	with h5py.File(saveFileName, 'a') as saveFile: 
 		# Define the regimes we want to study
@@ -139,22 +139,21 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
 		# Load save if occupancy is already saved
 		# Eric says the following should be a function.
-		if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
+		if ('currentOccupancyTime' in saveFile.attrs.keys()) and (os.path.exists(saveOccupancyFileName)):
 			mostRecentTime = saveFile.attrs['currentOccupancyTime']
-			occ = saveFile['currentOccupancy'][:]
-			Diff = DiffusionND.fromOccupancy(params, L, occ, mostRecentTime)
+			print(f"Loaded file from time {mostRecentTime}", flush=True)
+			Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
 		else:
 			# Otherwise, initialize as normal
 			Diff = DiffusionND(params, L)
-			saveFile.create_dataset('currentOccupancy', data=Diff.PDF, compression='gzip')
 			saveFile.attrs['currentOccupancyTime'] = 0
+			mostRecentTime = 0
 
 	# actually run and save data
-	evolveAndMeasurePDF(ts, tMax, Diff, saveFileName)
+	evolveAndMeasurePDF(ts, mostRecentTime, tMax, Diff, saveFileName, saveOccupancyFileName)
 
 	# To save space we delete the occupancy when done
-	with h5py.File(saveFileName, 'r+') as saveFile:
-		del saveFile['currentOccupancy']
+	os.remove(saveOccupancyFileName)
 
 def getExpVarX(distName, params):
 	'''
