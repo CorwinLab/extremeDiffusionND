@@ -8,6 +8,8 @@
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <pybind11/pybind11.h>
@@ -29,14 +31,9 @@ RandDistribution::RandDistribution(const std::vector<double> _alpha)
 	theta.resize(4);
 }
 
-// Need to define get alpha method
 std::vector<RealType> RandDistribution::getRandomNumbers()
 {
-	if (isinf(alpha[0]))
-	{
-		return {(RealType)0.25, (RealType)0.25, (RealType)0.25, (RealType)0.25};
-	}
-	else
+	if (!isinf(alpha[0]))
 	{
 		gsl_ran_dirichlet(gen, K, &alpha[0], &theta[0]);
 		/* Cast double precision to quad precision by dividing by sum of double precision rand numbers*/
@@ -53,6 +50,10 @@ std::vector<RealType> RandDistribution::getRandomNumbers()
 			biases[i] /= sum;
 		}
 		return biases;
+	}
+	else
+	{
+		return {(RealType)0.25, (RealType)0.25, (RealType)0.25, (RealType)0.25};
 	}
 }
 
@@ -88,25 +89,16 @@ void DiffusionND::iterateTimestep()
 	{ // i is the columns
 		for (unsigned long int j = startIdx; j < endIdx; j++)
 		{ // j is the row
-			if ((i + j + t) % 2 == 1)
-			{
-				continue;
+			if (((i + j + t) % 2 == 1) && (PDF.at(i).at(j) != 0)){
+				biases = getRandomNumbers();
+				RealType currentPos = PDF.at(i).at(j);
+				PDF.at(i + 1).at(j) += currentPos * (RealType)biases[0];
+				PDF.at(i - 1).at(j) += currentPos * (RealType)biases[1];
+				PDF.at(i).at(j + 1) += currentPos * (RealType)biases[2];
+				PDF.at(i).at(j - 1) += currentPos * (RealType)biases[3];
+
+				PDF.at(i).at(j) = 0;
 			}
-
-			RealType currentPos = PDF.at(i).at(j);
-			if (currentPos == 0)
-			{
-				continue;
-			}
-
-			biases = getRandomNumbers();
-
-			PDF.at(i + 1).at(j) += currentPos * (RealType)biases[0];
-			PDF.at(i - 1).at(j) += currentPos * (RealType)biases[1];
-			PDF.at(i).at(j + 1) += currentPos * (RealType)biases[2];
-			PDF.at(i).at(j - 1) += currentPos * (RealType)biases[3];
-
-			PDF.at(i).at(j) = 0;
 		}
 	}
 	/* Ensure we aren't losing/gaining probability */
@@ -127,29 +119,27 @@ std::vector<std::vector<RealType>> DiffusionND::integratedProbability(std::vecto
 		for (unsigned long int j = 0; j < 2 * L + 1; j++)
 		{ // j is the row
 
-			if (PDF.at(i).at(j) == 0)
+			if (PDF.at(i).at(j) != 0)
 			{
-				continue;
-			}
-			int xval = i - L; 
-			int yval = j - L;
-			double distanceToOrigin = sqrt(pow(xval, 2) + pow(yval, 2));
-			
-			for (unsigned long int l = 0; l < radii.size(); l++)
-			{
-				for (unsigned long int k = 0; k < radii.at(l).size(); k++)
+				int xval = i - L; 
+				int yval = j - L;
+				double distanceToOrigin = sqrt(pow(xval, 2) + pow(yval, 2));
+				
+				for (unsigned long int l = 0; l < radii.size(); l++)
 				{
-					double currentRadii = radii.at(l).at(k);
-
-					if (distanceToOrigin > currentRadii)
+					for (unsigned long int k = 0; k < radii.at(l).size(); k++)
 					{
-						probabilities.at(l).at(k) += PDF.at(i).at(j);
+						double currentRadii = radii.at(l).at(k);
+
+						if (distanceToOrigin > currentRadii)
+						{
+							probabilities.at(l).at(k) += PDF.at(i).at(j);
+						}
 					}
 				}
 			}
 		}
 	}
-
 	return probabilities;
 }
 
@@ -163,4 +153,26 @@ std::vector<std::vector<double> > DiffusionND::logIntegratedProbability(std::vec
 		}
 	}
 	return logProbabilities;
+}
+
+void DiffusionND::saveOccupancy(std::string fileName){
+	std::fstream myFile;
+	myFile.open(fileName, std::ios::out|std::ios::binary);
+	for (unsigned long int i=0; i < 2 * L+1; i++){
+		for (unsigned long int j=0; j<2*L+1; j++){
+			myFile.write(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
+		}
+	}
+	
+	myFile.close();
+}
+
+void DiffusionND::loadOccupancy(std::string fileName){
+	std::ifstream file(fileName, std::ios::binary);
+	for (unsigned long int i = 0; i < 2*L+1; i++) {
+        for (unsigned long int j = 0; j < 2*L+1; j++) {
+            file.read(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
+        }
+    }
+	file.close();
 }
