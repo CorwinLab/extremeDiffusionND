@@ -1,17 +1,14 @@
-from sympy.physics.units import velocity
-
-import evolve2DLattice as ev
 import memEfficientEvolve2DLattice as m
-import glob
-import numpy as np
-from matplotlib import pyplot as plt
-import pandas as pd
-from scipy.stats import norm
 import os
-import time
-import math
 import h5py
 import json
+import matplotlib.patches
+import numpy as np
+from matplotlib import pyplot as plt
+from memEfficientEvolve2DLattice import evolve2DDirichlet
+import matplotlib
+from randNumberGeneration import getRandomDistribution
+
 
 def generateGifRWRE(occupancy, maxT, alphas, pathName,startT=1, listOfTimes=None):
     os.makedirs(pathName,exist_ok=True)
@@ -183,6 +180,130 @@ def visualizeAlphaAndVar(savePath,regime='tOnSqrtLogT'):
         plt.savefig(f"{savePath}/" + tStr + ".png")
 
 
+def createMeasurementGraphic(saveFile):
+    """
+    savefile: str, path to which fig is saved
+    """
+    # os.makedirs(saveFile,exist_ok=True)
+    # plt.rcParams.update({'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+
+    maxT = 500
+    distName = 'Dirichlet'
+    params = np.array([1, 1, 1, 1])
+    pdf = False
+    occtype = int
+    occupancy = np.zeros(shape=(2 * maxT + 1, 2 * maxT + 1))
+    occupancy[maxT, maxT] = 1
+    # v = 0.63
+
+    func = getRandomDistribution(distName, params)
+
+    for t, occ in evolve2DDirichlet(occupancy, maxT, func):
+        pass
+
+    cmap = matplotlib.colormaps["jet"]  # instead of get_cmap because newer matplotlib version
+    cmap.set_under(color="white")
+    cmap.set_bad(color="white")
+    vmax = np.max(occ)
+    vmin = 1e-9
+
+    r1 = 25
+    r2 = 60
+    r3 = 3.5 * np.sqrt(maxT)
+
+    # # with velocities
+    # r1 = v * np.sqrt(maxT)
+    # r2 = (v * maxT) / (np.sqrt(np.log(maxT)))
+    # r3 = v * maxT
+
+
+    circle1 = plt.Circle((maxT, maxT), r1, color='k', fill=False, ls='--')
+    circle2 = plt.Circle((maxT, maxT), r2, color='k', fill=False, ls='--')
+    circle3 = plt.Circle((maxT, maxT), r3, color='k', fill=False, ls='--')
+
+    mutation_scale = 10
+
+    arrow1 = matplotlib.patches.FancyArrowPatch((maxT, maxT), (maxT + r1 * np.cos(-np.pi / 3), maxT + r1 * np.sin(-np.pi / 3)), mutation_scale=mutation_scale, color='k')
+    arrow2 = matplotlib.patches.FancyArrowPatch((maxT, maxT), (maxT + r2 * np.cos(np.pi / 6), maxT + r2 * np.sin(np.pi / 6)), mutation_scale=mutation_scale, color='k')
+    arrow3 = matplotlib.patches.FancyArrowPatch((maxT, maxT), (maxT, maxT + r3), mutation_scale=mutation_scale, color='k')
+
+    fig, ax = plt.subplots()
+    width = 4 * np.sqrt(maxT)
+    # if using pre-existing occ then use L instead of maxT
+    ax.set_xlim([maxT - width, maxT + width])
+    ax.set_ylim([maxT - width, maxT + width])
+
+    ax.add_patch(circle1)
+    ax.add_patch(circle2)
+    ax.add_patch(circle3)
+
+    ax.add_patch(arrow1)
+    ax.add_patch(arrow2)
+    ax.add_patch(arrow3)
+
+    ax.annotate(r"$v t$", (505, 562.5))
+    ax.annotate(r"$v \sqrt{t}$", (490, 480))
+    ax.annotate(r"$v \frac{t}{\sqrt{\ln(t)}}$", (525, 508))
+
+    # setting norm=matplotlib.colors.LogNorm automatically takes the log (base 10)
+    # trying to do like np.log(occ) and not do the norm gets back the terrible checkerboard
+    ax.imshow(occ, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax),
+            cmap=cmap,  interpolation='gaussian', alpha=0.75)
+    fig.savefig(f"{saveFile}.pdf", bbox_inches='tight')
+
+
+def plotAllSystems(path,saveDir, regime='tOnSqrtLogT',takeLog=False):
+    files = os.listdir(path)
+    os.makedirs(saveDir,exist_ok=True)
+    files.remove('info.npz')
+    files.remove('statsNoLog.npz')
+    files.remove('stats.npz')
+    info = np.load(f"{path}/info.npz")
+    velocities = info['velocities'].flatten()
+    vIdx = -8  # hard code in 0.39 for v, for figure purposes
+    time = info['times']
+
+    if regime =='tOnSqrtLogT':  # default to crit regime
+        regimeIdx = 3
+        r = velocities[vIdx] * time / (np.sqrt(np.log(time)))
+    elif regime =='sqrt':
+        regimeIdx = 1
+        r = velocities[vIdx] * (time ** (1/2))
+    elif regime =='linear':
+        regimeIdx = 0
+        r = velocities[vIdx] * time
+    if takeLog:
+        statsMean = np.load(f"{path}/stats.npz")['mean'][regimeIdx, :, vIdx]
+        ylabel = r"$-\log{P(r(t))}$"
+        meanLabel = r"-$\langle \log{P(r(t))} \rangle$"
+    else:
+        statsMean = np.load(f"{path}/statsNoLog.npz")['mean'][regimeIdx, :, vIdx]
+        ylabel = r"$P(r(t))$"
+        meanLabel = r"$\langle P(r(t))\rangle$"
+    fig, ax = plt.subplots(figsize=(5,4),dpi=150,constrained_layout=True)
+    ax.set_xlabel("Time")
+    ax.set_ylabel(ylabel)
+    for file in files:
+        temp = np.load(f"{path}/{file}")[regimeIdx,:,vIdx]
+        #TODO: what if dots plus lines instead
+        if takeLog:
+            with np.errstate(divide='ignore'):
+                ax.loglog(time,-np.log(temp),'.',linewidth=1,alpha=0.4)
+        else:
+            ax.semilogx(time, temp,'.',linewidth=1,alpha=0.4)
+    if takeLog:
+        with np.errstate(divide='ignore'):
+            ax.loglog(time,- statsMean,'o',color='k',alpha=0.8, label=meanLabel)
+            prediction = r**2 / time
+            ax.loglog(time, prediction, color='red',linestyle='dashed',label=r"$\frac{r(t)^2}{t}$")
+        savePath = f"{saveDir}/{regime}"+"AllSystemsLnP.png"
+    else:
+        ax.semilogx(time,statsMean,'o',color='k',label=meanLabel)
+        savePath = f"{saveDir}/{regime}"+"AllSystemsRawP.png"
+    ax.legend()
+    #ax.set_ylim([1e-6,1])
+    # TODO: save as png because too many points
+    fig.savefig(savePath,bbox_inches='tight')
 
 # all old shit because we've changed stuff.
 # def getLastValsLog(path,velocityIdx,savePath):

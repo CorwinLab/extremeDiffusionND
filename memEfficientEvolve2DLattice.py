@@ -96,7 +96,7 @@ def integratedProbability(occupancy, distances, time):
 	# this has an upper limit since vt grows linearly with t.
 	# for short times, only loop over the part of the array we expect to be occupied
 	if time < origin[0]:  
-		startIdx = origin[0]- time
+		startIdx = origin[0] - time
 		endIdx = origin[0] + time
 	else:
 		# start at 1 and go to shape-1 because otherwise at the boundary which we don't want
