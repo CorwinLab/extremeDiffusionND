@@ -23,8 +23,8 @@ def getStatsh5py(path,tCutOff=None,takeLog=True):
         variables = json.load(v)
     time = np.array(variables['ts'])
     # TODO: fix this once I push the other thing, to fix the range issue
-    #maxTime = time[-2]
-    maxTime = time[-1] -1  # because of
+    # maxTime = time[-2]
+    maxTime = time[-1] -1  # because of the range issue?
     print(maxTime)
     files = glob.glob(f"{path}/*.h5")
     # print(f"files: {files}")
