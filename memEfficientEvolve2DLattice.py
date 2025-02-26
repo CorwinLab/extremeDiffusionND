@@ -216,7 +216,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
 			# Reset the timer
 			startTime = wallTime()
 
-def runDirichlet(L, ts, velocities, distName, params, directory, systID):
+def runSystem(L, ts, velocities, distName, params, directory, systID):
 	"""
 	memory efficient eversion of runQuadrantsData.py; evolves with a bajillion for loops
 	instead of vectorization, to avoid making copies of the array, to save memory.
@@ -234,7 +234,8 @@ def runDirichlet(L, ts, velocities, distName, params, directory, systID):
 	func = getRandomDistribution(distName, params)
 	ts = np.array(ts)
 	velocities = np.array(velocities)
-	tMax = max(ts) + 1  # without the +1, this returns tMax (from bash file)-1
+	tMax = max(ts) + 1  # should be 10,000
+	# without the +1, this returns tMax (from bash file)-1
 	# and then it gets passed into evolveAndMeasure(..,tMax,..) which then uses it
 	# in "for t in range(startT, tMax))" but that will run to 1 less than the parameter given
 	# hence 1998
@@ -324,7 +325,7 @@ if __name__ == "__main__":
 		params = np.array(params).astype(float)
 		print(f"params: {params}")
 
-	ts = getListOfTimes(tMax - 1, 1)
+	ts = getListOfTimes(tMax - 1, 1)  # 1 to 10,000-1
 	velocities = np.geomspace(10 ** (-5), 10, 21)
 
 	vars = {'L': L, 
@@ -349,5 +350,5 @@ if __name__ == "__main__":
 		vars.pop("Date")
 
 	start = wallTime()
-	runDirichlet(**vars)
+	runSystem(**vars)
 	print(wallTime() - start, flush=True)
