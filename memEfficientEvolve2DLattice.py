@@ -211,8 +211,12 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
 			# Save current time and occupancy to make restartable
 			with h5py.File(saveFileName, 'r+') as saveFile:
 				saveFile.attrs['currentOccupancyTime'] = t
-				saveFile['currentOccupancy'][:] = occ
-			
+				try:
+					saveFile['currentOccupancy'][:] = occ
+				except OSError:
+					# TODO: something here?
+					# i kind of hate continue and want it to still save after waiting for the file? idk
+					continue
 			# Reset the timer
 			startTime = wallTime()
 
@@ -272,6 +276,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
 	with h5py.File(saveFileName, 'r+') as saveFile:
 		del saveFile['currentOccupancy']
 
+# TODO: this currently only works for dirichlet I thinK???
 def getExpVarX(distName, params):
 	'''
 	Examples
@@ -294,6 +299,8 @@ def getExpVarX(distName, params):
 	ExpX /= num_samples
 
 	return ExpX
+
+#TODO (sometime-ish): rewrite above w/ dot product scheme and verify its off by a factor of 1/2 or 2 or something
 
 def saveVars(vars, save_file):
 	"""

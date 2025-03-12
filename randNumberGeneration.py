@@ -44,6 +44,24 @@ def randomLogUniform(params):
     randVals = np.exp(np.random.uniform(-params[0], params[0], size=4))
     return randVals / np.sum(randVals)
 
+def randomCorner():
+    """
+    Choose 2 values p1, p2 independently from a distribution on (0,1) with mean 1/2. Use uniform for ease
+    but in principle any distribution could be used.
+    Assign probabilities as follows:
+        up: p1/2; right: (1-p1)/2; down: (1-p2)/2; left: p2/2
+    Interpreted as 2 random walks where the choices are up/right, and down/left, as opposed to the
+        traditional left/right, and up/down.
+    Returns
+    -------
+    rand_vals: np array of 4 probabilities which sum to 1) in the following order:
+        left, down, up, right
+    """
+    p1 = np.random.uniform(0,1)
+    p2 = np.random.uniform(0,1)
+    rand_vals = [p2/2, (1-p2)/2, p1/2, (1-p1)/2]
+    return rand_vals
+
 
 def getRandomDistribution(distName, params=''):
     """Get the function to run the random distribution we'll use."""
