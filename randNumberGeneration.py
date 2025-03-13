@@ -44,6 +44,7 @@ def randomLogUniform(params):
     randVals = np.exp(np.random.uniform(-params[0], params[0], size=4))
     return randVals / np.sum(randVals)
 
+@njit
 def randomCorner():
     """
     Choose 2 values p1, p2 independently from a distribution on (0,1) with mean 1/2. Use uniform for ease
