@@ -1,17 +1,22 @@
 function [] = largestEigenValue(dir, sysID)
+directory = sprintf("%s", dir)
+cd(directory);
 N = 10;
-numSamples = 500;
+numSamples = 50;
 fileName = sprintf("%s/EigenValues%s.txt", dir, sysID);
 eigenValues = zeros(numSamples, 1);
-A = normrnd(0, 1, N, N, N, numSamples);
+
+rng(str2num(sysID));
 
 for i=1:numSamples
-    arr = A(:, :, :, i);
+    arr = symtensor(@randn, 3, N);
+    arr = double(full(arr));
+    s = rng;
     lambda = eeig(arr);
+    rng(s);
     realLambda = lambda(abs(imag(lambda)) < 10 * eps);
     maxLambda = max(real(realLambda));
     eigenValues(i) = maxLambda;
-    disp(i);
 end
 
 writematrix(eigenValues, fileName);
