@@ -135,12 +135,12 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
     idx = [-2, -25, -50, -75, -100, -125, -150, -175, -200, -225, -250, -275, -300]
     x = np.logspace(-10, 0)
     plt.ion()
-    n = 9
+    n = 10
     colors = plt.cm.jet(np.linspace(0, 1, n))
     # calculation of Var_nu [E^xi [x]] for dirichlet
     alphas = [0.03162278, 0.1, 0.31622777, 1, 3.1622776, 10, 31.622776]
     VarEX = []  # 0.03, 0.1, 0.3, 1, 3, 10, 31
-    for i in range(n-2):
+    for i in range(n-3):
         # print(f"alpha: {alphas[i]}")
         params = np.array([alphas[i]] * 4)
         VarEX.append(m.getExpVarX('Dirichlet', params))
@@ -149,9 +149,12 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
     pathLogNormal = "data/memoryEfficientMeasurements/h5data/logNormal/0,1/L5000/tMax10000/"
     varLogNorm = h5py.File(f"{pathLogNormal}/Stats.h5","r")[regime]['var'][:,:]
     VarEXLogNorm = m.getExpVarX("LogNormal",np.array([0,1]))
-    pathRandomDelta = "data/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/"
-    varRandomDelta = h5py.File(f"{pathRandomDelta}/Stats.h5","r")[regime]['var'][:,:]
-    VarEXRandomDelta = m.getExpVarX("Delta", "")
+    pathDelta = "data/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/"
+    varDelta = h5py.File(f"{pathDelta}/Stats.h5","r")[regime]['var'][:,:]
+    VarEXDelta = m.getExpVarX("Delta", "")
+    pathCorner = "data/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000"
+    varCorner = h5py.File(f"{pathCorner}/Stats.h5","r")[regime]['var'][:,:]
+    VarEXCorner = m.getExpVarXDotProduct("Corner","")  # returns 1/6. analytics gives 1/12.
     for timeIDX in idx:
         t = time[timeIDX]
         # print(f"time: {t}")
@@ -173,7 +176,8 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
         lastVar10 = var10[timeIDX, :]
         lastVar31 = var31[timeIDX, :]
         lastVarLogNorm = varLogNorm[timeIDX,:]
-        lastVarRandomDelta = varRandomDelta[timeIDX,:]
+        lastVarDelta = varDelta[timeIDX,:]
+        lastVarCorner = varCorner[timeIDX,:]
         if regime == 'tOnSqrtLogT':  # default to crit regime
             prefactor = 1
             xLabel = r"$v^2 \frac{\mathrm{Var}_{\nu}(\mathbb{E}^{\xi}[\vec{X}])}{1-\mathrm{Var}_{\nu}(\mathbb{E}^{\xi}[\vec{X}])}$"
@@ -195,7 +199,8 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
         plt.loglog(prefactor * (VarEX[5] / (1 - VarEX[5])) * vels ** 2, lastVar10, '.', color=colors[5], label=r"$\alpha= 10$")
         plt.loglog(prefactor * (VarEX[6] / (1 - VarEX[6])) * vels ** 2, lastVar31, '.', color=colors[6], label=r"$\alpha= 31$")
         plt.loglog(prefactor * (VarEXLogNorm / (1 - VarEXLogNorm)) * vels**2, lastVarLogNorm,'.', color=colors[7],label=r"LogNormal(0,1)" )
-        plt.loglog(prefactor * (VarEXRandomDelta / (1 - VarEXRandomDelta)) * vels ** 2, lastVarRandomDelta, '.', color=colors[8],label="Delta")
+        plt.loglog(prefactor * (VarEXDelta / (1 - VarEXDelta)) * vels ** 2, lastVarDelta, '.', color=colors[8],label="Delta")
+        plt.loglog((prefactor * (VarEXCorner / (1 - VarEXCorner)) * vels ** 2), lastVarCorner, '*', color=colors[9],label="Corner")
         plt.plot((4*np.pi)*x, x, color='k', linestyle='dashed', label=r"y=4pi x")
         plt.ylim([10 ** -8, 10 ** 3])
         plt.xlim([10 ** -8, 10 ** 3])
