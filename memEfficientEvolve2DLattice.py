@@ -172,7 +172,7 @@ def getListOfTimes(maxT, startT=1, num=500):
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
-def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFileName):
     """
 	evolves occupancy lattice and makes probability lattice, through the generator loop
 
@@ -210,7 +210,18 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
                 # For ease, we will save the occupancy every time we
                 # write data to the file
                 saveFile.attrs['currentOccupancyTime'] = t
-                saveFile['currentOccupancy'][:] = occ
+                # TODO: put this bit into a helper function?
+                # saveFile['currentOccupancy'][:] = occ
+                print(f"creating temp file {tempFileName} at t = {t}")
+                with h5py.File(tempFileName, "a") as temp:
+                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip')
+                print(f"copying temp to main")
+                saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy']
+                # saveFile['currentOccupancy'][:] = occ
+                # # TEMPORARY SYS.EXIT() FOR DEBUGGING PURPOSES
+                # sys.exit()
+                print(f"deleting temp {tempFileName}")
+                os.remove(tempFileName)
                 startTime = wallTime()
 
         hours = 3
@@ -222,12 +233,14 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName):
             # Save current time and occupancy to make restartable
             with h5py.File(saveFileName, 'r+') as saveFile:
                 saveFile.attrs['currentOccupancyTime'] = t
-                try:
-                    saveFile['currentOccupancy'][:] = occ
-                except OSError:
-                    # TODO: something here?
-                    # i kind of hate continue and want it to still save after waiting for the file? idk
-                    continue
+                print(f"creating temp file {tempFileName} at t = {t}")
+                with h5py.File(tempFileName,"a") as temp:
+                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip')
+                    print(f"copying temp to main")
+                    saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy'][:]
+                # saveFile['currentOccupancy'][:] = occ
+                print(f"deleting temp {tempFileName}")
+                os.remove(tempFileName)
             # Reset the timer
             startTime = wallTime()
 
@@ -256,6 +269,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
     # in "for t in range(startT, tMax))" but that will run to 1 less than the parameter given
     # hence 1998
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
+    tempFileName = os.path.join(directory,"temp"+f"{str(systID)}.h5")
 
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study
@@ -271,8 +285,22 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         # Load save if occupancy is already saved
         # Eric says the following should be a function.
         if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
-            mostRecentTime = saveFile.attrs['currentOccupancyTime']
-            occ = saveFile['currentOccupancy'][:]
+            # TODO: atomic operations here, check for temp file
+            if os.path.isfile(tempFileName):
+                # if the temp file exists, then the old file (systID.h5)
+                # has not been re-written to, yet. but there's probably something
+                # wrong with the temp file. therefore we want to reload the old file occupancy
+                # and set the time to be that of the old file's currentOccupancyTime?
+                print("temp file exists, restoring old file")
+                mostRecentTime = saveFile.attrs['currentOccupancyTime']
+                occ = saveFile['currentOccupancy'][:]  # array vs hdf5 dataset
+                # delete the bad temp file...
+                print('deleting bad temp file')
+                os.remove(tempFileName)
+            else:
+                print('restoring most recent save')
+                mostRecentTime = saveFile.attrs['currentOccupancyTime']
+                occ = saveFile['currentOccupancy'][:]
         else:
             # Otherwise, initialize as normal
             occ = np.zeros((2 * L + 1, 2 * L + 1))
@@ -282,7 +310,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
             saveFile.attrs['currentOccupancyTime'] = mostRecentTime
 
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
 
     # To save space we delete the occupancy when done
     with h5py.File(saveFileName, 'r+') as saveFile:
@@ -326,7 +354,7 @@ def getExpVarXDotProduct(distName, params):
     num_samples = 100000
     ExpX = 0
     # nvecs instead of xvals because we need to preserve x and y orthogonality
-    nvecs = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
+    # nvecs = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
     for _ in range(num_samples):
         # rand_vals = np.array(func()).reshape(-1, 1)
         # temp = rand_vals * nvecs  # should be (4,2) in shape
