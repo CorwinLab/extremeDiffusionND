@@ -103,17 +103,9 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
     path01 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.1/L5000/tMax10000"
     path03 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.31622777/L5000/tMax10000"
     path1 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000"
-    # path003 = "data/memoryEfficientMeasurements/dirichlet/ALPHA0.03162278/L5000/tMax10000"
-    # path01 = "data/memoryEfficientMeasurements/dirichlet/ALPHA0.1/L5000/tMax10000"
-    # path03 = "data/memoryEfficientMeasurements/dirichlet/ALPHA0.31622777/L5000/tMax10000"
-    # path1 = "data/memoryEfficientMeasurements/dirichlet/ALPHA1/L5000/tMax10000"
     path3 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3.1622776/L5000/tMax10000/"
     path10 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10/L5000/tMax10000"
     path31 = "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA31.622776/L5000/tMax10000/"
-    # var003 = np.load(f"{path003}/stats.npz")['variance']
-    # var01 = np.load(f"{path01}/stats.npz")['variance']
-    # var03 = np.load(f"{path03}/stats.npz")['variance']
-    # var1 = np.load(f"{path1}/stats.npz")['variance']
     var003 = h5py.File(f"{path003}/Stats.h5","r")[regime]['var'][:,:]
     var01 = h5py.File(f"{path01}/Stats.h5","r")[regime]['var'][:,:]
     var03 = h5py.File(f"{path03}/Stats.h5","r")[regime]['var'][:,:]
@@ -122,10 +114,6 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
     var10 = h5py.File(f"{path10}/Stats.h5", "r")[regime]['var'][:, :]  # NP Array
     var31 = h5py.File(f"{path31}/Stats.h5", "r")[regime]['var'][:, :]  # NP Array
 
-    # grab list of velocities for small alpha (1e-3 to 10)
-    # info = np.load(f"{path03}/info.npz")
-    # time = info['times']
-    # velsSmallAlpha = info['velocities'].flatten()
     # grab list of velocities for big alpha (1e-5 to 10)
     with open(f"{path10}/variables.json","r") as v:
         variables = json.load(v)
@@ -168,10 +156,6 @@ def visualizeAlphaAndVar(savePath, regime='tOnSqrtLogT'):
         lastVar01 = var01[timeIDX, :]
         lastVar03 = var03[timeIDX, :]
         lastVar1 = var1[timeIDX, :]
-        # lastVar003 = var003[regimeIdx, timeIDX, :]
-        # lastVar01 = var01[regimeIdx, timeIDX, :]
-        # lastVar03 = var03[regimeIdx, timeIDX, :]
-        # lastVar1 = var1[regimeIdx, timeIDX, :]
         lastVar3 = var3[timeIDX, :]
         lastVar10 = var10[timeIDX, :]
         lastVar31 = var31[timeIDX, :]

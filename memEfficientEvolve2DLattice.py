@@ -154,7 +154,7 @@ def tOnLogT(time):
 def constantRadius(time):
     # for a fixed radius, it just be 1 (and then it gets called as radii = v*constantRadius
 
-    return np.full_like(time.astype(float), fill_value=1, dtype=float)
+    return np.full_like(time.astype(float), fill_value=1, dtype=np.float64)
 
 
 def sqrt(time):
@@ -201,7 +201,10 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
 
                 # Shape of resulting array is (regimes, velocities)
                 radiiAtTimeT = np.vstack(radiiAtTimeT)
+                # TODO: check if min of integrated probs is also 1e-45... save separately
                 probs = integratedProbability(occ, radiiAtTimeT, t)
+                print(f"probs min (integratedProb: {np.nanmin(probs[probs!=0])}")
+                print(f"dtype probs: {probs.dtype}")
 
                 # Now save data to file
                 for count, regimeName in enumerate(saveFile['regimes'].keys()):
@@ -214,7 +217,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
                 # saveFile['currentOccupancy'][:] = occ
                 print(f"creating temp file {tempFileName} at t = {t}")
                 with h5py.File(tempFileName, "a") as temp:
-                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip')
+                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip', dtype=np.float64)
                 print(f"copying temp to main")
                 saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy']
                 # saveFile['currentOccupancy'][:] = occ
@@ -235,7 +238,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
                 saveFile.attrs['currentOccupancyTime'] = t
                 print(f"creating temp file {tempFileName} at t = {t}")
                 with h5py.File(tempFileName,"a") as temp:
-                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip')
+                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
                     print(f"copying temp to main")
                     saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy'][:]
                 # saveFile['currentOccupancy'][:] = occ
@@ -279,7 +282,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
             saveFile.create_group("regimes")
 
             for regime in regimes:
-                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
+                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64)
                 saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
         # Load save if occupancy is already saved
@@ -306,15 +309,15 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
             occ = np.zeros((2 * L + 1, 2 * L + 1))
             occ[L, L] = 1
             mostRecentTime = 1
-            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip')
+            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
             saveFile.attrs['currentOccupancyTime'] = mostRecentTime
 
     # actually run and save data
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
 
     # To save space we delete the occupancy when done
-    with h5py.File(saveFileName, 'r+') as saveFile:
-        del saveFile['currentOccupancy']
+    # with h5py.File(saveFileName, 'r+') as saveFile:
+    #     del saveFile['currentOccupancy']
 
 
 def getExpVarX(distName, params):
