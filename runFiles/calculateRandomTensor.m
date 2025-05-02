@@ -1,0 +1,55 @@
+(* ::Package:: *)
+
+(* ::Input::Initialization:: *)
+(* Symmetric tensor under all permutations of indices *)
+Print["Hello"];
+TSymmetric[n_] := Module[{RandMatrix, SymmetrizedMatrix},
+(* Create random matrix of normal distribution *)
+RandMatrix=RandomVariate[NormalDistribution[0, 1], {n, n, n}];
+(* Symmetrize based on all permutations of tensor *)
+SymmetrizedMatrix = 1/6 (RandMatrix+TensorTranspose[RandMatrix,{2,1, 3}]+TensorTranspose[RandMatrix,{1,3,2}]+TensorTranspose[RandMatrix,{2,3,1}]+TensorTranspose[RandMatrix,{3,1,2}]+TensorTranspose[RandMatrix,{3,2,1}]);
+Return[SymmetrizedMatrix]
+(**)
+];
+(*Function to determine if eigenvalue is real or not*)
+Crit[l_]:=If[Chop[Norm[Im[l]]]==0, True, False];
+(*Maximal eigenvalue from a random 3-tensor of length n.*)
+Evals[n_]:= Module[{v, m, a, b, c, RT, eqns, sol, Jsol, Rsol, Nsol, NSsol},
+(*Random tensor of length n*)
+rt = TSymmetric[n]; 
+(*system of equations*)
+eqns =Table[Sum[rt[[a]][[b]][[c]]v[b] v[c], {b, 1, n}, {c, 1, n}] == v[a], {a, 1,n }];
+(*solution of system of equations*)
+sol =NSolve[eqns, Table[v[a],{a, 1, n} ]];
+(*reformating the solutions to a list*)
+Jsol =Table[v[a], {a, 1, n}]/.sol;
+(*remove trivial solutions*)
+Rsol =Select[Jsol, Crit];
+(*replace each solution with its norm*)
+Nsol = Norm/@Rsol;
+(*sort solutions in increasing value*)
+NSsol = Sort[Nsol];
+(*If there is only one Z-eigenvalue, which has to be zero, it will return zero. We need to account for this when we implement the function.*)
+Return[If[Length[NSsol]>1, 1/NSsol[[2]], 0]]
+(**)
+];
+arguments = $CommandLine;
+dimensions=Read[StringToStream[Part[arguments,4]],Number];
+numSamples=Read[StringToStream[Part[arguments,5]],Number];
+sysID = Read[StringToStream[Part[arguments,6]],Number];
+dir =Read[StringToStream[Part[arguments,7]],String];
+file = OpenWrite[StringJoin[{dir, "EigenValues", IntegerString[sysID], ".txt"}]];
+Print[file];
+
+For[i=0, i < numSamples, i++,
+largestEigenvalue = Evals[dimensions];
+Write[file, largestEigenvalue]; 
+]
+Close[file];
+Read::readn
+Read::readn
+Read::readn
+StringJoin::string
+OpenWrite::noopen
+$Failed
+Close::stream
