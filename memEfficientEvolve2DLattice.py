@@ -378,7 +378,22 @@ def getExpVarXDotProduct(distName, params):
     return ExpX
 
 
-def diamondCornerVariance(t,distName='Dirichlet',params=''):
+def productOfDirichletNumbers(n):
+    """" this works"""
+    params = np.array([0.1]*4)
+    rand_vals = np.random.dirichlet(params,size=n)
+    rand_vals = rand_vals.astype(np.quad)
+    prod = np.prod(rand_vals[:,0])
+    return prod
+
+def getLogP(t):
+    """ this works"""
+    sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
+           + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
+    logP = np.log(sumP)
+    return logP.astype(float)
+
+def diamondCornerVariance(t):
     """ calculate var[lnP] of rwre being at the 4 corners
     process (equiv of setting v=1 for vt regime):
     take product of t dirichlet numbers, 4 times independently
@@ -388,25 +403,12 @@ def diamondCornerVariance(t,distName='Dirichlet',params=''):
     for now only going to do this for dirichlet as a check.
     which means lambda_ext will be for dirichlet with alpha=0.1
     """
-    if distName == 'Dirichlet':
-        # for now default to alpha=0.1
-        params = np.array([0.1]*4)
-    # func = getRandomDistribution(distName, params)
-    probs = []
-    logProbs = []
-    num_samples = 1000
+    num_samples = 100000
+    logPs = []
     for _ in range(num_samples):
-        #rand_vals = np.array([func() for i in range(t)],dtype=np.quad)
-        probSum = 0
-        for direction in range(4):
-            rand_vals = np.array(np.random.dirichlet(params,size=t),dtype=np.quad)
-            product = np.prod(rand_vals[:,0])
-            probSum += product
-        probs.append(probSum)
-        logP = np.log(probSum)
-        logProbs.append(logP)
-    var = np.var(logProbs)
-    return np.array(probs,dtype=np.float64), np.array(logProbs,dtype=np.float64), np.float64(var)
+        logPs.append(getLogP(t))
+    var = np.var(logPs)
+    return logPs, var
 
 def saveVars(vars, save_file):
     """
