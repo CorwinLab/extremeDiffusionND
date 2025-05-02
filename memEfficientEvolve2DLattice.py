@@ -7,6 +7,7 @@ import json
 from datetime import date
 import h5py
 import sys
+import npquad
 
 
 @njit
@@ -376,6 +377,36 @@ def getExpVarXDotProduct(distName, params):
     ExpX /= num_samples
     return ExpX
 
+
+def diamondCornerVariance(t,distName='Dirichlet',params=''):
+    """ calculate var[lnP] of rwre being at the 4 corners
+    process (equiv of setting v=1 for vt regime):
+    take product of t dirichlet numbers, 4 times independently
+    repeat a ton of times
+    then take log of all of them and calculate variance
+    note because log(product) is sum(log) we can add instead?
+    for now only going to do this for dirichlet as a check.
+    which means lambda_ext will be for dirichlet with alpha=0.1
+    """
+    if distName == 'Dirichlet':
+        # for now default to alpha=0.1
+        params = np.array([0.1]*4)
+    # func = getRandomDistribution(distName, params)
+    probs = []
+    logProbs = []
+    num_samples = 1000
+    for _ in range(num_samples):
+        #rand_vals = np.array([func() for i in range(t)],dtype=np.quad)
+        probSum = 0
+        for direction in range(4):
+            rand_vals = np.array(np.random.dirichlet(params,size=t),dtype=np.quad)
+            product = np.prod(rand_vals[:,0])
+            probSum += product
+        probs.append(probSum)
+        logP = np.log(probSum)
+        logProbs.append(logP)
+    var = np.var(logProbs)
+    return np.array(probs,dtype=np.float64), np.array(logProbs,dtype=np.float64), np.float64(var)
 
 def saveVars(vars, save_file):
     """
