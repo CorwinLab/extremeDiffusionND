@@ -32,23 +32,18 @@ def productOfDirichletNumbers(n):
     params = np.array([0.1]*4)
     rand_vals = np.random.dirichlet(params,size=n)
     rand_vals = rand_vals.astype(np.quad)
-    print('before product')
-    # prod = np.prod(rand_vals[:,0])
+    prod = np.prod(rand_vals[:,0])
     # prod = np.exp(np.sum(np.log(rand_vals[:,0])))
 
     # testing to see if np prod is the issue
-    prod = np.quad('5')
-    print('after product')
+    #prod = np.quad('5')
     return prod
 
 def getLogP(t):
     """ this works"""
-    print('before sum')
     sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
            + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
-    print('after sum, before log')
     logP = np.log(sumP)
-    print('after log')
     return logP.astype(float)
 
 def manySamples(t,nsamples):
