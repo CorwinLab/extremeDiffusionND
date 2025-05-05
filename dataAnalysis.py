@@ -115,6 +115,39 @@ def processStats(statsFile):
     # indices = np.where(data[2,:] == tmax)
     return data, label
 
+def productOfDirichletNumbers(n):
+    """" calculate the product of n dirichlet numbers"""
+    params = np.array([0.1]*4)
+    rand_vals = np.random.dirichlet(params,size=n)
+    rand_vals = rand_vals.astype(np.quad)
+    prod = np.prod(rand_vals[:,0])
+    return prod
+
+def getLogP(t):
+    """ """
+    sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
+           + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
+    logP = np.log(sumP)
+    return logP.astype(float)
+
+def diamondCornerVariance(t):
+    """ calculate var[lnP] of rwre being at the 4 corners
+    process (equiv of setting v=1 for vt regime):
+    take product of t dirichlet numbers, 4 times independently
+    repeat a ton of times
+    then take log of all of them and calculate variance
+    note because log(product) is sum(log) we can add instead?
+    for now only going to do this for dirichlet as a check.
+    which means lambda_ext will be for dirichlet with alpha=0.1
+    """
+    num_samples = 100000
+    logPs = []
+    for _ in range(num_samples):
+        logPs.append(getLogP(t))
+    var = np.var(logPs)
+    return var
+
+
 # for the var[lnP]|tmax, we want r(tmax) and tmax...
 # but in theory any t should work.
 def masterCurveValue(radii, times, lambda_ext):
@@ -150,3 +183,12 @@ def getListOfLambdas(statsList):
         expVarXList.append(expVarX)
         lambdaList.append((expVarX / (1 - expVarX)))
     return np.array(expVarXList), np.array(lambdaList)
+
+def diamondVarFinal(ts):
+    radii = ts
+    params = np.array([0.1]*4)
+    lambda_ext = getExpVarXDotProduct("Dirichlet",params)
+    varLnPs = []
+    for t in ts:
+        varLnPs.append(diamondCornerVariance(t))
+    return masterCurveValue(radii,ts,lambda_ext), varLnPs
