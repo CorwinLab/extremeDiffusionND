@@ -23,7 +23,17 @@ def randomOneQuarter():
 def randomDirichlet(alphas):
     return np.random.dirichlet(alphas)
 
+# the next two functions are specifically for locust
+@vectorize
+def gammaDist(alpha, scale):
+    return np.random.gamma(alpha, scale)
 
+@njit
+def randomDirichletLocust(alphas):
+    gammas = gammaDist(alphas, np.ones(alphas.shape))
+    return gammas / np.sum(gammas)
+
+# return to normal functions
 @njit
 def randomSymmetricDirichlet(alphas):
     """
@@ -62,6 +72,8 @@ def randomCorner():
     p2 = np.random.uniform(0,1)
     rand_vals = [p2/2, (1-p2)/2, p1/2, (1-p1)/2]
     return rand_vals
+
+
 
 
 def getRandomDistribution(distName, params=''):
