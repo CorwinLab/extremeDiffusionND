@@ -30,9 +30,8 @@ def gammaDist(alpha, scale):
 
 @njit
 def randomDirichletLocust(alphas):
-    if isinstance(alphas, list):
-        alphas = np.array(alphas)
-    gammas = gammaDist(alphas, np.ones(alphas.shape))
+    # because alphas will be a list at this point
+    gammas = gammaDist(alphas, np.ones((len(alphas),)))
     return gammas / np.sum(gammas)
 
 # return to normal functions
