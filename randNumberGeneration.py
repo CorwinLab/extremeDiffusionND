@@ -30,8 +30,6 @@ def gammaDist(alpha, scale):
 
 @njit
 def randomDirichletLocust(alphas):
-    if isinstance(alphas, list):
-        alphas = np.array(alphas)
     gammas = gammaDist(alphas, np.ones(alphas.shape))
     return gammas / np.sum(gammas)
 
@@ -82,7 +80,9 @@ def getRandomDistribution(distName, params=''):
     """Get the function to run the random distribution we'll use."""
     # Need to convert numpy array to list to be properly
     # Converted to a string
-    if isinstance(params, np.ndarray):
+    if distName == 'randomDirichlet':
+        params = params
+    elif isinstance(params, np.ndarray):
         params = list(params)
 
     code = f'random{distName}'
