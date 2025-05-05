@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import glob
-import h5py
+# import h5py
 import json
 from memEfficientEvolve2DLattice import getExpVarXDotProduct
 
@@ -139,6 +139,8 @@ def diamondCornerVariance(t):
     note because log(product) is sum(log) we can add instead?
     for now only going to do this for dirichlet as a check.
     which means lambda_ext will be for dirichlet with alpha=0.1
+
+    That is. calculates variance of diamond corners, all for one time.
     """
     num_samples = 100000
     logPs = []
