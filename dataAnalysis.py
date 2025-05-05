@@ -4,6 +4,7 @@ import glob
 # import h5py
 import json
 from memEfficientEvolve2DLattice import getExpVarXDotProduct
+from randNumberGeneration import getRandomDistribution
 
 # moments calculation for files saved as .h5
 def getStatsh5py(path,tCutOff=None,takeLog=True):
@@ -115,40 +116,6 @@ def processStats(statsFile):
     # indices = np.where(data[2,:] == tmax)
     return data, label
 
-def productOfDirichletNumbers(n):
-    """" calculate the product of n dirichlet numbers"""
-    params = np.array([0.1]*4)
-    rand_vals = np.random.dirichlet(params,size=n)
-    rand_vals = rand_vals.astype(np.quad)
-    prod = np.prod(rand_vals[:,0])
-    return prod
-
-def getLogP(t):
-    """ """
-    sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
-           + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
-    logP = np.log(sumP)
-    return logP.astype(float)
-
-def diamondCornerVariance(t):
-    """ calculate var[lnP] of rwre being at the 4 corners
-    process (equiv of setting v=1 for vt regime):
-    take product of t dirichlet numbers, 4 times independently
-    repeat a ton of times
-    then take log of all of them and calculate variance
-    note because log(product) is sum(log) we can add instead?
-    for now only going to do this for dirichlet as a check.
-    which means lambda_ext will be for dirichlet with alpha=0.1
-
-    That is. calculates variance of diamond corners, all for one time.
-    """
-    num_samples = 100000
-    logPs = []
-    for _ in range(num_samples):
-        logPs.append(getLogP(t))
-    var = np.var(logPs)
-    return var
-
 
 # for the var[lnP]|tmax, we want r(tmax) and tmax...
 # but in theory any t should work.
@@ -186,7 +153,44 @@ def getListOfLambdas(statsList):
         lambdaList.append((expVarX / (1 - expVarX)))
     return np.array(expVarXList), np.array(lambdaList)
 
-# only works on locust
+# the following only work on LOCUST
+def productOfDirichletNumbers(n):
+    """" calculate the product of n dirichlet numbers"""
+    params = np.array([0.1]*4)
+    # rand_vals = np.random.dirichlet(params,size=n)
+    # rand_vals = rand_vals.astype(np.quad)
+    # prod = np.prod(rand_vals[:,0])
+    func = getRandomDistribution("DirichletLocust",params)
+    rand_vals = np.array([func() for i in range(n)],dtype=np.quad)
+    prod = np.prod(rand_vals[:,0])
+    return prod
+
+def getLogP(t):
+    """ """
+    sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
+           + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
+    logP = np.log(sumP)
+    return logP.astype(float)
+
+def diamondCornerVariance(t):
+    """ calculate var[lnP] of rwre being at the 4 corners
+    process (equiv of setting v=1 for vt regime):
+    take product of t dirichlet numbers, 4 times independently
+    repeat a ton of times
+    then take log of all of them and calculate variance
+    note because log(product) is sum(log) we can add instead?
+    for now only going to do this for dirichlet as a check.
+    which means lambda_ext will be for dirichlet with alpha=0.1
+
+    That is. calculates variance of diamond corners, all for one time.
+    """
+    num_samples = 100000
+    logPs = []
+    for _ in range(num_samples):
+        logPs.append(getLogP(t))
+    var = np.var(logPs)
+    return var
+
 def diamondVarFinal(ts):
     radii = ts
     params = np.array([0.1]*4)
