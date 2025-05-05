@@ -186,9 +186,11 @@ def diamondCornerVariance(t):
     """
     num_samples = 100000
     logPs = []
+    print(f"starting var calc:")
     for _ in range(num_samples):
         logPs.append(getLogP(t))
     var = np.var(logPs)
+    print(f"end of var calc")
     return var
 
 def diamondVarFinal(ts):
@@ -197,5 +199,6 @@ def diamondVarFinal(ts):
     lambda_ext = getExpVarXDotProduct("DirichletLocust",params)
     varLnPs = []
     for t in ts:
+        print(f"t: {t}")
         varLnPs.append(diamondCornerVariance(t))
     return masterCurveValue(radii,ts,lambda_ext), varLnPs
