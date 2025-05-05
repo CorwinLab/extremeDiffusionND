@@ -80,10 +80,9 @@ def getRandomDistribution(distName, params=''):
     """Get the function to run the random distribution we'll use."""
     # Need to convert numpy array to list to be properly
     # Converted to a string
-    if distName == 'randomDirichlet':
-        params = params
-    elif isinstance(params, np.ndarray):
+    if isinstance(params, np.ndarray):
         params = list(params)
-
+    if distName=='DirichletLocust':
+        params = np.array(params)
     code = f'random{distName}'
     return eval(f'njit(lambda : {code}({params}))')
