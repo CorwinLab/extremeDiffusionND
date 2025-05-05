@@ -30,6 +30,8 @@ def gammaDist(alpha, scale):
 
 @njit
 def randomDirichletLocust(alphas):
+    if isinstance(alphas, list):
+        alphas = np.array(alphas)
     gammas = gammaDist(alphas, np.ones(alphas.shape))
     return gammas / np.sum(gammas)
 
@@ -82,7 +84,5 @@ def getRandomDistribution(distName, params=''):
     # Converted to a string
     if isinstance(params, np.ndarray):
         params = list(params)
-    if distName=='DirichletLocust':
-        params = np.array(params)
     code = f'random{distName}'
     return eval(f'njit(lambda : {code}({params}))')
