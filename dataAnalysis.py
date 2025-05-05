@@ -186,10 +186,11 @@ def getListOfLambdas(statsList):
         lambdaList.append((expVarX / (1 - expVarX)))
     return np.array(expVarXList), np.array(lambdaList)
 
+# only works on locust
 def diamondVarFinal(ts):
     radii = ts
     params = np.array([0.1]*4)
-    lambda_ext = getExpVarXDotProduct("Dirichlet",params)
+    lambda_ext = getExpVarXDotProduct("DirichletLocust",params)
     varLnPs = []
     for t in ts:
         varLnPs.append(diamondCornerVariance(t))
