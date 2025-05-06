@@ -1,5 +1,6 @@
 import numpy as np
 import npquad
+from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
 
 
 # the following only work on LOCUST
@@ -40,9 +41,11 @@ def diamondCornerVariance(t):
     """
     num_samples = 10000
     logPs = []
+    startTime = wallTime()
     print(f"starting var calc:")
     for _ in range(num_samples):
         logPs.append(getLogP(t))
+    print(f"end of iterations at {wallTime() - startTime}")
     var = np.var(logPs)
     print(f"end of var calc")
     return var
