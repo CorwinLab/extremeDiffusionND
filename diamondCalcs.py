@@ -47,7 +47,7 @@ def diamondCornerVariance(t, num_samples=500):
         logPs.append(getLogP(t))
     print(f"end of iterations at {wallTime() - startTime}")
     var = np.var(logPs)
-    print(f"end of var calc")
+    print(f"end of var calc, var = {var}")
     return var
 
 def diamondVarFinal(ts):
