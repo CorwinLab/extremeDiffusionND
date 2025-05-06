@@ -136,6 +136,7 @@ def masterCurveValue(radii, times, lambda_ext):
     scalingFunction = (lambda_ext / (4*np.pi)) * (np.log(times) / times**2) * (radii **2)
     return scalingFunction
 
+
 def getListOfLambdas(statsList):
     expVarXList = []
     lambdaList = []
@@ -153,52 +154,3 @@ def getListOfLambdas(statsList):
         lambdaList.append((expVarX / (1 - expVarX)))
     return np.array(expVarXList), np.array(lambdaList)
 
-# the following only work on LOCUST
-def productOfDirichletNumbers(n):
-    """" calculate the product of n dirichlet numbers"""
-    params = np.array([0.1]*4)
-    # rand_vals = np.random.dirichlet(params,size=n)
-    # rand_vals = rand_vals.astype(np.quad)
-    # prod = np.prod(rand_vals[:,0])
-    func = getRandomDistribution("DirichletLocust",params)
-    rand_vals = np.array([func() for i in range(n)],dtype=np.quad)
-    prod = np.prod(rand_vals[:,0])
-    return prod
-
-def getLogP(t):
-    """ """
-    sumP = (productOfDirichletNumbers(t) + productOfDirichletNumbers(t)
-           + productOfDirichletNumbers(t) + productOfDirichletNumbers(t))
-    logP = np.log(sumP)
-    return logP.astype(float)
-
-def diamondCornerVariance(t):
-    """ calculate var[lnP] of rwre being at the 4 corners
-    process (equiv of setting v=1 for vt regime):
-    take product of t dirichlet numbers, 4 times independently
-    repeat a ton of times
-    then take log of all of them and calculate variance
-    note because log(product) is sum(log) we can add instead?
-    for now only going to do this for dirichlet as a check.
-    which means lambda_ext will be for dirichlet with alpha=0.1
-
-    That is. calculates variance of diamond corners, all for one time.
-    """
-    num_samples = 100000
-    logPs = []
-    print(f"starting var calc:")
-    for _ in range(num_samples):
-        logPs.append(getLogP(t))
-    var = np.var(logPs)
-    print(f"end of var calc")
-    return var
-
-def diamondVarFinal(ts):
-    # radii = ts
-    params = np.array([0.1]*4)
-    # lambda_ext = getExpVarXDotProduct("DirichletLocust",params)
-    varLnPs = []
-    for t in ts:
-        print(f"t: {t}")
-        varLnPs.append(diamondCornerVariance(t))
-    return varLnPs

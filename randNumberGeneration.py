@@ -23,17 +23,17 @@ def randomOneQuarter():
 def randomDirichlet(alphas):
     return np.random.dirichlet(alphas)
 
-# the next two functions are specifically for locust
-@vectorize
-def gammaDist(alpha, scale):
-    return np.random.gamma(alpha, scale)
-
-@njit
-def randomDirichletLocust(alphas):
-    # because alphas will be a list at this point
-    alphas = np.array(alphas)
-    gammas = gammaDist(alphas, np.ones((len(alphas),)))
-    return gammas / np.sum(gammas)
+# # the next two functions are specifically for locust
+# @vectorize
+# def gammaDist(alpha, scale):
+#     return np.random.gamma(alpha, scale)
+#
+# @njit
+# def randomDirichletLocust(alphas):
+#     # because alphas will be a list at this point
+#     alphas = np.array(alphas)
+#     gammas = gammaDist(alphas, np.ones((len(alphas),)))
+#     return gammas / np.sum(gammas)
 
 # return to normal functions
 @njit
