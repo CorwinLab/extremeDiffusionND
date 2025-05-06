@@ -16,7 +16,8 @@ def productOfDirichletNumbers(n):
     # # return prod
     # prob = np.exp(np.sum(np.log(rand_vals)))
     rand_vals = np.random.dirichlet(params,size=n).astype(np.quad)
-    prod = np.exp(np.sum(np.log(rand_vals[:,0])))
+    # prod = np.exp(np.sum(np.log(rand_vals[:,0])))
+    prod = np.prod(rand_vals[:,0])
     return prod
 
 def getLogP(t):
@@ -27,7 +28,7 @@ def getLogP(t):
     return logP.astype(float)
 
 
-def diamondCornerVariance(t):
+def diamondCornerVariance(t, num_samples=500):
     """ calculate var[lnP] of rwre being at the 4 corners
     process (equiv of setting v=1 for vt regime):
     take product of t dirichlet numbers, 4 times independently
@@ -39,10 +40,9 @@ def diamondCornerVariance(t):
 
     That is. calculates variance of diamond corners, all for one time.
     """
-    num_samples = 10000
     logPs = []
-    startTime = wallTime()
     print(f"starting var calc:")
+    startTime = wallTime()
     for _ in range(num_samples):
         logPs.append(getLogP(t))
     print(f"end of iterations at {wallTime() - startTime}")
