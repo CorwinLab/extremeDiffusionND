@@ -7,7 +7,7 @@ import json
 from datetime import date
 import h5py
 import sys
-import npquad
+# import npquad
 
 
 @njit
@@ -344,7 +344,6 @@ def getExpVarX(distName, params):
     return ExpX
 
 
-#TODO (sometime-ish): rewrite above w/ dot product scheme and verify its off by a factor of 1/2 or 2 or something
 def getExpVarXDotProduct(distName, params):
     """
     Calculates Var_nu[E^xi[X]] numerically using vector variance (dot product) definition

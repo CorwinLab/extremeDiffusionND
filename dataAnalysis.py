@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import glob
-# import h5py
+import h5py
 import json
 from memEfficientEvolve2DLattice import getExpVarXDotProduct
 from randNumberGeneration import getRandomDistribution

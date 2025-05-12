@@ -359,9 +359,7 @@ def plotAllVariance(path, saveDir, regime='tOnSqrtLogT'):
 def colorsForLambda(lambdaList):
     # normalize values of lambda to be between 0 and 1
     logVals = np.log(lambdaList)
-    #vals = (lambdaList - np.min(lambdaList)) / (np.max(lambdaList) - np.min(lambdaList))
     vals = (logVals - np.min(logVals)) / (np.max(logVals) - np.min(logVals))
-    #print(f"vals: {vals}")
     # this goes between teal and green i guess?
     colorList = [[l, 1-l, 1] for l in vals]
     return colorList
@@ -378,7 +376,6 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
     -------
 
     """
-    # os.makedirs(savePath, exist_ok=True)
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     plt.ion()
@@ -395,7 +392,9 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
     plt.xlim([1e-11, 5e2])
     plt.ylim([1e-11, 5e2])
-    plt.gca().set_aspect('equal')
+    # plt.xlim([1e0,1e4])
+    # plt.ylim([1e-1,1e1])
+    # plt.gca().set_aspect('equal')
     # TODO: make more robust? under the assumption that all paths have the same ts list.
     for i in range(len(statsFileList)):
         for j in range(len(tMaxList)):
@@ -408,17 +407,39 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
             indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
             scalingFuncVals = d.masterCurveValue(tempData[1, :][indices], tempData[2, :][indices],
                                                  tempData[3, :][indices])
-            plt.loglog(scalingFuncVals, tempData[0, :][indices],
+            # # for main collapse (vlp vs masterfunc linear)
+            # plt.loglog(scalingFuncVals, tempData[0, :][indices],
+            #            markers[i], color=colors[i], markeredgecolor='k',
+            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
+            # # for vlp/mastercurve vs mastercurve
+            # plt.loglog(scalingFuncVals, tempData[0, :][indices]/scalingFuncVals,
+            #            markers[i], color=colors[i], markeredgecolor='k',
+            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
+            # # for vlp/mastercurve vs time?
+            # plt.loglog(tempData[1,:][indices], tempData[0, :][indices]/scalingFuncVals,
+            #            markers[i], color=colors[i], markeredgecolor='k',
+            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
+
+            # no log t in collapse
+            plt.loglog(scalingFuncVals / (np.log(tempData[2,:][indices])), tempData[0, :][indices],
                        markers[i], color=colors[i], markeredgecolor='k',
                        ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
-    # plt.legend()
-    #plt.xlabel(r"$f\left(r(t),t,\lambda_{\mathrm{ext}}\right)$")
-    plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}}{4\pi}\frac{\ln{t}}{t^2} r^2$")
+    # for normal mastercurve
+    # plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}}{4\pi}\frac{\ln{t}}{t^2} r^2$")
+    plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}}{4\pi}\frac{r^2}{t^2}$")
     plt.ylabel(r"$\mathrm{Var}[\ln{P\left(r\right)}]$")
+    # # for vlp/mastercurve vs time
+    # plt.xlabel("t")
+    # plt.ylabel("vlp / f(r,t,lambda)")
     x = np.logspace(-11, 2)
-    plt.plot(x, x, color='k', linestyle='dashed', label=r"y=4pi x")
-    # TODO: figure out how to make aspect ratio equal since slope should be 1
-    print('adjusting ticks')
+    # plt.plot(x, np.ones_like(x), color='k', linestyle='dashed', label=r"$y=4\pi x$")
+
+    # line for variance at corners of diamonds
+    #pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
+    #diamondVals = np.load(pathDiamondVar)
+    #varMasterCurves = d.masterCurveValue(diamondVals[0,:],diamondVals[0,:],lambdaExtVals[3])
+    #plt.plot(varMasterCurves[diamondVals[1,:]>diamondVals[1,0]],diamondVals[1,:][diamondVals[1,:]>diamondVals[1,0]],color='red')
+
     plt.xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     plt.yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     plt.savefig(f"{savePath}")
@@ -439,7 +460,7 @@ if __name__ == "__main__":
     statsFileList = [path003, path01, path03, path1, path3, path10, path31,
                      pathLogNormal, pathDelta, pathCorner]
 
-    savePath = "/home/fransces/Documents/Figures/2DRWREMasterCurve.png"
+    savePath = "/home/fransces/Documents/Figures/2DRWREMasterCurveNoLogt.png"
 
     # TODO: add all data (ie at all times)
     # TODO: change from manual list of 2 per decade
