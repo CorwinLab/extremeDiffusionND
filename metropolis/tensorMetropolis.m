@@ -34,7 +34,7 @@ function prob = pijConstantVariance(xijk, indices)
 end
 
 function prob = pijkCyclicVariance(xijk, indices)
-    prob = exp(-xijk^2 / 2 / d(indices));
+    prob = exp(-xijk^2 / 2 * d(indices));
 end
 
 function A = getCyclicTensor(N)
