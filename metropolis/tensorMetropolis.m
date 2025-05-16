@@ -2,7 +2,7 @@ rng('shuffle');
 
 outSteps = 10000;
 inSteps = 100;
-N = 3;
+N = 10;
 f = exp(1);
 b = 0.92;
 nBins = 30;
@@ -15,55 +15,23 @@ binLambdaMax = 14;
 ensemble = 'ConstantVariance';
 [logWeights, nc, f, histogram, accepted, rejected] = metropolisEigenValues(outSteps, inSteps, N, f, b, nBins, width, binLambdaMin, binLambdaMax, ensemble);
 
-function count = d(indices)
-    i = indices(1);
-    j = indices(2);
-    k = indices(3);
-   
-    if i == j && j==k
-        count = 1;
-    elseif i == j || j == k || i == k
-        count = 3;
-    else 
-        count = 6;
-    end
-end
-
-function prob = pijConstantVariance(xijk, indices)
-    prob = exp(-xijk^2 / 2);
-end
-
-function prob = pijkCyclicVariance(xijk, indices)
-    prob = exp(-xijk^2 / 2 * d(indices));
-end
-
-function A = getCyclicTensor(N)
-    A = symtensor(@randn, 3, N);
-
-    for i=1:N
-        for j=1:i
-            for k=1:j
-                if i==j && j==k
-                    continue
-                elseif i==j || i==k || j==k
-                    A(i, j, k) = A(i, j, k) / sqrt(3);
-                else
-                    A(i, j, k) = A(i, j, k) / sqrt(6);
-                end
-            end
-        end
-    end 
-end
-
-function A = getConstantVarianceTensor(N)
-    A = symtensor(@randn, 3, N);
-end
+% A = getConstantVarianceTensor(3);
+% s = rng;
+% [lambda, eigVectors] = zeig(double(full(A)));
+% rng(s);
+% 
+% eigVectors = eigVectors(:, lambda > 0);
+% lambda = lambda(lambda > 0);   
+% lambdaMax = max(lambda);
+% 
+% [lambdaPower, eigVectorsPower] = getEigenvalues(eigVectors, A);
+% display(eigVectorsPower);
 
 function bin = computeBin(lambdaC, binLambdaMin, binLambdaMax, nBins)
     bin = round((lambdaC - binLambdaMin) / (binLambdaMax - binLambdaMin) * (nBins-1)) + 1;
 end
 
-function [eigValues, eigVectors] = getEigenvalues(prevEigVectors, A)
+function [uniqueEigValues, uniqueEigVectors] = getEigenvalues(prevEigVectors, A)
     % Let's say that prevEigVectors is size (N, numEigVectors)
     % Tensor is a "tensor" object
     s = size(prevEigVectors);
@@ -77,6 +45,10 @@ function [eigValues, eigVectors] = getEigenvalues(prevEigVectors, A)
         eigValues(eigIdx) = powerLambda;
         eigVectors(:, eigIdx) = powerV; 
     end
+    [uniqueEigVectors, idx] = unique(eigVectors.', 'rows', 'stable');
+    uniqueEigVectors = uniqueEigVectors.';
+    uniqueEigValues = eigValues(idx);
+
 end
 
 function [logWeights, nc, f, histogram, accepted, rejected] = metropolisEigenValues(outSteps, inSteps, N, f, b, nBins, width, binLambdaMin, binLambdaMax, ensemble)
@@ -103,7 +75,7 @@ function [logWeights, nc, f, histogram, accepted, rejected] = metropolisEigenVal
     eigVectors = eigVectors(:, lambda > 0);
     lambda = lambda(lambda > 0);   
     lambdaMax = max(lambda);
-
+    display(length(eigVectors));
     accepted = 0;
     rejected = 0;
     mcSteps = 0;
@@ -131,7 +103,7 @@ function [logWeights, nc, f, histogram, accepted, rejected] = metropolisEigenVal
             
             [lambdaNew, eigVectorsNew] = getEigenvalues(eigVectors, Anew);
             lambdaMaxNew = max(lambdaNew);
-            
+            display([length(eigVectorsNew), mcSteps]);
             if lambdaMaxNew > binLambdaMin && lambdaMaxNew < binLambdaMax
                 binLambdaNew = computeBin(lambdaMaxNew, binLambdaMin, binLambdaMax, nBins);
                 binLambda = computeBin(lambdaMax, binLambdaMin, binLambdaMax, nBins);
