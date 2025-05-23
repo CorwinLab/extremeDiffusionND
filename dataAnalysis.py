@@ -7,14 +7,12 @@ from memEfficientEvolve2DLattice import getExpVarXDotProduct
 from randNumberGeneration import getRandomDistribution
 
 # moments calculation for files saved as .h5
-def getStatsh5py(path,tCutOff=None,takeLog=True):
+def getStatsh5py(path):
     """
     Calculates mean, variance, etc. of ln[Probability outside sphere]
     Parameters
     ----------
     path: str,  something like "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3/L1000/tMax2000"
-    tCutOff: optional, integer. time at which you want to cut off data before taking stats
-    takeLog: boolean, default true.
 
     Returns
     -------
@@ -24,39 +22,31 @@ def getStatsh5py(path,tCutOff=None,takeLog=True):
     with open(f"{path}/variables.json",'r') as v:
         variables = json.load(v)
     time = np.array(variables['ts'])
-    # TODO: fix this once I push the other thing, to fix the range issue
-    # maxTime = time[-2]
     maxTime = time[-1] -1  # because of the range issue?
     print(maxTime)
+    # TODO: re-write to ignore working and temp named
     files = glob.glob(f"{path}/*.h5")
-    # print(f"files: {files}")
-    # TODO: add string option for if takeLog=False
     statsFile = h5py.File(f"{path}/Stats.h5",'a')
     moments = ['mean','secondMoment','var','skew']
     with h5py.File(files[0], 'r') as f:
         for regime in f['regimes'].keys():
             statsFile.require_group(regime)
             for moment in moments:
-                statsFile[regime].require_dataset(moment, shape=f['regimes'][regime].shape, dtype=float)
-                statsFile[regime][moment][:] = np.zeros(f['regimes'][regime].shape, dtype=float)
+                statsFile[regime].require_dataset(moment, shape=f['regimes'][regime].shape, dtype=np.float64)
+                statsFile[regime][moment][:] = np.zeros(f['regimes'][regime].shape, dtype=np.float64)
     num_files = 0
     for file in files:
         # print(file)
         with h5py.File(file, 'r') as f:
             if f.attrs['currentOccupancyTime'] < maxTime:
-                print(f"file: {file}")
-                print("Skipping")
+                print(f"Skipping file: {file}")
                 continue
             for regime in f['regimes'].keys():
                 probs = f['regimes'][regime][:].astype(float)
                 # TODO: figure out how to print something if this throws the error
                 assert np.sum(np.isnan(probs)) == 0
-
                 statsFile[regime]['mean'][:] += np.log(probs)
                 statsFile[regime]['secondMoment'][:] += np.log(probs) ** 2
-                # debugging prints
-                # print(f"file: {file} \n regime: {regime}")
-                # print(f"mean (unnormalized): {statsFile[regime]['mean'][:]}")
             num_files += 1
     for regime in statsFile.keys():
         statsFile[regime]['mean'][:] /= num_files
@@ -81,7 +71,7 @@ def processStats(statsFile):
     testFile = h5py.File(f"{filePath}/0.h5","r")
     with open (f"{filePath}/variables.json","r") as v:
         variables = json.load(v)
-    ts = np.array(variables['ts'])  # in order from 0 to 99999
+    ts = np.array(variables['ts'])  # in order from 0 to 9999
     vs = np.array(variables['velocities'])
     # calculation of lambda_ext
     distName = variables['distName']
@@ -131,9 +121,11 @@ def masterCurveValue(radii, times, lambda_ext):
     lambda_ext: list of lambda_ext
     Returns
     -------
-    f(r(t),t,lambda_ext) = (lambda_ext / 4pi) * (ln t / t^2) * r(t)^2
+    f(r(t),t,lambda_ext) = (lambda_ext) r^2 / t^2
     """
-    scalingFunction = (lambda_ext / (4*np.pi)) * (np.log(times) / times**2) * (radii **2)
+    # scalingFunction = (lambda_ext / (4*np.pi)) * (np.log(times) / times**2) * (radii **2)
+    #scalingFunction = (lambda_ext / (4*np.pi)) * (radii**2 / times**2)
+    scalingFunction = (lambda_ext) * (radii**2 / times**2)
     return scalingFunction
 
 

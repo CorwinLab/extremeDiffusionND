@@ -380,25 +380,20 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     plt.ion()
     # n = len(statsFileList)
-    markers = ['o'] * 7 + ['D'] + ['v'] + ['s']
+    markers = ['o'] * 6 + ['D'] + ['v'] + ['s']
     # correspond transparency to time
     alphaVals = np.flip(np.linspace(0.3, 1, tMaxList.shape[0]))
-    #TODO: change colors (single-scale) to agree w/ value of lambda-ext
-    # TODO: diff. markers that are the same color
-    # then the message is look at everything that's dark brown
-    # similar lambda but diff. nu
-    # colors = plt.cm.cool(np.linspace(0, 1, n))
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
     plt.xlim([1e-11, 5e2])
     plt.ylim([1e-11, 5e2])
     # plt.xlim([1e0,1e4])
     # plt.ylim([1e-1,1e1])
-    # plt.gca().set_aspect('equal')
+    plt.gca().set_aspect('equal')
     # TODO: make more robust? under the assumption that all paths have the same ts list.
     for i in range(len(statsFileList)):
+        print(statsFileList[i])
         for j in range(len(tMaxList)):
-            print(f"time: {tMaxList[j]}, opacity: {alphaVals[j]}")
             file = statsFileList[i]
             # label: distribution name
             tempData, label = d.processStats(file)
@@ -407,38 +402,27 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
             indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
             scalingFuncVals = d.masterCurveValue(tempData[1, :][indices], tempData[2, :][indices],
                                                  tempData[3, :][indices])
-            # # for main collapse (vlp vs masterfunc linear)
-            # plt.loglog(scalingFuncVals, tempData[0, :][indices],
-            #            markers[i], color=colors[i], markeredgecolor='k',
-            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
-            # # for vlp/mastercurve vs mastercurve
-            # plt.loglog(scalingFuncVals, tempData[0, :][indices]/scalingFuncVals,
-            #            markers[i], color=colors[i], markeredgecolor='k',
-            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
-            # # for vlp/mastercurve vs time?
-            # plt.loglog(tempData[1,:][indices], tempData[0, :][indices]/scalingFuncVals,
-            #            markers[i], color=colors[i], markeredgecolor='k',
-            #            ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
-
-            # no log t in collapse
-            plt.loglog(scalingFuncVals / (np.log(tempData[2,:][indices])), tempData[0, :][indices],
+            # for main collapse (vlp vs masterfunc linear)
+            plt.loglog(scalingFuncVals, tempData[0, :][indices],
                        markers[i], color=colors[i], markeredgecolor='k',
                        ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
     # for normal mastercurve
-    # plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}}{4\pi}\frac{\ln{t}}{t^2} r^2$")
-    plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}}{4\pi}\frac{r^2}{t^2}$")
+    plt.xlabel(r"$\frac{c \lambda_{\mathrm{ext}}r^2}{t^2}$")
     plt.ylabel(r"$\mathrm{Var}[\ln{P\left(r\right)}]$")
     # # for vlp/mastercurve vs time
     # plt.xlabel("t")
     # plt.ylabel("vlp / f(r,t,lambda)")
     x = np.logspace(-11, 2)
+    plt.plot(x, x, color='k',linestyle='dashed',label=r'$y=x$')
+    # plt.plot(x, x /2, color = 'k',linestyle='dashed')
     # plt.plot(x, np.ones_like(x), color='k', linestyle='dashed', label=r"$y=4\pi x$")
 
     # line for variance at corners of diamonds
-    #pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
-    #diamondVals = np.load(pathDiamondVar)
-    #varMasterCurves = d.masterCurveValue(diamondVals[0,:],diamondVals[0,:],lambdaExtVals[3])
-    #plt.plot(varMasterCurves[diamondVals[1,:]>diamondVals[1,0]],diamondVals[1,:][diamondVals[1,:]>diamondVals[1,0]],color='red')
+    pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
+    # should be (2, 336); 0th index is either time vals, or VLP
+    diamondVals = np.load(pathDiamondVar)
+    varMasterCurves = d.masterCurveValue(diamondVals[0,:],diamondVals[0,:],lambdaExtVals[3])
+    plt.plot(varMasterCurves,diamondVals[1,:],color='red')
 
     plt.xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     plt.yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
@@ -451,20 +435,22 @@ if __name__ == "__main__":
     path03 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.31622777/L5000/tMax10000/Stats.h5"
     path1 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/Stats.h5"
     path3 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3.1622776/L5000/tMax10000/Stats.h5"
-    path10 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10/L5000/tMax10000/Stats.h5"
+    # path10 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10old/L5000/tMax10000/Stats.h5"
     path31 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA31.622776/L5000/tMax10000/Stats.h5"
     pathLogNormal = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/logNormal/0,1/L5000/tMax10000/Stats.h5"
     pathDelta = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/Stats.h5"
     pathCorner = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
 
-    statsFileList = [path003, path01, path03, path1, path3, path10, path31,
+    # statsFileList = [path003, path01, path03, path1, path3, path10, path31,
+    #                  pathLogNormal, pathDelta, pathCorner]
+    statsFileList = [path003, path01, path03, path1, path3, path31,
                      pathLogNormal, pathDelta, pathCorner]
+    savePath = "/home/fransces/Documents/Figures/2DRWREMasterCurveNoLogtAllTimes.png"
 
-    savePath = "/home/fransces/Documents/Figures/2DRWREMasterCurveNoLogt.png"
-
-    # TODO: add all data (ie at all times)
-    # TODO: change from manual list of 2 per decade
-    tMaxList = np.flip(np.array([2, 10, 37, 100, 402, 639, 4047, 9816]))
+    # tMaxList = np.flip(np.array([2, 10, 37, 100, 402, 639, 4047, 9816]))
+    with open("/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/variables.json","r") as v:
+        variables = json.load(v)
+    tMaxList = np.array(variables['ts'])
 
     # this will run through all your files once to pull out the
     # list of lambdas. the order should correspond to the filelist

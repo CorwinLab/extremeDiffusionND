@@ -7,6 +7,7 @@ import json
 from datetime import date
 import h5py
 import sys
+import shutil
 # import npquad
 
 
@@ -37,8 +38,7 @@ def updateOccupancy(occupancy, time, func):
 
     origin = occupancy.shape[0] // 2
 
-    # TODO: at some point implement "find indx of farthest occupied site
-    # and sweep over that square instead
+    # TODO: at some point implement "find indx of farthest occupied site and sweep over that square instead
     # this has an upper limit since vt grows linearly with t.
     # for short times, only loop over the part of the array we expect to be occupied
     if time < origin:
@@ -176,7 +176,7 @@ def getListOfTimes(maxT, startT=1, num=500):
 def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFileName):
     """
 	evolves occupancy lattice and makes probability lattice, through the generator loop
-
+    writes & saves files, no returns
 	ts: np array (ints) of times
 	startT: int; the start time at which evolution is starting/continuing
 	tMax: int; final time to which occupancy is evolved
@@ -185,68 +185,38 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
 	alphas: np array, floats; array of alpha1=alpha2=alpha3=alpha4 for dirichlet distribution
 	saveFile: h5 object; this is the file we are going to be saving data to
 	"""
-    startTime = wallTime()
-
     for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
         if t in ts:
-            # First need to pull out radii at current time we want
+            # Copy the num.h5 file to tempnum.h5
+            print(f"creating temp file {tempFileName} at t = {t}")
+            shutil.copy(saveFileName, tempFileName)
+
+            # Plan: Calculate everything that we need
+            # get current time indices
             idx = list(ts).index(t)
             radiiAtTimeT = []
-
-            with h5py.File(saveFileName, 'r+') as saveFile:
-                # Change because radii are now attached to the save file
+            # open the file; pull out radii at specified time
+            with h5py.File(saveFileName, 'r') as saveFile:
                 for regimeName in saveFile['regimes'].keys():
                     radii = saveFile['regimes'][regimeName].attrs['radii']
                     regimeRadiiAtTimeT = radii[idx, :]
                     radiiAtTimeT.append(regimeRadiiAtTimeT)
 
-                # Shape of resulting array is (regimes, velocities)
-                radiiAtTimeT = np.vstack(radiiAtTimeT)
-                # TODO: check if min of integrated probs is also 1e-45... save separately
-                probs = integratedProbability(occ, radiiAtTimeT, t)
-                print(f"probs min (integratedProb: {np.nanmin(probs[probs!=0])}")
-                print(f"dtype probs: {probs.dtype}")
+            # Shape of resulting array is (regimes, velocities)
+            radiiAtTimeT = np.vstack(radiiAtTimeT)
+            # calculate probabilities past those radii
+            probs = integratedProbability(occ, radiiAtTimeT, t)
 
-                # Now save data to file
-                for count, regimeName in enumerate(saveFile['regimes'].keys()):
-                    saveFile['regimes'][regimeName][idx, :] = probs[count, :]
+            # With tempnum.h5 save everything with no logic being performed
+            with h5py.File(tempFileName, 'r+') as tempFile:
+                for count, regimeName in enumerate(tempFile['regimes'].keys()):
+                    tempFile['regimes'][regimeName][idx, :] = probs[count, :]
+                tempFile.attrs['currentOccupancyTime'] = t
+                tempFile.attrs['currentOccupancy'] = occ
 
-                # For ease, we will save the occupancy every time we
-                # write data to the file
-                saveFile.attrs['currentOccupancyTime'] = t
-                # TODO: put this bit into a helper function?
-                # saveFile['currentOccupancy'][:] = occ
-                print(f"creating temp file {tempFileName} at t = {t}")
-                with h5py.File(tempFileName, "a") as temp:
-                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip', dtype=np.float64)
-                print(f"copying temp to main")
-                saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy']
-                # saveFile['currentOccupancy'][:] = occ
-                # # TEMPORARY SYS.EXIT() FOR DEBUGGING PURPOSES
-                # sys.exit()
-                print(f"deleting temp {tempFileName}")
-                os.remove(tempFileName)
-                startTime = wallTime()
-
-        hours = 3
-        seconds = hours * 3600
-        # Save at final time and if haven't saved for XX hours
-        # Because it might take longer than 3 hours to go between
-        # save times
-        if (wallTime() - startTime >= seconds) or (t == tMax - 1):
-            # Save current time and occupancy to make restartable
-            with h5py.File(saveFileName, 'r+') as saveFile:
-                saveFile.attrs['currentOccupancyTime'] = t
-                print(f"creating temp file {tempFileName} at t = {t}")
-                with h5py.File(tempFileName,"a") as temp:
-                    temp.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
-                    print(f"copying temp to main")
-                    saveFile['currentOccupancy'][:] = h5py.File(tempFileName, "r")['currentOccupancy'][:]
-                # saveFile['currentOccupancy'][:] = occ
-                print(f"deleting temp {tempFileName}")
-                os.remove(tempFileName)
-            # Reset the timer
-            startTime = wallTime()
+            # Copy tempnum.h5 to num.h5
+            print(f"moving temp to main")
+            shutil.move(tempFileName, saveFileName)
 
 
 def runSystem(L, ts, velocities, distName, params, directory, systID):
@@ -267,13 +237,15 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
     func = getRandomDistribution(distName, params)
     ts = np.array(ts)
     velocities = np.array(velocities)
-    tMax = max(ts) + 1  # should be 10,000
-    # without the +1, this returns tMax (from bash file)-1
-    # and then it gets passed into evolveAndMeasure(..,tMax,..) which then uses it
-    # in "for t in range(startT, tMax))" but that will run to 1 less than the parameter given
-    # hence 1998
-    saveFileName = os.path.join(directory, f"{str(systID)}.h5")
-    tempFileName = os.path.join(directory,"temp"+f"{str(systID)}.h5")
+    tMax = max(ts) + 1  # the +1 is there for a range issue
+    # setup save and temp and final file names
+    saveFileName = os.path.join(directory, f"working-{systID}.h5")
+    tempFileName = os.path.join(directory, f"temp-{systID}.h5")
+    finalFileName = os.path.join(directory, f"{systID}.h5")
+
+    if os.path.isfile(tempFileName):
+        print("Deleting old temp file")
+        os.remove(tempFileName)
 
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study
@@ -281,44 +253,27 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         # Check if "regimes" group has been made and create otherwise
         if 'regimes' not in saveFile.keys():
             saveFile.create_group("regimes")
-
             for regime in regimes:
                 saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64)
                 saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
-
-        # Load save if occupancy is already saved
-        # Eric says the following should be a function.
-        if ('currentOccupancyTime' in saveFile.attrs.keys()) and ('currentOccupancy' in saveFile.keys()):
-            # TODO: atomic operations here, check for temp file
-            if os.path.isfile(tempFileName):
-                # if the temp file exists, then the old file (systID.h5)
-                # has not been re-written to, yet. but there's probably something
-                # wrong with the temp file. therefore we want to reload the old file occupancy
-                # and set the time to be that of the old file's currentOccupancyTime?
-                print("temp file exists, restoring old file")
-                mostRecentTime = saveFile.attrs['currentOccupancyTime']
-                occ = saveFile['currentOccupancy'][:]  # array vs hdf5 dataset
-                # delete the bad temp file...
-                print('deleting bad temp file')
-                os.remove(tempFileName)
-            else:
-                print('restoring most recent save')
-                mostRecentTime = saveFile.attrs['currentOccupancyTime']
-                occ = saveFile['currentOccupancy'][:]
-        else:
-            # Otherwise, initialize as normal
+            # initialize occupancy
             occ = np.zeros((2 * L + 1, 2 * L + 1))
             occ[L, L] = 1
             mostRecentTime = 1
             saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
             saveFile.attrs['currentOccupancyTime'] = mostRecentTime
+        # Load save if occupancy is already saved; Extract time and occupancy from h5
+        mostRecentTime = saveFile.attrs['currentOccupancyTime']
+        occ = saveFile['currentOccupancy'][:]
 
-    # actually run and save data
+    # actually run and save data, passing in occ and time and stuff
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
 
-    # To save space we delete the occupancy when done
-    # with h5py.File(saveFileName, 'r+') as saveFile:
-    #     del saveFile['currentOccupancy']
+    # Once finished, create a final file which does not contain the occupancy
+    shutil.copy(saveFileName, finalFileName)
+    with h5py.File(finalFileName, 'r+') as finalFile:
+        del finalFile['currentOccupancy']
+    os.remove(saveFileName)
 
 
 def getExpVarX(distName, params):
