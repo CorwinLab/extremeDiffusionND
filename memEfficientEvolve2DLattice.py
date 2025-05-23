@@ -270,9 +270,11 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
 
     # Once finished, create a final file which does not contain the occupancy
+    print("Copying working to final (and deleting occ from final")
     shutil.copy(saveFileName, finalFileName)
     with h5py.File(finalFileName, 'r+') as finalFile:
         del finalFile['currentOccupancy']
+    print('deleting working')
     os.remove(saveFileName)
 
 
