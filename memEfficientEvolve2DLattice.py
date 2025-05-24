@@ -212,7 +212,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
                 for count, regimeName in enumerate(tempFile['regimes'].keys()):
                     tempFile['regimes'][regimeName][idx, :] = probs[count, :]
                 tempFile.attrs['currentOccupancyTime'] = t
-                tempFile['currentOccupancy'] = occ
+                tempFile['currentOccupancy'][:] = occ
 
             # Copy tempnum.h5 to num.h5
             print(f"moving temp to main")
