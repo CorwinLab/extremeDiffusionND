@@ -3,13 +3,17 @@ import os
 import h5py
 import json
 import matplotlib.patches
-import numpy as np
 from matplotlib import pyplot as plt
 from memEfficientEvolve2DLattice import evolve2DDirichlet
 import matplotlib
-from randNumberGeneration import getRandomDistribution
 import dataAnalysis as d
-import sys
+import numpy as np
+from memEfficientEvolve2DLattice import updateOccupancy
+import matplotlib
+import copy
+from randNumberGeneration import getRandomDistribution
+#from tqdm import tqdm
+from matplotlib.patches import FancyArrowPatch
 
 
 def generateGifRWRE(occupancy, maxT, alphas, pathName, startT=1, listOfTimes=None):
@@ -253,107 +257,207 @@ def createMeasurementGraphic(saveFile):
     fig.savefig(f"{saveFile}.png", bbox_inches='tight')
 
 
-# TODO: fix labels acc. to eric's message on 12 feb 2025
-def plotAllSystems(path, saveDir, regime='tOnSqrtLogT', takeLog=False):
-    files = os.listdir(path)
-    os.makedirs(saveDir, exist_ok=True)
-    files.remove('info.npz')
-    files.remove('statsNoLog.npz')
-    files.remove('stats.npz')
-    info = np.load(f"{path}/info.npz")
-    velocities = info['velocities'].flatten()
-    vIdx = -8  # hard code in 0.39 for v, for figure purposes
-    time = info['times']
-    plt.rcParams.update(
-        {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+# # TODO: fix labels acc. to eric's message on 12 feb 2025
+# def plotAllSystems(path, saveDir, regime='tOnSqrtLogT', takeLog=False):
+#     files = os.listdir(path)
+#     os.makedirs(saveDir, exist_ok=True)
+#     files.remove('info.npz')
+#     files.remove('statsNoLog.npz')
+#     files.remove('stats.npz')
+#     info = np.load(f"{path}/info.npz")
+#     velocities = info['velocities'].flatten()
+#     vIdx = -8  # hard code in 0.39 for v, for figure purposes
+#     time = info['times']
+#     plt.rcParams.update(
+#         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+#
+#     if regime == 'tOnSqrtLogT':  # default to crit regime
+#         regimeIdx = 3
+#         r = velocities[vIdx] * time / (np.sqrt(np.log(time)))
+#         if takeLog:
+#             ylabel = r"$-\ln{P(\frac{vt}{\sqrt{\ln t}})}$"
+#             meanLabel = r"-$\langle \ln{P(\frac{vt}{\sqrt{\ln t}})} \rangle$"
+#         else:
+#             ylabel = r"$P(\frac{vt}{\sqrt{\ln t}})$"
+#             meanLabel = r"$\langle P(\frac{vt}{\sqrt{\ln t}}) \rangle$"
+#     elif regime == 'sqrt':
+#         regimeIdx = 1
+#         r = velocities[vIdx] * (time ** (1 / 2))
+#         if takeLog:
+#             ylabel = r"$-\ln{P(vt^{1/2})}$"
+#             meanLabel = r"$-\langle \ln{P(vt^{1/2})} \rangle$"
+#         else:
+#             ylabel = r"$ P(vt^{1/2}) $"
+#             meanLabel = r"$\langle P(vt^{1/2}) \rangle$"
+#     elif regime == 'linear':
+#         regimeIdx = 0
+#         r = velocities[vIdx] * time
+#         if takeLog:
+#             ylabel = r"$-\ln{P(vt)}"
+#             meanLabel = r"$-\langle \ln{P(vt)} \rangle$"
+#         else:
+#             ylabel = r"$P(vt)"
+#             meanLabel = r"$\langle P(vt) \rangle$"
+#     if takeLog:
+#         statsMean = np.load(f"{path}/stats.npz")['mean'][regimeIdx, :, vIdx]
+#     else:
+#         statsMean = np.load(f"{path}/statsNoLog.npz")['mean'][regimeIdx, :, vIdx]
+#     fig, ax = plt.subplots(figsize=(5, 4), dpi=150, constrained_layout=True)
+#     ax.set_xlabel(r"$t$")
+#     ax.set_ylabel(ylabel)
+#     for file in files:
+#         temp = np.load(f"{path}/{file}")[regimeIdx, :, vIdx]
+#         #TODO: what if dots plus lines instead
+#         if takeLog:
+#             with np.errstate(divide='ignore'):
+#                 ax.loglog(time, -np.log(temp), '.', linewidth=1, alpha=0.4)
+#         else:
+#             ax.semilogx(time, temp, '.', linewidth=1, alpha=0.4)
+#     if takeLog:
+#         with np.errstate(divide='ignore'):
+#             ax.loglog(time, - statsMean, 'o', color='k', alpha=0.8, label=meanLabel)
+#             prediction = r ** 2 / time
+#             ax.loglog(time, prediction, color='red', linestyle='dashed', label=r"$\frac{r(t)^2}{t}$")
+#         savePath = f"{saveDir}/{regime}" + "AllSystemsLnP.png"
+#     else:
+#         ax.semilogx(time, statsMean, 'o', color='k', label=meanLabel)
+#         savePath = f"{saveDir}/{regime}" + "AllSystemsRawP.png"
+#     ax.legend()
+#     #ax.set_ylim([1e-6,1])
+#     fig.savefig(savePath, bbox_inches='tight')
 
-    if regime == 'tOnSqrtLogT':  # default to crit regime
-        regimeIdx = 3
-        r = velocities[vIdx] * time / (np.sqrt(np.log(time)))
-        if takeLog:
-            ylabel = r"$-\ln{P(\frac{vt}{\sqrt{\ln t}})}$"
-            meanLabel = r"-$\langle \ln{P(\frac{vt}{\sqrt{\ln t}})} \rangle$"
-        else:
-            ylabel = r"$P(\frac{vt}{\sqrt{\ln t}})$"
-            meanLabel = r"$\langle P(\frac{vt}{\sqrt{\ln t}}) \rangle$"
-    elif regime == 'sqrt':
-        regimeIdx = 1
-        r = velocities[vIdx] * (time ** (1 / 2))
-        if takeLog:
-            ylabel = r"$-\ln{P(vt^{1/2})}$"
-            meanLabel = r"$-\langle \ln{P(vt^{1/2})} \rangle$"
-        else:
-            ylabel = r"$ P(vt^{1/2}) $"
-            meanLabel = r"$\langle P(vt^{1/2}) \rangle$"
-    elif regime == 'linear':
-        regimeIdx = 0
-        r = velocities[vIdx] * time
-        if takeLog:
-            ylabel = r"$-\ln{P(vt)}"
-            meanLabel = r"$-\langle \ln{P(vt)} \rangle$"
-        else:
-            ylabel = r"$P(vt)"
-            meanLabel = r"$\langle P(vt) \rangle$"
-    if takeLog:
-        statsMean = np.load(f"{path}/stats.npz")['mean'][regimeIdx, :, vIdx]
-    else:
-        statsMean = np.load(f"{path}/statsNoLog.npz")['mean'][regimeIdx, :, vIdx]
-    fig, ax = plt.subplots(figsize=(5, 4), dpi=150, constrained_layout=True)
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(ylabel)
-    for file in files:
-        temp = np.load(f"{path}/{file}")[regimeIdx, :, vIdx]
-        #TODO: what if dots plus lines instead
-        if takeLog:
-            with np.errstate(divide='ignore'):
-                ax.loglog(time, -np.log(temp), '.', linewidth=1, alpha=0.4)
-        else:
-            ax.semilogx(time, temp, '.', linewidth=1, alpha=0.4)
-    if takeLog:
-        with np.errstate(divide='ignore'):
-            ax.loglog(time, - statsMean, 'o', color='k', alpha=0.8, label=meanLabel)
-            prediction = r ** 2 / time
-            ax.loglog(time, prediction, color='red', linestyle='dashed', label=r"$\frac{r(t)^2}{t}$")
-        savePath = f"{saveDir}/{regime}" + "AllSystemsLnP.png"
-    else:
-        ax.semilogx(time, statsMean, 'o', color='k', label=meanLabel)
-        savePath = f"{saveDir}/{regime}" + "AllSystemsRawP.png"
-    ax.legend()
-    #ax.set_ylim([1e-6,1])
-    fig.savefig(savePath, bbox_inches='tight')
 
+# def plotAllVariance(path, saveDir, regime='tOnSqrtLogT'):
+#     plt.rcParams.update(
+#         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+#     os.makedirs(saveDir, exist_ok=True)
+#     info = np.load(f"{path}/info.npz")
+#     velocities = info['velocities'].flatten()
+#     time = info['times']
+#     VarEx = m.getExpVarX("Dirichlet", [0.1] * 4)
+#     if regime == 'tOnSqrtLogT':  # default to crit regime
+#         regimeIdx = 3
+#         ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(\frac{vt}{\sqrt{\ln t}})}]$"
+#     elif regime == 'sqrt':
+#         regimeIdx = 1
+#         ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(vt^{1/2})}]$"
+#     elif regime == 'linear':
+#         regimeIdx = 0
+#         ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(vt)}]$"
+#     statsVar = np.load(f"{path}/stats.npz")['variance'][regimeIdx, :, :]
+#     n = statsVar.shape[1]
+#     fig, ax = plt.subplots(figsize=(5, 4), dpi=150, constrained_layout=True)
+#     ax.set_xlabel(r"$t$")
+#     ax.set_ylabel(ylabel)
+#     colors = plt.cm.jet(np.linspace(0, 1, n))
+#     for i in range(n):
+#         with np.errstate(divide='ignore'):
+#             scaledPrefactor = 1 / ((1 / (4 * np.pi)) * velocities[i] ** 2 * (VarEx / (1 - VarEx)))
+#             ax.loglog(time[velocities[i] * time / (np.sqrt(np.log(time))) > 2],
+#                       scaledPrefactor * statsVar[:, i][velocities[i] * time / (np.sqrt(np.log(time))) > 2], '.',
+#                       color=colors[i], alpha=0.8, label=np.round(velocities[i], 2))
+#             savePath = f"{saveDir}/{regime}" + "VarLnP.png"
+#     fig.savefig(savePath, bbox_inches='tight')
 
-def plotAllVariance(path, saveDir, regime='tOnSqrtLogT'):
-    plt.rcParams.update(
-        {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    os.makedirs(saveDir, exist_ok=True)
-    info = np.load(f"{path}/info.npz")
-    velocities = info['velocities'].flatten()
-    time = info['times']
-    VarEx = m.getExpVarX("Dirichlet", [0.1] * 4)
-    if regime == 'tOnSqrtLogT':  # default to crit regime
-        regimeIdx = 3
-        ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(\frac{vt}{\sqrt{\ln t}})}]$"
-    elif regime == 'sqrt':
-        regimeIdx = 1
-        ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(vt^{1/2})}]$"
-    elif regime == 'linear':
-        regimeIdx = 0
-        ylabel = r"$\frac{1-\mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]}{v^2 \mathrm{Var}_{\nu}[\mathbb{E}^{\xi}[\vec{X}]]} \mathrm{Var}[\ln{P(vt)}]$"
-    statsVar = np.load(f"{path}/stats.npz")['variance'][regimeIdx, :, :]
-    n = statsVar.shape[1]
-    fig, ax = plt.subplots(figsize=(5, 4), dpi=150, constrained_layout=True)
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(ylabel)
-    colors = plt.cm.jet(np.linspace(0, 1, n))
-    for i in range(n):
-        with np.errstate(divide='ignore'):
-            scaledPrefactor = 1 / ((1 / (4 * np.pi)) * velocities[i] ** 2 * (VarEx / (1 - VarEx)))
-            ax.loglog(time[velocities[i] * time / (np.sqrt(np.log(time))) > 2],
-                      scaledPrefactor * statsVar[:, i][velocities[i] * time / (np.sqrt(np.log(time))) > 2], '.',
-                      color=colors[i], alpha=0.8, label=np.round(velocities[i], 2))
-            savePath = f"{saveDir}/{regime}" + "VarLnP.png"
-    fig.savefig(savePath, bbox_inches='tight')
+# # DO NOT USE
+# def plotMeasurementFig(path,saveDir,regime='tOnSqrtLogT',vIDX=-6):
+#     os.makedirs(saveDir, exist_ok=True)
+#     plt.rcParams.update({'font.size': 15, 'text.usetex': True,
+#                          'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+#     fig, ax = plt.subplots()
+#     ax.set_xlabel(r"$t$")
+#     ax.set_ylabel(r"$P(r,t)$")
+#     # get data
+#     files = os.listdir(path)
+#     files.remove('variables.json')
+#     files.remove('Stats.h5')
+#     # grab list of velocities for big alpha (1e-5 to 10)
+#     with open(f"{path10}/variables.json", "r") as v:
+#         variables = json.load(v)
+#     time = np.array(variables['ts'])
+#     v = variables['velocities'][vIDX]
+#     if regime == 'tOnSqrtLogT':
+#         r = v * time / (np.sqrt(np.log(time)))  # for specifically tOnSqrtLogT
+#     else:  # otherwise just use linear i guess
+#         r = v * time
+#     # this will be an inset of the -lnP graph
+#     left, bottom, width, height = [0.25, 0.6, 0.2, 0.2]  # in % of fig.size
+#     ax2 = fig.add_axes([left,bottom,width,height])
+#     # plot all data
+#     for file in files:
+#         # load file (should be an h5 stats file)
+#         with h5py.File(f"{path}/{file}","r") as f:
+#             temp = f['regimes'][regime][:,vIDX]  # grab v=0.3 approx
+#         # grab -lnP data and plot on main graph
+#         with np.errstate(divide='ignore'):
+#             ax.loglog(time, -np.log(temp), '.', linewidth=1, alpha=0.4)
+#         # plot raw probs on inset
+#         ax2.semilogx(time, temp, '.', linewidth=1, alpha=0.4)
+#     # plot -E_v [lnP]
+#     with h5py.File(f"{path}/Stats.h5","r") as statsFile:
+#         logMean = statsFile[regime]['mean'][:,vIDX]
+#     ax.loglog(time, -logMean,'o',color='k')
+#     prediction = r ** 2 / time
+#     ax.loglog(time, prediction, color='red', linestyle='dashed')
+#     ax.loglog(time, prediction, color='red', linestyle='dashed', label=r"$\frac{r(t)^2}{t}$")
+#     # plot mean of raw probs  (i think I'll have to take exp? )
+#     with h5py.File(f"{path}/statsNoLog.npz", "r") as statsNoLogFile:
+#         noLogMean = statsNoLogFile[regime]['mean'][:,vIDX]
+#     ax2.semilogx(time, noLogMean, 'o', color='k')
+
+def measurementPastCircleGraphic():
+    plt.rcParams.update({'font.size': 20, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts}'})
+
+    maxT = 1000
+    func = getRandomDistribution('Dirichlet', [1, 1, 1, 1])
+
+    L = 1000
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+
+    for t in range(maxT):
+        occ = updateOccupancy(occ, t, func)
+
+    cmap = copy.copy(matplotlib.cm.get_cmap("viridis"))
+    cmap.set_under(color="white")
+    cmap.set_bad(color="white")
+    vmax = np.max(occ)
+    vmin = 1e-10
+
+    fig, ax = plt.subplots()
+    ax.imshow(occ, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax), cmap=cmap, interpolation='none', alpha=0.9)
+    limits = [L - 200, L + 200]
+    ax.set_xlim(limits)
+    ax.set_ylim(limits)
+
+    r = 75
+    circle = plt.Circle((L, L), r, color='k', ls='--', fill=False, lw=2.5)
+    ax.add_patch(circle)
+
+    arrow = FancyArrowPatch((L, L), (L + r * np.cos(np.pi / 4), L + r * np.sin(np.pi / 4)), color='k',
+                            mutation_scale=40)
+    ax.add_patch(arrow)
+
+    ax.annotate(r"$R(t)$", (500, 545))
+
+    xvals = np.linspace(400, 600)
+    yvals = np.sqrt(r ** 2 - (xvals - L) ** 2) + L
+    yvals[np.isnan(yvals)] = 500
+    y2vals = np.ones(len(xvals)) * 600
+
+    ax.fill_between(xvals, yvals, y2vals, alpha=0.75, hatch='//', facecolor='none', edgecolor='k', linewidth=0)
+    ax.fill_between(xvals, 2 * L - yvals, np.ones(len(xvals)) * 400, alpha=0.75, hatch='//', facecolor='none',
+                    edgecolor='k', linewidth=0)
+
+    ax.get_xaxis().set_ticks([])
+    ax.get_yaxis().set_ticks([])
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    fig.savefig("/home/fransces/Documents/Figures/Viz.svg", bbox_inches='tight')
 
 
 def colorsForLambda(lambdaList):
@@ -361,28 +465,19 @@ def colorsForLambda(lambdaList):
     logVals = np.log(lambdaList)
     vals = (logVals - np.min(logVals)) / (np.max(logVals) - np.min(logVals))
     # this goes between teal and green i guess?
-    colorList = [[l, 1-l, 1] for l in vals]
+    colorList = np.array([[l, 1-l, 1] for l in vals])
+    if np.any(np.isnan(colorList)):
+        colorList[np.isnan(colorList)] = 0
     return colorList
 
 
-def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
+def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals, markers, verticalLine=True):
     """
-
-    Parameters
-    ----------
-    savePath
-
-    Returns
-    -------
-
+    plots given lists of var[lnP] as a function of mastercurve f(lambda,r,t) = lambda r^2/t^2
     """
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     plt.ion()
-    # n = len(statsFileList)
-    markers = ['o'] * 6 + ['D'] + ['v'] + ['s']
-    # correspond transparency to time
-    alphaVals = np.flip(np.linspace(0.3, 1, tMaxList.shape[0]))
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
     plt.xlim([1e-11, 5e2])
@@ -393,36 +488,38 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals):
     # TODO: make more robust? under the assumption that all paths have the same ts list.
     for i in range(len(statsFileList)):
         print(statsFileList[i])
+        if verticalLine:
+            # this part is data for alpha=1
+            # pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
+            # diamondVals = np.load(pathDiamondVar)
+            # varMasterCurves = d.masterCurveValue(diamondVals[0, :], diamondVals[0, :], lambdaExtVals[1])
+            # plt.plot(varMasterCurves, diamondVals[1, :], color='red')
+
+            # this is theoretical prediction
+            xLoc = lambdaExtVals[i]
+            plt.loglog([xLoc,xLoc],[xLoc,5e2], color=colors[i],linestyle='solid', zorder=0.0000000001)
         for j in range(len(tMaxList)):
             file = statsFileList[i]
             # label: distribution name
             tempData, label = d.processStats(file)
-            # we want to get all the values at t-> inf
-            # but we ALSO want to mask out the small radii (r<1) vals.
+            # grab times we're interested in, and mask out the small radii (r<1) vals.
             indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
             scalingFuncVals = d.masterCurveValue(tempData[1, :][indices], tempData[2, :][indices],
                                                  tempData[3, :][indices])
             # for main collapse (vlp vs masterfunc linear)
             plt.loglog(scalingFuncVals, tempData[0, :][indices],
                        markers[i], color=colors[i], markeredgecolor='k',
-                       ms=4, mew=0.5, label=label, alpha=alphaVals[j], zorder=np.random.rand())
+                       ms=4, mew=0.5, label=label, zorder=np.random.rand())
     # for normal mastercurve
-    plt.xlabel(r"$\frac{c \lambda_{\mathrm{ext}}r^2}{t^2}$")
+    plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}r^2}{t^2}$")
     plt.ylabel(r"$\mathrm{Var}[\ln{P\left(r\right)}]$")
     # # for vlp/mastercurve vs time
     # plt.xlabel("t")
     # plt.ylabel("vlp / f(r,t,lambda)")
-    x = np.logspace(-11, 2)
-    plt.plot(x, x, color='k',linestyle='dashed',label=r'$y=x$')
-    # plt.plot(x, x /2, color = 'k',linestyle='dashed')
-    # plt.plot(x, np.ones_like(x), color='k', linestyle='dashed', label=r"$y=4\pi x$")
 
-    # line for variance at corners of diamonds
-    pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
-    # should be (2, 336); 0th index is either time vals, or VLP
-    diamondVals = np.load(pathDiamondVar)
-    varMasterCurves = d.masterCurveValue(diamondVals[0,:],diamondVals[0,:],lambdaExtVals[3])
-    plt.plot(varMasterCurves,diamondVals[1,:],color='red')
+    # offset?
+    x = np.logspace(-8, -5)
+    plt.plot(x, x+1e-11, color='k',linestyle='dashed')
 
     plt.xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     plt.yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
@@ -435,31 +532,36 @@ if __name__ == "__main__":
     path03 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.31622777/L5000/tMax10000/Stats.h5"
     path1 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/Stats.h5"
     path3 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3.1622776/L5000/tMax10000/Stats.h5"
-    # path10 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10old/L5000/tMax10000/Stats.h5"
+    path10 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10/L5000/tMax10000/Stats.h5"
     path31 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA31.622776/L5000/tMax10000/Stats.h5"
     pathLogNormal = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/logNormal/0,1/L5000/tMax10000/Stats.h5"
     pathDelta = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/Stats.h5"
     pathCorner = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
 
-    # statsFileList = [path003, path01, path03, path1, path3, path10, path31,
-    #                  pathLogNormal, pathDelta, pathCorner]
-    statsFileList = [path003, path01, path03, path1, path3, path31,
+    # for all data, all times
+    statsFileList = [path003, path01, path03, path1, path3, path10, path31,
                      pathLogNormal, pathDelta, pathCorner]
-    savePath = "/home/fransces/Documents/Figures/2DRWREMasterCurveNoLogtAllTimes.png"
+    markers = ['o'] * 7 + ['D'] + ['v'] + ['s']
+    savePath = "/home/fransces/Documents/Figures/testfigs/2DRWREMasterCurveNoLogtAllTimes.png"
 
-    # tMaxList = np.flip(np.array([2, 10, 37, 100, 402, 639, 4047, 9816]))
     with open("/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/variables.json","r") as v:
         variables = json.load(v)
     tMaxList = np.array(variables['ts'])
 
-    # this will run through all your files once to pull out the
-    # list of lambdas. the order should correspond to the filelist
-    expVarXList, lambdaList = d.getListOfLambdas(statsFileList)
-    # print(f"exp var X List: {expVarXList}")
-    # print(f"lambda List: {lambdaList}")
+    # # this will run through all your files once to pull out the
+    # # list of lambdas. the order should correspond to the filelist
+    # expVarXList, lambdaList = d.getListOfLambdas(statsFileList)
+    # # this is the second runthrough (all data, all times)
+    # plotMasterCurve(savePath, statsFileList, tMaxList, markers=markers,lambdaExtVals=lambdaList,verticalLine=True)
+    # # # for only dirichlet alpha=1 all times
+    # for all data of one value of alpha
+    # singleFile = [path1]
+    # savePathSingle = "/home/fransces/Documents/Figures/testfigs/2DRWREMasterCurveDirichlet1.png"
+    # # plotMasterCurve(savePathSingle, singleFile, tMaxList=tMaxList, lambdaExtVals=[lambdaList[3]]*3,markers=markers)
 
-    # this is the second runthrough
-    # its kind of
-    plotMasterCurve(savePath, statsFileList, tMaxList=tMaxList, lambdaExtVals=lambdaList)
-
-
+    # for dropping distributions which have very close values of lambda
+    minSavePath = "/home/fransces/Documents/Figures/testfigs/2DRWREMasterCurveReduced.png"
+    minimalStatsList = [path31, pathCorner, path1, pathDelta, path03, path01, path003]
+    minExpVarXList, minLambdaList = d.getListOfLambdas(minimalStatsList)
+    minmarkers = ['o'] + ['s'] + ['o'] + ['v'] + ['o']*3
+    plotMasterCurve(minSavePath, minimalStatsList, tMaxList, markers=minmarkers, lambdaExtVals=minLambdaList, verticalLine=True)

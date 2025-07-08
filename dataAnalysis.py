@@ -6,6 +6,7 @@ import json
 from memEfficientEvolve2DLattice import getExpVarXDotProduct
 from randNumberGeneration import getRandomDistribution
 
+# TODO: add no-log dataset to this
 # moments calculation for files saved as .h5
 def getStatsh5py(path):
     """
