@@ -511,8 +511,8 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals, markers, v
                        markers[i], color=colors[i], markeredgecolor='k',
                        ms=4, mew=0.5, label=label, zorder=np.random.rand())
     # for normal mastercurve
-    plt.xlabel(r"$\frac{\lambda_{\mathrm{ext}}r^2}{t^2}$")
-    plt.ylabel(r"$\mathrm{Var}[\ln{P\left(r\right)}]$")
+    plt.xlabel(r"$\frac{\displaystyle\lambda_{\mathrm{ext}}r^2}{t^2}$")
+    plt.ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(r\right)\right)}\right]$")
     # # for vlp/mastercurve vs time
     # plt.xlabel("t")
     # plt.ylabel("vlp / f(r,t,lambda)")

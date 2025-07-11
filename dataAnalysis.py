@@ -147,3 +147,41 @@ def getListOfLambdas(statsList):
         lambdaList.append((expVarX / (1 - expVarX)))
     return np.array(expVarXList), np.array(lambdaList)
 
+
+def prepLossFunc(statsList, tMaxList, alpha=1, vlpMax=1e-2):
+    """
+    takes list of stats files, chops off values where var[lnP] > vlpMax
+    and then computes
+    std( g - t^alpha ) where g = vlp / ( lambda*v**2 )
+    """
+    # initialize arrays for concatenate
+    scalingFuncs = np.array([])
+    vlps = np.array([])
+    vs = np.array([])
+    times = np.array([])
+    ls = np.array([])
+    for i in range(len(statsList)):
+        print(statsList[i])
+        file = statsList[i]
+        tempData, label = processStats(file)
+        for j in range(len(tMaxList)):
+            # grab times we're interested in, and mask out the small radii (r<1) vals.
+            # chop data above vlpMax
+            indices = np.array(np.where((tempData[2, :] == tMaxList[j])
+                                        & (tempData[1, :] >= 2)
+                                        & (tempData[0,:] < vlpMax))).flatten()
+            # pull out the r, t, and lambdas of our masked data, then calc lambda r^2/t^2
+            r = tempData[1, indices]  # radii
+            t = tempData[2, indices]  # time
+            l = tempData[3, indices]  # lambda_ext
+            scalingFuncVals = masterCurveValue(r, t, l)
+            # cast our velocities, assuming r = v t^alpha
+            vLin = r / t**alpha
+
+            # smash into list
+            scalingFuncs = np.concatenate((scalingFuncs, scalingFuncVals))
+            vlps = np.concatenate((vlps, tempData[0,indices]))
+            vs = np.concatenate((vs, vLin))
+            times = np.concatenate((times, t))
+            ls = np.concatenate((ls, l))
+    return scalingFuncs, vlps, vs, times, ls
