@@ -30,22 +30,20 @@ if __name__ == "__main__":
                                                      vlpMax=1e-3,alpha=1)
     g = vlp / (ls * vs**2)
     print(f"mean g, std g: {np.mean(g), np.std(g)}")
-    alphas = np.linspace(-2,2,1001)
-    s = [np.std(g - times**alpha) for alpha in alphas]
+    # alphas = np.linspace(-2,2,1001)
+    # s = [np.std(g - times**alpha) for alpha in alphas]
     tedge = np.geomspace(10, 1e4)
     binnedMedianG = [np.median(g[(times > tedge[i]) * (times < tedge[i + 1])]) for i in range(len(tedge) - 1)]
-
 
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     plt.ion()
-    # markers = ['o'] * 7 + ['D'] + ['v'] + ['s']
     # this will run through all your files once to pull out the
     # list of lambdas. the order should correspond to the filelist
     expVarXList, lambdaExtVals = d.getListOfLambdas(statsFileList)
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
-    # plt.gca().set_aspect('equal')
+    plt.gca().set_box_aspect(1)
     # this will plot the data
     # colors = ['darkgreen', 'dodgerblue', 'darkslateblue']
     # tGrid = np.arange(1,1e4)
@@ -72,7 +70,7 @@ if __name__ == "__main__":
         # sqrtPred = (l/2) * (1/ tGrid)
         # plot data
         # plt.loglog(t[indices], vlp[indices] / vLin[indices]**2, marker='.',color=colors[i], alpha=0.1)
-        plt.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=colors[i],alpha=.05, zorder=np.random.rand())
+        plt.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=colors[i],alpha=.05,zorder=np.random.rand())
 
         # plt.loglog(t[indices], vlp[indices] / vMod[indices]**2, marker=markers[i],color=colors[1], alpha=0.1)
         # plt.loglog(t[indices], vlp[indices] / vSqrt[indices]**2, marker=markers[i],color=colors[2], alpha=0.1)

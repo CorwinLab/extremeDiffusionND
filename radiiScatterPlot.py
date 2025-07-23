@@ -22,20 +22,23 @@ if __name__ == "__main__":
 
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=150)
+    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=150,subplot_kw=dict(box_aspect=1))
     with h5py.File(f"{filePath}/0.h5", "r") as f:
         for regime in regimes:
             # ax.loglog(longTs, f['regimes'][regime].attrs['radii'].flatten(order='F'),'.',ms=2,color=colors[regimes.index(regime)],label=regime)
             # (336*21 = 7056 1d array) of linear radii
             # flatten in column major so its like (v[0] radii for all t, v[1] radii for all t, ... etc)
             tempR = f['regimes'][regime].attrs['radii'].flatten(order='F')
-            radii = np.concatenate((radii, tempR))
-            times = np.concatenate((times, longTs))
+            indices = (tempR >= 2) & (tempR <= longTs)
+            radii = np.concatenate((radii, tempR[indices]))
+            times = np.concatenate((times, longTs[indices]))
+    x = np.logspace(0, 4)
     # ax.legend()
     ax.scatter(times, radii, s=1, color='k',marker='.')
+    ax.plot(x, x, color='red')
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_xlabel(r"$t$")
-    ax.set_ylabel(r"$r$")
+    ax.set_ylabel(r"$r(t)$")
     savepath = "/home/fransces/Documents/Figures/testfigs/radiiScatterPlot.pdf"
     plt.savefig(f"{savepath}")

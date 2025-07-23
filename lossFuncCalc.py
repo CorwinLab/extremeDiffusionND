@@ -57,6 +57,13 @@ if __name__ == "__main__":
         savepath2 = "/home/fransces/Documents/Figures/testfigs/loss/moreChoppedDataFlat.png"
         plt.savefig(f"{savepath2}")
 
+        plt.figure(figsize=(5,5), constrained_layout=True, dpi=150)
+        plt.loglog(times, vlp, '.',ms=2)
+        plt.xlabel(r"$t$")
+        plt.ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+        savepath3 = "/home/fransces/Documents/Figures/testfigs/loss/outliersUnscaled.png"
+        plt.savefig(f"{savepath3}")
+
     # actual loss func
     g = vlp / (ls * vs**2)
     print(f"mean g, std g: {np.mean(g), np.std(g)}")

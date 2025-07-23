@@ -88,7 +88,8 @@ def processStats(statsFile):
     # fence post problem
     firstRadii = testFile['regimes'][regimes[0]].attrs['radii'].flatten('F')
     linearVLP = stats[regimes[0]]['var'][:].flatten('F')
-    data = np.array([linearVLP,firstRadii,longTs,lambda_ext])
+    meanLnPFirst = stats[regimes[0]]['mean'][:].flatten('F')
+    data = np.array([linearVLP,firstRadii,longTs,lambda_ext, meanLnPFirst])
     if distName == 'Dirichlet':
         label = distName + str(params[0])
     else:
@@ -99,10 +100,11 @@ def processStats(statsFile):
         radii = testFile['regimes'][regime].attrs['radii'].flatten(order='F')
         # returns (331*21 = 7056 1d array)
         varLnP = stats[regime]['var'][:].flatten(order='F')
-        tempData = np.array([varLnP,radii,longTs,lambda_ext])
+        meanLnP = stats[regime]['mean'][:].flatten(order='F')
+        tempData = np.array([varLnP,radii,longTs,lambda_ext, meanLnP])
         data = np.hstack((data,tempData))
     # indices for data: (4, t.shape * v.shape)
-    # the 0th index: 0 = VLP, 1 = radii, 2 = t, 3 = lambda
+    # the 0th index: 0 = VLP, 1 = radii, 2 = t, 3 = lambda, 4 = mean
     # note that if you want to pull out a specific val, such as tMax
     # indices = np.where(data[2,:] == tmax)
     return data, label

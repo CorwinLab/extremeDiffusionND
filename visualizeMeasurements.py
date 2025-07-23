@@ -12,7 +12,6 @@ from memEfficientEvolve2DLattice import updateOccupancy
 import matplotlib
 import copy
 from randNumberGeneration import getRandomDistribution
-#from tqdm import tqdm
 from matplotlib.patches import FancyArrowPatch
 
 
@@ -178,7 +177,7 @@ def generateGifSSRW(occupancy, maxT, pathName):
 #
 
 def measurementPastCircleGraphic():
-    plt.rcParams.update({'font.size': 20, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts}'})
+    plt.rcParams.update({'font.size': 20, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts}\usepackage{bm}'})
 
     maxT = 500
     func = getRandomDistribution('Dirichlet', [1, 1, 1, 1])
@@ -193,11 +192,13 @@ def measurementPastCircleGraphic():
     cmap = copy.copy(matplotlib.cm.get_cmap("viridis"))
     cmap.set_under(color="white")
     cmap.set_bad(color="white")
-    vmax = np.max(occ)
+    # to fix colorization of model graphic ? make them all use the same min and max.
+    vmax = 1
+    # vmax = np.max(occ)
     vmin = 1e-10
 
-    fig, ax = plt.subplots()
-    ax.imshow(occ, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax), cmap=cmap, interpolation='none',alpha=1)
+    fig, ax = plt.subplots(figsize=(5,5))
+    a = ax.imshow(occ, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax), cmap=cmap, interpolation='none',alpha=1)
     limits = [L - 100, L + 100]
     ax.set_xlim(limits)
     ax.set_ylim(limits)
@@ -210,6 +211,9 @@ def measurementPastCircleGraphic():
     ax.add_patch(arrow)
 
     ax.annotate(r"$r(t)$", (500, 545))
+    # ax.annotate("(b)",xy=(0,1), xycoords='axes fraction', xytext=(+0.5,-0.5),
+    #              textcoords='offset fontsize', verticalalignment='top',
+    #              bbox=dict(facecolor='0.7',edgecolor='none',pad=3.0))
 
     xvals = np.linspace(400, 600)
     yvals = np.sqrt(r ** 2 - (xvals - L) ** 2) + L
@@ -219,6 +223,8 @@ def measurementPastCircleGraphic():
     ax.fill_between(xvals, yvals, y2vals, alpha=0.75, hatch='//', facecolor='none', edgecolor='k', linewidth=0)
     ax.fill_between(xvals, 2 * L - yvals, np.ones(len(xvals)) * 400, alpha=0.75, hatch='//', facecolor='none',
                     edgecolor='k', linewidth=0)
+    fig.colorbar(a,label=r"$\textrm{Probability}$",location='right',
+                 fraction=0.046,pad=0.04)
 
     ax.get_xaxis().set_ticks([])
     ax.get_yaxis().set_ticks([])
@@ -228,29 +234,35 @@ def measurementPastCircleGraphic():
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
 
-    fig.savefig("/home/fransces/Documents/Figures/Viz.pdf", bbox_inches='tight')
+    fig.savefig("/home/fransces/Documents/Figures/Paper/VizColorbarNew.pdf", bbox_inches='tight')
+
 
 def modelGraphic(topDir="/home/fransces/Documents/Figures/Paper"):
     plt.rcParams.update({'font.size': 20, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts}'})
-    cmap = copy.copy(matplotlib.cm.get_cmap("viridis"))
+    cmap = copy.copy(matplotlib.colormaps.get_cmap("viridis"))
     cmap.set_under(color="white")
     cmap.set_bad(color="white")
-
     maxT = 3
     func = getRandomDistribution('Dirichlet', [1, 1, 1, 1])
-
     L = 3
     occ = np.zeros((2 * L + 1, 2 * L + 1))
     occ[L, L] = 1
     limits = [L - 3, L + 3]
+    vmax = 1
+    vmin = 1e-3
     fig, ax = plt.subplots(1,3,figsize=(5, 15), dpi=150)
     for t in range(maxT):
+        # TODO: if i do it like this then I need to use the vectorized shit
+        # biases are left, down, up, right
         occ = updateOccupancy(occ, t, func)
-        vmax = np.max(occ)
-        vmin = 1e-10
-        ax[t].imshow(occ,cmap=cmap,vmin=vmin,vmax=vmax,aspect='equal')
+        print(occ)
+        # occ, biases = updateOccupancy(occ, t, func)
+
+        im = ax[t].imshow(occ,cmap=cmap,vmax=vmax,vmin=vmin, aspect='equal')
+        # ax[t].imshow(occ,cmap=cmap,vmin=vmin,vmax=vmax,aspect='equal')
         [ax[t].plot([-1,6],[y+.5,y+.5],'k',lw=1) for y in range(-1,6)]
         [ax[t].plot([x+.5,x+.5],[-1,6],'k',lw=1) for x in range(-1,6)]
+
         ax[t].set_xlim(limits)
         ax[t].set_ylim(limits)
         ax[t].get_xaxis().set_ticks([])
@@ -259,10 +271,90 @@ def modelGraphic(topDir="/home/fransces/Documents/Figures/Paper"):
         ax[t].spines['right'].set_visible(False)
         ax[t].spines['bottom'].set_visible(False)
         ax[t].spines['left'].set_visible(False)
-    path = os.path.join(topDir,"modelGraphic.pdf")
+    # ax[0].annotate("(a)",xy=(0,1), xycoords='axes fraction', xytext=(+0.5,-0.5),
+    #              textcoords='offset fontsize', verticalalignment='top',
+    #              bbox=dict(facecolor='0.7',edgecolor='none',pad=3.0))
+    path = os.path.join(topDir,"modelGraphicNewAdjustedColors.pdf")
     fig.savefig(path, bbox_inches='tight')
     plt.close(fig)
 
+# don't use this lmao
+def modelAndMeasurementGraphic(topDir="/home/fransces/Documents/Figures/Paper"):
+    plt.rcParams.update({'font.size': 20, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts}\usepackage{bm}'})
+    fig, axs = plt.subplot_mosaic("012;333",constrained_layout=True,figsize=(5,5),height_ratios=[1/3,2/3])
+    # top 3, model
+    cmap = copy.copy(matplotlib.colormaps.get_cmap("viridis"))
+    cmap.set_under(color="white")
+    cmap.set_bad(color="white")
+    maxT = 3
+    func = getRandomDistribution('Dirichlet', [1, 1, 1, 1])
+    L = 3
+    occ = np.zeros((2 * L + 1, 2 * L + 1))
+    occ[L, L] = 1
+    limits = [L - 3, L + 3]
+    vmax = 1
+    vmin = 1e-10
+    for t in range(maxT):
+        # TODO: if i do it like this then I need to use the vectorized shit
+        # biases are left, down, up, right
+        occ = updateOccupancy(occ, t, func)
+        print(occ)
+        # occ, biases = updateOccupancy(occ, t, func)
+        axs[f"{t}"].imshow(occ,cmap=cmap,vmin=vmin, aspect='equal')
+        # ax[t].imshow(occ,cmap=cmap,vmin=vmin,vmax=vmax,aspect='equal')
+        [axs[f"{t}"].plot([-1,6],[y+.5,y+.5],'k',lw=1) for y in range(-1,6)]
+        [axs[f"{t}"].plot([x+.5,x+.5],[-1,6],'k',lw=1) for x in range(-1,6)]
+        axs[f"{t}"].set_xlim(limits)
+        axs[f"{t}"].set_ylim(limits)
+        axs[f"{t}"].get_xaxis().set_ticks([])
+        axs[f"{t}"].get_yaxis().set_ticks([])
+        axs[f"{t}"].spines['top'].set_visible(False)
+        axs[f"{t}"].spines['right'].set_visible(False)
+        axs[f"{t}"].spines['bottom'].set_visible(False)
+        axs[f"{t}"].spines['left'].set_visible(False)
+    axs["0"].annotate("(a)",xy=(0,1), xycoords='axes fraction', xytext=(+0.5,-0.5),
+                 textcoords='offset fontsize', fontsize='small', verticalalignment='top',
+                 bbox=dict(facecolor='0.7',edgecolor='none',pad=2.0))
+    # bottom fig, measurement
+    maxT2 = 500
+    L2 = 500
+    occ2 = np.zeros((2 * L2 + 1, 2 * L2 + 1))
+    occ2[L2, L2] = 1
+    for t in range(maxT2):
+        occ2 = updateOccupancy(occ2, t, func)
+    cmap2 = copy.copy(matplotlib.cm.get_cmap("viridis"))
+    cmap2.set_under(color="white")
+    cmap2.set_bad(color="white")
+    a = axs["3"].imshow(occ2, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax), cmap=cmap2, interpolation='none')
+    limits2 = [L2 - 100, L2 + 100]
+    axs["3"].set_xlim(limits2)
+    axs["3"].set_ylim(limits2)
+    r = 75
+    circle = plt.Circle((L2, L2), r, color='k', ls='--', fill=False, lw=2.5)
+    axs["3"].add_patch(circle)
+    arrow = FancyArrowPatch((L2, L2), (L2 + r * np.cos(np.pi / 4), L2 + r * np.sin(np.pi / 4)), color='k',
+                            mutation_scale=40)
+    axs["3"].add_patch(arrow)
+    axs["3"].annotate(r"$r(t)$", (500, 545))
+    axs["3"].annotate("(b)",xy=(0,1), xycoords='axes fraction', xytext=(+0.5,-0.5),
+                 textcoords='offset fontsize', fontsize='small',verticalalignment='top',
+                 bbox=dict(facecolor='0.7',edgecolor='none',pad=3.0))
+    xvals = np.linspace(400, 600)
+    yvals = np.sqrt(r ** 2 - (xvals - L2) ** 2) + L2
+    yvals[np.isnan(yvals)] = 500
+    y2vals = np.ones(len(xvals)) * 600
+    axs["3"].fill_between(xvals, yvals, y2vals, alpha=0.75, hatch='//', facecolor='none', edgecolor='k', linewidth=0)
+    axs["3"].fill_between(xvals, 2 * L2 - yvals, np.ones(len(xvals)) * 400, alpha=0.75, hatch='//', facecolor='none',
+                    edgecolor='k', linewidth=0)
+    fig.colorbar(a,label=r"$\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r(t)\right)$",location='right')
+    axs["3"].get_xaxis().set_ticks([])
+    axs["3"].get_yaxis().set_ticks([])
+    axs["3"].spines['top'].set_visible(False)
+    axs["3"].spines['right'].set_visible(False)
+    axs["3"].spines['bottom'].set_visible(False)
+    axs["3"].spines['left'].set_visible(False)
+
+    fig.savefig(os.path.join(topDir,"modelAndMeasurement.pdf"),bbox_inches='tight')
 
 def colorsForLambda(lambdaList):
     # normalize values of lambda to be between 0 and 1
@@ -274,34 +366,29 @@ def colorsForLambda(lambdaList):
         colorList[np.isnan(colorList)] = 0
     return colorList
 
-
+# TODO: as an inset, plot the mean.
 def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals, markers, verticalLine=True):
     """
     plots given lists of var[lnP] as a function of mastercurve f(lambda,r,t) = lambda r^2/t^2
     """
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    plt.ion()
     colors = colorsForLambda(lambdaExtVals)
-    plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
-    plt.xlim([1e-11, 5e2])
-    plt.ylim([1e-11, 5e2])
-    # plt.xlim([1e0,1e4])
-    # plt.ylim([1e-1,1e1])
-    plt.gca().set_aspect('equal')
+    fig, ax1 = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=150)
+    left, bottom, width, height = [0.25, 0.25, 0.4, 0.4]
+    # ax2 = fig.add_axes([left, bottom, width, height])
+    #plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
+    ax1.set_xlim([1e-11, 5e2])
+    ax1.set_ylim([1e-11, 5e2])
+    ax1.set_aspect('equal')
+    # ax2.set_aspect('equal')
     # TODO: make more robust? under the assumption that all paths have the same ts list.
     for i in range(len(statsFileList)):
         print(statsFileList[i])
         if verticalLine:
-            # this part is data for alpha=1
-            # pathDiamondVar = "/home/fransces/Documents/code/diamondVars.npy"
-            # diamondVals = np.load(pathDiamondVar)
-            # varMasterCurves = d.masterCurveValue(diamondVals[0, :], diamondVals[0, :], lambdaExtVals[1])
-            # plt.plot(varMasterCurves, diamondVals[1, :], color='red')
-
             # this is theoretical prediction
             xLoc = lambdaExtVals[i]
-            plt.loglog([xLoc,xLoc],[xLoc,5e2], color=colors[i],linestyle='solid', zorder=0.0000000001)
+            ax1.loglog([xLoc,xLoc],[xLoc,5e2], color=colors[i],linestyle='solid', zorder=0.0000000001)
         for j in range(len(tMaxList)):
             file = statsFileList[i]
             # label: distribution name
@@ -311,23 +398,60 @@ def plotMasterCurve(savePath, statsFileList, tMaxList, lambdaExtVals, markers, v
             scalingFuncVals = d.masterCurveValue(tempData[1, :][indices], tempData[2, :][indices],
                                                  tempData[3, :][indices])
             # for main collapse (vlp vs masterfunc linear)
-            plt.loglog(scalingFuncVals, tempData[0, :][indices],
+            ax1.loglog(scalingFuncVals, tempData[0, :][indices],
                        markers[i], color=colors[i], markeredgecolor='k',
                        ms=4, mew=0.5, label=label, zorder=np.random.rand())
+            # # mean inset
+            # with np.errstate(divide='ignore'):
+            #     # plot - < lnP > vs t
+            #     ax2.loglog(tempData[2,:][indices],-tempData[4,:][indices],markers[i],
+            #                color=colors[i],markeredgecolor='k',ms=2,mew=0.25,label=label,
+            #                zorder=np.random.rand())
     # for normal mastercurve
-    plt.xlabel(r"$\frac{\displaystyle\lambda_{\mathrm{ext}}r^2}{t^2}$")
-    plt.ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(r\right)\right)}\right]$")
-    # # for vlp/mastercurve vs time
-    # plt.xlabel("t")
-    # plt.ylabel("vlp / f(r,t,lambda)")
+    ax1.set_xlabel(r"$\frac{\displaystyle\lambda_{\mathrm{ext}}r^2}{t^2}$")
+    ax1.set_ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    ax1.set_xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
+    ax1.set_yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
+    # # for the inset
+    # ax2.set_xlabel(r"$t$")
+    # ax2.set_ylabel(r"$-\mathrm{E}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
 
-    # offset?
-    x = np.logspace(-8, -5)
-    plt.plot(x, x+1e-11, color='k',linestyle='dashed')
+    fig.savefig(f"{savePath}")
 
-    plt.xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
-    plt.yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
-    plt.savefig(f"{savePath}")
+def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers):
+    plt.rcParams.update(
+        {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+    colors = colorsForLambda(lambdaExtVals)
+    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=150)
+    for i in range(len(statsFileList)):
+        print(statsFileList[i])
+        for j in range(len(tMaxList)):
+            file = statsFileList[i]
+            # label: distribution name
+            tempData, label = d.processStats(file)
+            # grab times we're interested in, and mask out the small radii (r<1) vals.
+            indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
+
+            # mean inset
+            with np.errstate(divide='ignore'):
+                # x-axis, r^2/ t
+                gaussianbehavior = tempData[1, indices]**2 / tempData[2,indices]
+                # plot -<lnP> vs r^2/t
+                ax.loglog(gaussianbehavior, -tempData[4,:][indices],markers[i],
+                           color=colors[i],markeredgecolor='k',ms=4,mew=0.5,label=label,
+                           zorder=np.random.rand())
+    # prediction
+    x = np.logspace(-4,3)
+    ax.plot(x,x,color='red')
+    # for the inset
+    ax.set_xlabel(r"$r(t)^2 / t$")
+    ax.set_ylabel(r"$-\mathrm{E}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    ax.set_xlim([1e-4, 1e3])
+    ax.set_ylim([1e-4, 1e3])
+    ax.set_aspect('equal')
+    ax.set_xticks([1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3])
+    ax.set_yticks([1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3])
+    fig.savefig(f"{savePath}")
 
 
 if __name__ == "__main__":
@@ -346,26 +470,18 @@ if __name__ == "__main__":
     statsFileList = [path003, path01, path03, path1, path3, path10, path31,
                      pathLogNormal, pathDelta, pathCorner]
     markers = ['o'] * 7 + ['D'] + ['v'] + ['s']
-    savePath = "/home/fransces/Documents/Figures/Paper/2DRWREMasterCurveFinal.pdf"
+    savePath = "/home/fransces/Documents/Figures/Paper/2DRWREMasterCurveWithInset.pdf"
 
     with open("/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/variables.json","r") as v:
         variables = json.load(v)
     tMaxList = np.array(variables['ts'])
 
-    # # this will run through all your files once to pull out the
-    # # list of lambdas. the order should correspond to the filelist
-    # expVarXList, lambdaList = d.getListOfLambdas(statsFileList)
-    # # this is the second runthrough (all data, all times)
-    # plotMasterCurve(savePath, statsFileList, tMaxList, markers=markers,lambdaExtVals=lambdaList,verticalLine=True)
-    # # # for only dirichlet alpha=1 all times
-    # for all data of one value of alpha
-    # singleFile = [path1]
-    # savePathSingle = "/home/fransces/Documents/Figures/testfigs/2DRWREMasterCurveDirichlet1.png"
-    # # plotMasterCurve(savePathSingle, singleFile, tMaxList=tMaxList, lambdaExtVals=[lambdaList[3]]*3,markers=markers)
-
     # for dropping distributions which have very close values of lambda
-    minSavePath = "/home/fransces/Documents/Figures/testfigs/2DRWREMasterCurveReduced.pdf"
+    minSavePath = "/home/fransces/Documents/Figures/Paper/2DRWREMasterCurveReduced.pdf"
     minimalStatsList = [path31, pathCorner, path1, pathDelta, path03, path01, path003]
     minExpVarXList, minLambdaList = d.getListOfLambdas(minimalStatsList)
     minmarkers = ['o'] + ['s'] + ['o'] + ['v'] + ['o']*3
     plotMasterCurve(minSavePath, minimalStatsList, tMaxList, markers=minmarkers, lambdaExtVals=minLambdaList, verticalLine=True)
+
+    meanPath = "/home/fransces/Douments/Figures/Paper/2DRWREMean.pdf"
+    plotMean(meanPath, minimalStatsList, tMaxList, markers=minmarkers, lambdaExtVals=minLambdaList)
