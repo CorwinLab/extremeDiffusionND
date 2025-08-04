@@ -37,13 +37,11 @@ if __name__ == "__main__":
 
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    plt.ion()
     # this will run through all your files once to pull out the
     # list of lambdas. the order should correspond to the filelist
     expVarXList, lambdaExtVals = d.getListOfLambdas(statsFileList)
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
-    plt.gca().set_box_aspect(1)
     # this will plot the data
     # colors = ['darkgreen', 'dodgerblue', 'darkslateblue']
     # tGrid = np.arange(1,1e4)
@@ -84,7 +82,8 @@ if __name__ == "__main__":
     plt.semilogx(tedge[1:], binnedMedianG, label="binned median g",color='black')
     plt.ylim([0,4/3])
     plt.xlim([1,2e4])
+    plt.gca().set_box_aspect(1)
     plt.xlabel(r"$t$")
-    plt.ylabel(r"$\frac{\displaystyle 1}{\lambda_{\mathrm{ext}}v^2}\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    plt.ylabel(r"$\frac{\displaystyle t^2}{r(t)^2 \lambda_{\mathrm{ext}}}\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
 
     plt.savefig(f"{savePath}")
