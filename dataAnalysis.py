@@ -79,11 +79,18 @@ def processStats(statsFile):
     params = np.array(variables['params'])
     if '' in params:
         params = ''
+    # get list of Var_nu[E^xi[Y]]
     expVarX = getExpVarXDotProduct(distName, params)
+    # turn into D_ext and D
+    D_ext = (1/2) * expVarX  # D_ext includes factor of 1/2 by defn.
+    D = 1/2  # by defn includes factor of 1/2
     # reshaping of arrays
     longTs = np.tile(ts,vs.shape[0])  # turn ts array into 1d array of size (336 * 221)
     # turn lambda_ext into 1d array of size (336*21 = 7056)
-    lambda_ext = np.array([(expVarX / (1 - expVarX))]*(ts.shape[0]*vs.shape[0]))
+
+    # calculate lambda_ext
+    # note that lambda_ext also includes factor of 1/2 by defn.
+    lambda_ext = np.array([(1/2) * (D_ext / (D - D_ext))]*(ts.shape[0]*vs.shape[0]))
 
     # fence post problem
     firstRadii = testFile['regimes'][regimes[0]].attrs['radii'].flatten('F')
@@ -126,14 +133,15 @@ def masterCurveValue(radii, times, lambda_ext):
     -------
     f(r(t),t,lambda_ext) = (lambda_ext) r^2 / t^2
     """
-    # scalingFunction = (lambda_ext / (4*np.pi)) * (np.log(times) / times**2) * (radii **2)
-    #scalingFunction = (lambda_ext / (4*np.pi)) * (radii**2 / times**2)
+
     scalingFunction = (lambda_ext) * (radii**2 / times**2)
     return scalingFunction
 
 
 def getListOfLambdas(statsList):
+    # var_nu[E^xi[Y]]
     expVarXList = []
+    # needs to be defined as 1/2 * (D_ext / (1 - D_ext) )
     lambdaList = []
     for path in statsList:
         filePath = os.path.split(path)[0]  # returns the directory data & stats in
@@ -146,11 +154,14 @@ def getListOfLambdas(statsList):
             params = ''
         expVarX = getExpVarXDotProduct(distName, params)
         expVarXList.append(expVarX)
-        lambdaList.append((expVarX / (1 - expVarX)))
+        D_ext = (1 / 2) * expVarX  # D_ext includes factor of 1/2 by defn.
+        D = 1 / 2  # by defn includes factor of 1/2
+        lambda_ext = (1 / 2) * (D_ext / (D - D_ext))
+        lambdaList.append(lambda_ext)
     return np.array(expVarXList), np.array(lambdaList)
 
 
-def prepLossFunc(statsList, tMaxList, alpha=1, vlpMax=1e-2):
+def prepLossFunc(statsList, tMaxList, vlpMax, alpha=1):
     """
     takes list of stats files, chops off values where var[lnP] > vlpMax
     and then computes

@@ -19,7 +19,7 @@ if __name__ == "__main__":
     #
     statsFileList = [path003, path01, path03, path1, path3, path10, path31,
                      pathLogNormal, pathDelta, pathCorner]
-    savePath = "/home/fransces/Documents/Figures/Paper/constantCollapse.pdf"
+    savePath = "/home/fransces/Documents/Figures/Paper/constantCollapsFactorOf2.pdf"
     with open("/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/variables.json","r") as v:
         variables = json.load(v)
     tMaxList = np.array(variables['ts'])
@@ -42,9 +42,6 @@ if __name__ == "__main__":
     expVarXList, lambdaExtVals = d.getListOfLambdas(statsFileList)
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
-    # this will plot the data
-    # colors = ['darkgreen', 'dodgerblue', 'darkslateblue']
-    # tGrid = np.arange(1,1e4)
     tGrid = [0,1e5]
     for i in range(len(statsFileList)):
         # data
@@ -59,28 +56,12 @@ if __name__ == "__main__":
         indices = (r > 2)
         # velocities
         vLin = r / t**(1)
-        # vMod = r * np.sqrt(np.log(t)) / t
-        # vSqrt = r / np.sqrt(t)
-        # predictions
-        #linPred = (l) * np.ones_like(tGrid)
-
-        # modPred = (l/2) * (1 / np.log(tGrid))
-        # sqrtPred = (l/2) * (1/ tGrid)
-        # plot data
-        # plt.loglog(t[indices], vlp[indices] / vLin[indices]**2, marker='.',color=colors[i], alpha=0.1)
-        plt.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=colors[i],alpha=.05,zorder=np.random.rand())
-
-        # plt.loglog(t[indices], vlp[indices] / vMod[indices]**2, marker=markers[i],color=colors[1], alpha=0.1)
-        # plt.loglog(t[indices], vlp[indices] / vSqrt[indices]**2, marker=markers[i],color=colors[2], alpha=0.1)
-        # plot predictions
-        # plt.loglog(tGrid, modPred, color='k',linestyle='dotted')
-        # plt.loglog(tGrid, sqrtPred, color='k', linestyle='dashdot')
+        plt.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=colors[i],
+                 alpha=.05,zorder=np.random.rand())
     # collapssed prediction
 
-    # linPred2 = (2/3)*np.ones_like(tGrid)  # this should be whatever value c is; for now 1
-    # plt.semilogx(tGrid,linPred2, color='k',linestyle='dashed',zorder=100000)
     plt.semilogx(tedge[1:], binnedMedianG, label="binned median g",color='black')
-    plt.ylim([0,4/3])
+    plt.ylim([0,8/3])
     plt.xlim([1,2e4])
     plt.gca().set_box_aspect(1)
     plt.xlabel(r"$t$")

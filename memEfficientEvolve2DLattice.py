@@ -278,29 +278,6 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
     os.remove(saveFileName)
 
 
-# def getExpVarX(distName, params):
-#     '''
-# 	Calculates Var_nu[E^xi[X]] numerically using jacob's special vector definition
-# 	Examples
-# 	--------
-# 	alpha = 0.1
-# 	var = getExpVarX('Dirichlet', [alpha] * 4)
-# 	print(var, 1 / (1 + 4 * float(alpha)))
-# 	'''
-#
-#     func = getRandomDistribution(distName, params)
-#     ExpX = 0
-#     xvals = np.array([-1, -1, 1, 1])
-#     num_samples = 100000
-#     for _ in range(num_samples):
-#         rand_vals = func()
-#         ExpX += np.sum(
-#             xvals * rand_vals) ** 2  # 16 terms because 4 terms in the (xvals*randvals) quantity, and then you sum and square them?
-#     ExpX /= num_samples
-#
-#     return ExpX
-
-
 def getExpVarXDotProduct(distName, params):
     """
     Calculates Var_nu[E^xi[X]] numerically using vector variance (dot product) definition
