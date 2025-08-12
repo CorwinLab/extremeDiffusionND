@@ -211,7 +211,7 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     fig, (ax1, ax2) = plt.subplots(2,1, figsize=(5,10),constrained_layout=True,dpi=150)
-    # mastercurve (ax2)
+    # mastercurve (ax2), want subset of data
     print('starting mastercurve')
     ax2.set_xlim([1e-11, 5e2])
     ax2.set_ylim([1e-11, 5e2])
@@ -239,7 +239,7 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
                        markers[i], color=minColors[i], markeredgecolor='k',
                        ms=4, mew=0.5, label=label, zorder=np.random.rand())
 
-    # constant collapse (ax1)
+    # constant collapse (ax1), want all data
     print("starting constant collapse fig")
     fullColors = colorsForLambda(fullLambdaVal)
     scalingFuncAll, vlpAll, vsAll, timesAll, lsAll = d.prepLossFunc(fullStatFileList, tMaxList,
@@ -255,13 +255,14 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     ax1.set_xlabel(r"$t$")
     ax1.set_ylabel(r"$\frac{\displaystyle t^2}{r(t)^2 \lambda_{\mathrm{ext}}}\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
     for i in range(len(fullStatFileList)):
-        file = fullStatFileList[i]
+        file2 = fullStatFileList[i]
+        tempData2, label2 = d.processStats(file2)  # label is distribution name
         print(f"{file}")
         # for constant collapse (ax1)
-        vlp = tempData[0,:]  # var[ln[P(r(t))]]
-        r = tempData[1,:]  # radii
-        t = tempData[2,:]  # time
-        l = tempData[3,0]  # lambda_ext
+        vlp = tempData2[0,:]  # var[ln[P(r(t))]]
+        r = tempData2[1,:]  # radii
+        t = tempData2[2,:]  # time
+        l = tempData2[3,0]  # lambda_ext
         indices = (r >= 2)
         # velocities
         vLin = r / t**(1)
