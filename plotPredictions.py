@@ -43,6 +43,7 @@ if __name__ == "__main__":
     colors = colorsForLambda(lambdaExtVals)
     plt.figure(figsize=(5, 5), constrained_layout=True, dpi=150)
     tGrid = [0,1e5]
+    rMin = 3
     for i in range(len(statsFileList)):
         # data
         file = statsFileList[i]
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         r = tempData[1,:]  # radii
         t = tempData[2,:]  # time
         l = tempData[3,0]  # lambda_ext
-        indices = (r > 2)
+        indices = (r >= rMin)
         # velocities
         vLin = r / t**(1)
         plt.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=colors[i],

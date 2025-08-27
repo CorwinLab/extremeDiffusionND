@@ -204,13 +204,13 @@ def visualizeLambdaColors():
     return sortedDict
 
 # plots var[ln[p]] vs lambda_ext r^2/t^2
-def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLambdaExtVals, fullLambdaVal, markers, verticalLine=True):
+def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLambdaExtVals, fullLambdaVal, markers, verticalLine=True,rMin=3):
     """
     plots given lists of var[lnP] as a function of mastercurve f(lambda,r,t) = lambda r^2/t^2
     """
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    fig, (ax1, ax2) = plt.subplots(2,1, figsize=(5,10),constrained_layout=True,dpi=150)
+    fig, (ax1, ax2) = plt.subplots(2,1, figsize=(5,10),constrained_layout=True,dpi=300)
     # mastercurve (ax2), want subset of data
     print('starting mastercurve')
     ax2.set_xlim([1e-11, 5e2])
@@ -228,16 +228,14 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
             xLoc = minLambdaExtVals[i]
             ax2.loglog([xLoc,xLoc],[xLoc,5e2], color=minColors[i],linestyle='solid', zorder=0.0000000001)
         for j in range(len(tMaxList)):
-            # file = statsFileList[i]
-            # tempData, label = d.processStats(file)
             # grab times we're interested in, and mask out the small radii (r<1) vals.
-            indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
+            indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= rMin))).flatten()
             scalingFuncVals = d.masterCurveValue(tempData[1, :][indices], tempData[2, :][indices],
                                                  tempData[3, :][indices])
             # for main collapse (vlp vs masterfunc linear)
             ax2.loglog(scalingFuncVals, tempData[0, :][indices],
                        markers[i], color=minColors[i], markeredgecolor='k',
-                       ms=4, mew=0.5, label=label, zorder=np.random.rand())
+                       ms=4, mew=0.5, label=label, zorder=np.random.rand(), rasterized=True)
 
     # constant collapse (ax1), want all data
     print("starting constant collapse fig")
@@ -248,12 +246,12 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     print(f"mean g, std g: {np.mean(g), np.std(g)}")
     tedge = np.geomspace(10, 1e4)
     binnedMedianG = [np.median(g[(timesAll > tedge[i]) * (timesAll < tedge[i + 1])]) for i in range(len(tedge) - 1)]
-    ax1.semilogx(tedge[1:], binnedMedianG, label="binned median g",color='black')
+    ax1.semilogx(tedge[1:], binnedMedianG, label="binned median g",color='black',zorder=1000000000000)
     ax1.set_ylim([0,8/3])  # should be a fctor of 2 from the previous one
     ax1.set_xlim([1,2e4])
-    ax1.set(adjustable='box')
+    ax1.set_aspect(1.0/ax1.get_data_ratio(), adjustable='box')
     ax1.set_xlabel(r"$t$")
-    ax1.set_ylabel(r"$\frac{\displaystyle t^2}{r(t)^2 \lambda_{\mathrm{ext}}}\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    ax1.set_ylabel(r"$\displaystyle\frac{ t^2}{r^2 \lambda_{\mathrm{ext}}}\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r\right)\right)}\right]$")
     for i in range(len(fullStatFileList)):
         file2 = fullStatFileList[i]
         tempData2, label2 = d.processStats(file2)  # label is distribution name
@@ -263,25 +261,37 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
         r = tempData2[1,:]  # radii
         t = tempData2[2,:]  # time
         l = tempData2[3,0]  # lambda_ext
-        indices = (r >= 2)
+        indices = (r >= rMin)
         # velocities
         vLin = r / t**(1)
-        ax1.plot(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=fullColors[i],
-                 alpha=.05,zorder=np.random.rand())
+        ax1.semilogx(t[indices], (1/(l*vLin[indices]**2))*vlp[indices],'.',color=fullColors[i],
+                 alpha=.05,zorder=np.random.rand(), rasterized=True)
+        # # binned median for each nu
+        # # use vlp < 1e-3 and r<=rMin
+        scalingFuncAll, vlpAll, vsAll, timesAll, lsAll = d.prepLossFunc([file2], tMaxList,
+                                                                        vlpMax=1e-3, alpha=1)
+        g = vlpAll / (lsAll * vsAll ** 2)
+        print(f"nu, mean g, std g: {label, np.mean(g), np.std(g)}")
+        binnedMedianG = [np.median(g[(timesAll > tedge[i]) * (timesAll < tedge[i + 1])]) for i in range(len(tedge) - 1)]
+        # to create a gray line behind each line
+        ax1.semilogx(tedge[1:], binnedMedianG, linewidth=1.8, color=[0.1]*3)  # gray
+        ax1.semilogx(tedge[1:], binnedMedianG, color=fullColors[i])  # actual line
+
     # for normal mastercurve (ax2)
-    ax2.set_xlabel(r"$\frac{\displaystyle\lambda_{\mathrm{ext}}r^2}{t^2}$")
-    ax2.set_ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    ax2.set_xlabel(r"$\displaystyle\frac{\lambda_{\mathrm{ext}}r^2}{t^2}$")
+    ax2.set_ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r\right)\right)}\right]$")
     ax2.set_xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     ax2.set_yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
 
     fig.savefig(savePath)
 
 # plots -mean[ln[p]] vs r^2/t
-def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers):
+def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers,rMin=3):
+    print("starting mean plot")
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     colors = colorsForLambda(lambdaExtVals)
-    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=150)
+    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=300)
     for i in range(len(statsFileList)):
         print(statsFileList[i])
         for j in range(len(tMaxList)):
@@ -289,7 +299,7 @@ def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers):
             # label: distribution name
             tempData, label = d.processStats(file)
             # grab times we're interested in, and mask out the small radii (r<1) vals.
-            indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= 2))).flatten()
+            indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= rMin))).flatten()
 
             # mean inset
             with np.errstate(divide='ignore'):
@@ -298,13 +308,13 @@ def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers):
                 # plot -<lnP> vs r^2/t
                 ax.loglog(gaussianbehavior, -tempData[4,:][indices],markers[i],
                            color=colors[i],markeredgecolor='k',ms=4,mew=0.5,label=label,
-                           zorder=np.random.rand())
+                           zorder=np.random.rand(), rasterized=True)
     # prediction
     x = np.logspace(-4,3)
     ax.plot(x,x,color='red')
-    # for the inset
-    ax.set_xlabel(r"$r(t)^2 / t$")
-    ax.set_ylabel(r"$-\mathbb{E}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|>r(t)\right)\right)}\right]$")
+    ax.set(adjustable='box',aspect='equal')
+    ax.set_xlabel(r"$r^2 / t$")
+    ax.set_ylabel(r"$-\mathbb{E}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r\right)\right)}\right]$")
     ax.set_xlim([1e-4, 1e3])
     ax.set_ylim([1e-4, 1e3])
     ax.set_xticks([1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3])
@@ -329,21 +339,18 @@ if __name__ == "__main__":
                      pathLogNormal, pathDelta, pathCorner]
     expVarXListFull, lambdaListFull = d.getListOfLambdas(fullList)
     fullMarkers = ['o'] * 7 + ['D'] + ['v'] + ['s']
-    savePath = "/home/fransces/Documents/Figures/Paper/2DRWREMasterCurveWithInset.pdf"
 
     with open("/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/variables.json","r") as v:
         variables = json.load(v)
     tMaxList = np.array(variables['ts'])
 
-    # for dropping distributions which have very close values of lambda
-    minSavePath = "/home/fransces/Documents/Figures/Paper/2DRWREMasterCurveReduced.pdf"
+    # # for dropping distributions which have very close values of lambda
+    minSavePath = "/home/fransces/Documents/Figures/2DRWREMasterCurveReduced.pdf"
     minimalStatsList = [path31, pathCorner, path1, pathDelta, path03, path01, path003]
     minExpVarXList, minLambdaList = d.getListOfLambdas(minimalStatsList)
     minMarkers = ['o'] + ['s'] + ['o'] + ['v'] + ['o']*3
     plotMasterCurve(minSavePath, minimalStatsList, fullList, tMaxList,
                     minLambdaList, lambdaListFull, minMarkers, verticalLine=True)
 
-    # meanPath = "/home/fransces/Documents/Figures/Paper/2DRWREMean.pdf"
-    # plotMean(meanPath, minimalStatsList, tMaxList, markers=minmarkers, lambdaExtVals=minLambdaList)
-    meanPath2 = "/home/fransces/Documents/Figures/Paper/2DRWREMeanFull.pdf"
-    plotMean(meanPath2, fullList, tMaxList, markers=fullMarkers, lambdaExtVals=lambdaListFull)
+    # meanPath2 = "/home/fransces/Documents/Figures/2DRWREMeanFull.pdf"
+    # plotMean(meanPath2, fullList, tMaxList, markers=fullMarkers, lambdaExtVals=lambdaListFull)

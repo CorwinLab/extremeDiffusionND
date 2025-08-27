@@ -19,6 +19,7 @@ if __name__ == "__main__":
     ts = np.array(variables['ts'])
     vs = np.array(variables['velocities'])
     longTs = np.tile(ts,vs.shape[0])  # turn ts array into 1d array of size (336 * 221)
+    rMin = 3
 
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
@@ -29,7 +30,7 @@ if __name__ == "__main__":
             # (336*21 = 7056 1d array) of linear radii
             # flatten in column major so its like (v[0] radii for all t, v[1] radii for all t, ... etc)
             tempR = f['regimes'][regime].attrs['radii'].flatten(order='F')
-            indices = (tempR >= 2) & (tempR <= longTs)
+            indices = (tempR >= rMin) & (tempR <= longTs)
             radii = np.concatenate((radii, tempR[indices]))
             times = np.concatenate((times, longTs[indices]))
     x = np.logspace(0, 4)

@@ -28,7 +28,7 @@ def getStatsh5py(path):
     # TODO: re-write to ignore working and temp named
     files = glob.glob(f"{path}/*.h5")
     statsFile = h5py.File(f"{path}/Stats.h5",'a')
-    moments = ['mean','secondMoment','var','skew']
+    moments = ['mean','secondMoment','var','skew','noLogMean','noLogSecondMoment','noLogVar']
     with h5py.File(files[0], 'r') as f:
         for regime in f['regimes'].keys():
             statsFile.require_group(regime)
@@ -161,7 +161,7 @@ def getListOfLambdas(statsList):
     return np.array(expVarXList), np.array(lambdaList)
 
 
-def prepLossFunc(statsList, tMaxList, vlpMax, alpha=1):
+def prepLossFunc(statsList, tMaxList, vlpMax, alpha=1,rMin=3):
     """
     takes list of stats files, chops off values where var[lnP] > vlpMax
     and then computes
@@ -181,7 +181,7 @@ def prepLossFunc(statsList, tMaxList, vlpMax, alpha=1):
             # grab times we're interested in, and mask out the small radii (r<1) vals.
             # chop data above vlpMax
             indices = np.array(np.where((tempData[2, :] == tMaxList[j])
-                                        & (tempData[1, :] >= 2)
+                                        & (tempData[1, :] >= rMin)
                                         & (tempData[0,:] < vlpMax))).flatten()
             # pull out the r, t, and lambdas of our masked data, then calc lambda r^2/t^2
             r = tempData[1, indices]  # radii
