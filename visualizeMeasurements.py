@@ -204,7 +204,8 @@ def visualizeLambdaColors():
     return sortedDict
 
 # plots var[ln[p]] vs lambda_ext r^2/t^2
-def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLambdaExtVals, fullLambdaVal, markers, verticalLine=True,rMin=3):
+def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLambdaExtVals, fullLambdaVal, markers,
+                    verticalLine=True,rMin=3):
     """
     plots given lists of var[lnP] as a function of mastercurve f(lambda,r,t) = lambda r^2/t^2
     """
