@@ -254,7 +254,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         if 'regimes' not in saveFile.keys():
             saveFile.create_group("regimes")
             for regime in regimes:
-                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64)
+                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64,track_order=True)
                 saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
             # initialize occupancy
             occ = np.zeros((2 * L + 1, 2 * L + 1))
