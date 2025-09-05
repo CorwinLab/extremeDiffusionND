@@ -5,7 +5,7 @@ import json
 from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
-    statsFile ="/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
+    statsFile ="/mnt/locustData/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
     stats = h5py.File(f"{statsFile}", "r")
     # for concatenate
     radii = np.array([])
