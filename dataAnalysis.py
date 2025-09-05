@@ -6,16 +6,16 @@ import json
 from memEfficientEvolve2DLattice import getExpVarXDotProduct
 from randNumberGeneration import getRandomDistribution
 
-# TODO: add no-log dataset to this
 # moments calculation for files saved as .h5
 def getStatsh5py(path,takeLog=True):
     """
-    Calculates mean, second moment, variance. of ln[Probability outside sphere]'
-    Also calcs. mean, second moment, variance of just the prob. outside sphere
+    Calculates mean, second moment, variance. of ln[Probability outside sphere]' or just of prob outside sphere
+    Also saves probabilities at some tFinal of every system into 1 file
     Parameters
     ----------
     path: str,  something like "data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3/L1000/tMax2000"
-
+        should be the path to the directory in which your data is contained
+    takeLog, boolean: if True (default) takes stats of ln(P); if false, takes stats of P
     Returns
     -------
     saves Stats.h5 to the path given as a parameter
@@ -26,7 +26,7 @@ def getStatsh5py(path,takeLog=True):
     time = np.array(variables['ts'])
     maxTime = time[-1] -1  # because of the range issue?
     print(maxTime)
-    # TODO: re-write to ignore working and temp named
+
     files = glob.glob(f"{path}/*.h5")
     if not takeLog:  # if you want stats for P
         print("taking stats for P")
@@ -46,46 +46,59 @@ def getStatsh5py(path,takeLog=True):
             files.remove(f"{path}/StatsNoLog.h5")
         print('taking stats for lnP')
         fileName = "Stats.h5"
+    if f"{path}/FinalProbs.h5" in files:  # ignore final probability files
+        files.remove(f"{path}/FinalProbs.h5")
+
     statsFile = h5py.File(f"{path}/{fileName}",'w')
-    moments = ['mean','secondMoment','var']
+    moments = ['mean', 'secondMoment', 'var', 'thirdMoment', 'skew']
+    # initialize the analysis file with array of 0s with the correct shape
     with h5py.File(files[0], 'r') as f:
         for regime in f['regimes'].keys():
             statsFile.require_group(regime)
             for moment in moments:
                 statsFile[regime].require_dataset(moment, shape=f['regimes'][regime].shape, dtype=np.float64)
                 statsFile[regime][moment][:] = np.zeros(f['regimes'][regime].shape, dtype=np.float64)
+    # start the calculation
     num_files = 0
     for file in files:
-        # print(file)
-        with h5py.File(file, 'r') as f:
-            if f.attrs['currentOccupancyTime'] < maxTime:
-                print(f"Skipping file: {file}")
-                continue
-            for regime in f['regimes'].keys():
-                probs = f['regimes'][regime][:].astype(float)
-                # TODO: figure out how to print something if this throws the error
-                assert np.sum(np.isnan(probs)) == 0
-                # stats for ln(P)
-                if takeLog:
-                    statsFile[regime]['mean'][:] += np.log(probs)
-                    statsFile[regime]['secondMoment'][:] += np.log(probs) ** 2
-                else: # stats for P
-                    statsFile[regime]['mean'][:] += probs
-                    statsFile[regime]['secondMoment'][:] += probs ** 2
-            num_files += 1
-    for regime in statsFile.keys():
-        # for ln(P)
-        if takeLog:
-            statsFile[regime]['mean'][:] /= num_files
-            statsFile[regime]['secondMoment'][:] /= num_files
-            statsFile[regime]['var'][:] = statsFile[regime]['secondMoment'][:] - statsFile[regime]['mean'][:] ** 2
-        # for P
-        else:
-            statsFile[regime]['mean'][:] /= num_files
-            statsFile[regime]['secondMoment'][:] /= num_files
-            statsFile[regime]['var'][:] = statsFile[regime]['secondMoment'][:] - statsFile[regime]['mean'][:] ** 2
+        try:
+            with h5py.File(file, 'r') as f:
+                if f.attrs['currentOccupancyTime'] < maxTime:
+                    print(f"Skipping file: {file}, current occ. is {f.attrs['currentOccupancyTime']}")
+                    continue
+                for regime in f['regimes'].keys():
+                    probs = f['regimes'][regime][:].astype(float)
+                    # if np.sum(np.isnan(probs)) == 0 is false, then throws an error
+                    assert np.sum(np.isnan(probs)) == 0
+                    with np.errstate(divide='ignore'):  # prevent it from getting mad about divide by 0
+                        if takeLog:  # stats for ln(P)
+                            statsFile[regime]['mean'][:] += (np.log(probs)).astype(np.float64)
+                            statsFile[regime]['secondMoment'][:] += (np.log(probs) ** 2).astype(np.float64)
+                            statsFile[regime]['thirdMoment'][:] += (np.log(probs) ** 3).astype(np.float64)
+                        else:  # stats for P
+                            statsFile[regime]['mean'][:] += (probs).astype(np.float64)
+                            statsFile[regime]['secondMoment'][:] += (probs ** 2).astype(np.float64)
+                            statsFile[regime]['thridMoment'][:] += (probs ** 3).astype(np.float64)
+                num_files += 1
+        except Exception as e:  # skip file if corrupted, also say its corrupted
+            print(f"{file} is corrupted!")
+            continue
+    statsFile.attrs['numberOfFiles'] = num_files
+    for regime in statsFile.keys():  # normalize, then calc. var and skew
+        statsFile[regime]['mean'][:] /= num_files
+        statsFile[regime]['secondMoment'][:] /= num_files
+        statsFile[regime]['var'][:] = statsFile[regime]['secondMoment'][:] - statsFile[regime]['mean'][:] ** 2
 
+        with np.errstate(invalid='ignore', divide='ignore'):
+            statsFile[regime]['var'][:] = statsFile[regime]['secondMoment'][:] - statsFile[regime]['mean'][:] ** 2
+            sigma = np.sqrt(statsFile[regime]['var'][:])
 
+            statsFile[regime]['skew'][:] = (statsFile[regime]['thirdMoment'][:] -
+                                            3*statsFile[regime]['mean'][:]*sigma**2
+                                            - statsFile[regime]['mean'][:]** 3) / (sigma**3)
+    statsFile.close()
+
+# the following functions are for the Universal Fluctuations paper!
 # inherently dependent on the way we save data but thats ok
 # this shouldn't  change on if we're taking var[lnP] vs var[P]
 def processStats(statsFile):
