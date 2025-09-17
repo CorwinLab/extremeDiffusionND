@@ -21,11 +21,12 @@ def calcStatsForHistogram(path, savePath, takeLog=True,lookAtNum=None):
        saves Stats.h5 to the path given as a parameter
        saves finalProbs.h5 to the given path (file full of ln(LAST probability measurement)
        """
+    os.makedirs(savePath,exist_ok=True)
     expected_file_num = 5000000  # want to overshoot here even if its not actually
     with open(f"{path}/variables.json", 'r') as v:
         variables = json.load(v)
     time = np.array(variables['ts'])
-    maxTime = time[-1] - 1  # because of the range issue?
+    maxTime = time[-1]  # because of the range issue?
     print(maxTime)
     if takeLog:
         fileName = "Stats.h5"
