@@ -1,4 +1,5 @@
 import numpy as np
+import npquad
 import os
 from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
 from numba import njit
@@ -8,7 +9,7 @@ from datetime import date
 import h5py
 import sys
 import shutil
-# import npquad
+
 
 
 @njit
@@ -196,6 +197,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
             idx = list(ts).index(t)
             radiiAtTimeT = []
             # open the file; pull out radii at specified time
+            # TODO: repeat this but with k scaling
             with h5py.File(saveFileName, 'r') as saveFile:
                 for regimeName in saveFile['regimes'].keys():
                     radii = saveFile['regimes'][regimeName].attrs['radii']
@@ -254,13 +256,13 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         if 'regimes' not in saveFile.keys():
             saveFile.create_group("regimes")
             for regime in regimes:
-                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64,track_order=True)
+                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.quad,track_order=True)
                 saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
             # initialize occupancy
             occ = np.zeros((2 * L + 1, 2 * L + 1))
             occ[L, L] = 1
             mostRecentTime = 1
-            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
+            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.quad)
             saveFile.attrs['currentOccupancyTime'] = mostRecentTime
         # Load save if occupancy is already saved; Extract time and occupancy from h5
         mostRecentTime = saveFile.attrs['currentOccupancyTime']
