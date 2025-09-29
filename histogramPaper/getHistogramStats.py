@@ -101,6 +101,16 @@ def calcStatsForHistogram(path, savePath, takeLog=True,lookAtNum=None):
     statsFile.close()
     finalProbsFile.close()
 
+def SMA(data, windowsize):
+    """ returns the simple moving avg. of data"""
+    i = 0
+    movingAvg = []
+    while i < len(data) - windowsize + 1:
+            wA = np.nansum(data[i:i+windowsize]) / windowsize
+            movingAvg.append(wA)
+            i += 1
+    return np.array(movingAvg)
+
 if __name__ == "__main__":
     # Test Code. assumes always taking log and always looking at the full no. of files
     # dataDirectory, savePathDirectory

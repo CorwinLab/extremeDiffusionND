@@ -87,6 +87,7 @@ def getStatsh5py(path,takeLog=True):
     for regime in statsFile.keys():  # normalize, then calc. var and skew
         statsFile[regime]['mean'][:] /= num_files
         statsFile[regime]['secondMoment'][:] /= num_files
+        statsFile[regime]['thirdMoment'][:] /= num_files
         statsFile[regime]['var'][:] = statsFile[regime]['secondMoment'][:] - statsFile[regime]['mean'][:] ** 2
 
         with np.errstate(invalid='ignore', divide='ignore'):
