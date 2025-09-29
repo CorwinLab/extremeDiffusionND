@@ -1,10 +1,10 @@
 import numpy as np
+import npquad
 import os
 from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
 from datetime import date
 import sys
 import memEfficientEvolve2DLattice as m
-
 
 if __name__ == "__main__":
     # Test Code
