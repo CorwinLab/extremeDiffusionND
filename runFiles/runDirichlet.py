@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
 	ts = getListOfTimes(tMax - 1, 1)
 	#velocities = np.geomspace(10 ** (-3), 10, 21)
-    velocities = np.linspace(0.6, 0.8, 21)  # in 0.01 increments
+	velocities = np.linspace(0.6, 0.8, 21)  # in 0.01 increments
 
 	vars = {'L': L, 
 			'ts': ts,
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 			'params': params,
 			'directory': directory,
 			'systID': systID}
-
+	os.makedirs(directory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
 	vars_file = os.path.join(directory, "variables.json")
 
 	today = date.today()
