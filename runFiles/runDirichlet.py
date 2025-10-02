@@ -27,7 +27,7 @@ if __name__ == '__main__':
 	#velocities = np.geomspace(10 ** (-3), 10, 21)
 	# velocities = np.linspace(0.6, 0.8, 21)  # in 0.01 increments
     # actually let's do 0.1 to 0.6 in 0.05 increments, and then 0.61 to 0.99 in 0.01 increments, then 0.99 to 1 in 0.001 increments
-    velocities = np.concatenate( (np.linspace(0.1, 0.6, 11), np.linspace(0.61, 0.99,39), np.linspace(0.991, 1, 10) ) )
+    velocities = np.concatenate((np.linspace(0.1, 0.6, 11), np.linspace(0.61, 0.99,39), np.linspace(0.991, 1, 10)))
 
 	vars = {'L': L, 
 			'ts': ts,
