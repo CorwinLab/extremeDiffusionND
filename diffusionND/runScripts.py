@@ -66,7 +66,7 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
     seconds = hours * 3600
     # time evolution
     while Diff.time < tMax:
-        Diff.iteratetTimestep()
+        Diff.iterateTimestep()
         if Diff.time in ts:
             # pull out radii at times we want to measure at
             idx = list(ts).index(Diff.time)
