@@ -128,13 +128,14 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
 	with h5py.File(saveFileName, 'a') as saveFile: 
 		# Define the regimes we want to study
-		regimes = [linear, np.sqrt, tOnSqrtLogT]
+		#regimes = [linear, np.sqrt, tOnSqrtLogT]
+		regimes = [linear]
 		# Check if "regimes" group has been made and create otherwise
 		if 'regimes' not in saveFile.keys():
 			saveFile.create_group("regimes")
 
 			for regime in regimes: 
-				saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)))
+				saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)), track_order=True)
 				saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
 		# Load save if occupancy is already saved
