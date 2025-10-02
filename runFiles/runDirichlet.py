@@ -38,6 +38,7 @@ if __name__ == '__main__':
         vars.update({"Date": text_date})
         saveVars(vars, vars_file)
         vars.pop("Date")
+    if not os.path.exists(os.path.join(directory,"Radii.npz")):
         # if first system, also make the radii file
         regimes = [linear, np.sqrt, tOnSqrtLogT]
         allRegimes = []
