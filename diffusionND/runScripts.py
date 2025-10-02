@@ -119,6 +119,9 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
     saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
 
+    radiiFileName = os.path.join(directory, "Radii.npz")
+    allR = np.load(radiiFileName)
+
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study
         # regimes = [linear, np.sqrt, tOnSqrtLogT]
@@ -144,7 +147,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             mostRecentTime = 0
 
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, Diff, saveFileName, saveOccupancyFileName)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFileName)
 
     # To save space we delete the occupancy when done
     os.remove(saveOccupancyFileName)

@@ -23,10 +23,6 @@ if __name__ == '__main__':
 
     ts = getListOfTimes(tMax - 1, 1)
     velocities = np.concatenate((np.linspace(0.1, 0.6, 11), np.linspace(0.61, 0.99,39), np.linspace(0.991, 1, 10)))
-    # TODO: pre-calculate radii, save to npz file as "radii.npz" or something. idk
-    # TODO: figure out how to not hard-code in the 3 regimes???
-
-
     vars = {'L': L,
 			'ts': ts,
 			'velocities': velocities,
