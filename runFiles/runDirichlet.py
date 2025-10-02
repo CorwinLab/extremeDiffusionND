@@ -1,4 +1,4 @@
-from diffusionND.runScripts import runDirichlet, getListOfTimes, saveVars
+from diffusionND.runScripts import runDirichlet, getListOfTimes, saveVars, calculateRadii, linear, tOnSqrtLogT
 import numpy as np
 import sys
 import os
@@ -22,10 +22,11 @@ if __name__ == '__main__':
         params = np.array(params).astype(float)
 
     ts = getListOfTimes(tMax - 1, 1)
-    # velocities = np.geomspace(10 ** (-3), 10, 21)
-    # velocities = np.linspace(0.6, 0.8, 21)  # in 0.01 increments
-    # actually let's do 0.1 to 0.6 in 0.05 increments, and then 0.61 to 0.99 in 0.01 increments, then 0.99 to 1 in 0.001 increments
     velocities = np.concatenate((np.linspace(0.1, 0.6, 11), np.linspace(0.61, 0.99,39), np.linspace(0.991, 1, 10)))
+    # TODO: pre-calculate radii, save to npz file as "radii.npz" or something. idk
+    # TODO: figure out how to not hard-code in the 3 regimes???
+
+
     vars = {'L': L,
 			'ts': ts,
 			'velocities': velocities,
@@ -41,6 +42,13 @@ if __name__ == '__main__':
         vars.update({"Date": text_date})
         saveVars(vars, vars_file)
         vars.pop("Date")
+        # if first system, also make the radii file
+        regimes = [linear, np.sqrt, tOnSqrtLogT]
+        allRegimes = []
+        for regime in regimes:
+            allRegimes.append(calculateRadii(ts, velocities, regime))
+        # should append the correct .npz file format to the name
+        np.savez_compressed(os.path.join(directory, "Radii"), linearR=allRegimes[0], sqrtR=allRegimes[1], tOnSqrtLogTR=allRegimes[2])
     start = wallTime()
     # runDirichlet(L, ts, velocities, params, directory, systID)
     runDirichlet(**vars)
