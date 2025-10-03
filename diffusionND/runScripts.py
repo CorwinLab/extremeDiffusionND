@@ -120,7 +120,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
 
     radiiFileName = os.path.join(directory, "Radii.npz")
-    allR = np.load(radiiFileName)
+    allR = np.load(radiiFileName,allow_pickle=True)
 
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study
@@ -132,7 +132,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
             for regime in regimes:
                 saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)), track_order=True)
-                saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
+                # saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
         # Load save if occupancy is already saved
         # Eric says the following should be a function.
