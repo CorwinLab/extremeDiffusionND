@@ -65,7 +65,6 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
     hours = 3
     seconds = hours * 3600
     radiiRegimes = ['linear', 'np.sqrt', 'tOnSqrtLogT']
-    print(radiiRegimes)
     # time evolution
     while Diff.time < tMax:
         Diff.iterateTimestep()
@@ -75,7 +74,6 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
             radiiAtTimeT = []
             with h5py.File(saveFileName, "r+") as saveFile:
                 for regimeName in saveFile['regimes'].keys():
-                    print(f"regimeName: {regimeName}",type(regimeName))
                     regimeIdx = radiiRegimes.index(regimeName)
                     tempRadii = radii[regimeIdx,:,:]
                     #tempRadii = radii[f"{regimeName}"]
