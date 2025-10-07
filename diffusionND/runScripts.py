@@ -118,9 +118,13 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
     saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
+    # saveOccupancyFileName = os.path.join("/scratch/jamming/fransces/",f"Occupancy{systID}.bin")
 
     radiiFileName = os.path.join(directory, "Radii.npz")
-    allR = np.load(radiiFileName,allow_pickle=True)
+    try:
+        allR = np.load(radiiFileName,allow_pickle=True)
+    except OSError as e:
+        allR = np.load(radiiFileName)
 
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study
