@@ -131,7 +131,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             saveFile.create_group("regimes")
 
             for regime in regimes:
-                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)), track_order=True)
+                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)), track_order=True, dtype=np.quad)
                 # saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
 
         # Load save if occupancy is already saved
