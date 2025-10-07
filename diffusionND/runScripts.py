@@ -123,7 +123,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
     # saveOccupancyFileName = os.path.join("/scratch/jamming/fransces/",f"Occupancy{systID}.bin")
 
-    radiiFileName = os.path.join(directory, "Radii.npz")
+    radiiFileName = os.path.join(directory, "Radii.npy")
     allR = np.load(radiiFileName)
     #allR = np.load(radiiFileName, allow_pickle=True)
     # try:
