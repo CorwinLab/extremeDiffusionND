@@ -90,7 +90,9 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
 
                 # also save occupancy every time we write to file
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
+                print("about to save occ")
                 Diff.saveOccupancy(saveOccupancyFileName)
+                print("saved!")
                 # reset timer
                 startTime = wallTime()
         # also save at final time, and if more than 3 hrs have passed since last save
@@ -121,8 +123,11 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
     # saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
-    saveOccupancyFileName = os.path.join(directory.replace("projects","scratch"),f"Occupancy{systID}.bin")
-    print(saveOccupancyFileName)
+    occDir = directory.replace("projects","scratch")
+    print(occDir, os.path.exists(occDir))
+    os.makedirs(occDir, exist_ok=True)
+    print(f"made {occDir}?", os.path.exists(occDir))
+    saveOccupancyFileName = os.path.join(occDir, f"Occupancy{systID}.bin")
 
     # radii calculation
     regimes = [linear, np.sqrt, tOnSqrtLogT]
@@ -155,11 +160,15 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             Diff = DiffusionND(params, L)
             saveFile.attrs['currentOccupancyTime'] = 0
             mostRecentTime = 0
+    # save occ before it starts to evolve?
+    # Diff.saveOccupancy(saveOccFileName)
+    # print("saved occ before evolution!, checking if exists:")
+    # print(os.path.exists(saveOccFileName))
 
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFileName)
-
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccFileName)
     print("finished evolving")
+
     # To save space we delete the occupancy when done
     # os.remove(saveOccupancyFileName)
 
