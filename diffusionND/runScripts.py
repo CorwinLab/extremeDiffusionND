@@ -120,8 +120,8 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     tMax = max(ts)
 
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
-    saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
-    # saveOccupancyFileName = os.path.join(directory.replace("projects","scratch"),f"Occupancy{systID}.bin")
+    # saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
+    saveOccupancyFileName = os.path.join(directory.replace("projects","scratch"),f"Occupancy{systID}.bin")
     print(saveOccupancyFileName)
 
     # radii calculation
@@ -145,6 +145,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
         # Load save if occupancy is already saved
         # Eric says the following should be a function.
+        print("does occ file exist: ", os.path.exists(saveOccupancyFileName))
         if ('currentOccupancyTime' in saveFile.attrs.keys()) and (os.path.exists(saveOccupancyFileName)):
             mostRecentTime = saveFile.attrs['currentOccupancyTime']
             print(f"Loaded file from time {mostRecentTime}", flush=True)
@@ -160,7 +161,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
 
     print("finished evolving")
     # To save space we delete the occupancy when done
-    os.remove(saveOccupancyFileName)
+    # os.remove(saveOccupancyFileName)
 
 def getExpVarX(distName, params):
     '''
