@@ -122,6 +122,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
     # saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
     saveOccupancyFileName = os.path.join(directory.replace("projects","scratch"),f"Occupancy{systID}.bin")
+    print(saveOccupancyFileName)
 
     # radii calculation
     regimes = [linear, np.sqrt, tOnSqrtLogT]
@@ -157,6 +158,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     # actually run and save data
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFileName)
 
+    print("finished evolving")
     # To save space we delete the occupancy when done
     # os.remove(saveOccupancyFileName)
 
