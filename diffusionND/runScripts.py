@@ -123,8 +123,12 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     # saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
     saveOccupancyFileName = os.path.join(directory.replace("projects","scratch"),f"Occupancy{systID}.bin")
 
-    radiiFileName = os.path.join(directory, "Radii.npy")
-    allR = np.load(radiiFileName)
+    # radii calculation
+    regimes = [linear, np.sqrt, tOnSqrtLogT]
+    allRegimes = []
+    for regime in regimes:
+        allRegimes.append(calculateRadii(ts, velocities, regime))
+    allR = np.array(allRegimes)
 
     with h5py.File(saveFileName, 'a') as saveFile:
         # Define the regimes we want to study

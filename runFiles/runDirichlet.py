@@ -38,15 +38,6 @@ if __name__ == '__main__':
         vars.update({"Date": text_date})
         saveVars(vars, vars_file)
         vars.pop("Date")
-    if not os.path.exists(os.path.join(directory,"Radii.npz")):
-        # if first system, also make the radii file
-        regimes = [linear, np.sqrt, tOnSqrtLogT]
-        allRegimes = []
-        for regime in regimes:
-            allRegimes.append(calculateRadii(ts, velocities, regime))
-        # should append the correct .npz file format to the name
-        #np.savez_compressed(os.path.join(directory, "Radii"), linear=allRegimes[0], sqrt=allRegimes[1], tOnSqrtLogT=allRegimes[2])
-        np.save(os.path.join(directory,"Radii"),allRegimes, allow_pickle=False)  # no.regimes by no. ts, by no. vs
     start = wallTime()
     # runDirichlet(L, ts, velocities, params, directory, systID)
     runDirichlet(**vars)
