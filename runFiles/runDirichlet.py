@@ -46,7 +46,7 @@ if __name__ == '__main__':
             allRegimes.append(calculateRadii(ts, velocities, regime))
         # should append the correct .npz file format to the name
         #np.savez_compressed(os.path.join(directory, "Radii"), linear=allRegimes[0], sqrt=allRegimes[1], tOnSqrtLogT=allRegimes[2])
-        np.save(os.path.join(directory,"Radii"),allRegimes)  # no.regimes by no. ts, by no. vs
+        np.save(os.path.join(directory,"Radii"),allRegimes, allow_pickle=False)  # no.regimes by no. ts, by no. vs
     start = wallTime()
     # runDirichlet(L, ts, velocities, params, directory, systID)
     runDirichlet(**vars)

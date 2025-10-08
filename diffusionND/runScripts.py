@@ -120,8 +120,8 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     tMax = max(ts)
 
     saveFileName = os.path.join(directory, f"{str(systID)}.h5")
-    saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
-    # saveOccupancyFileName = os.path.join("/scratch/jamming/fransces/",f"Occupancy{systID}.bin")
+    # saveOccupancyFileName = os.path.join(directory, f"Occupancy{systID}.bin")
+    saveOccupancyFileName = os.path.join("/scratch/jamming/fransces/",f"Occupancy{systID}.bin")
 
     radiiFileName = os.path.join(directory, "Radii.npy")
     allR = np.load(radiiFileName)
@@ -159,7 +159,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFileName)
 
     # To save space we delete the occupancy when done
-    os.remove(saveOccupancyFileName)
+    # os.remove(saveOccupancyFileName)
 
 def getExpVarX(distName, params):
     '''
