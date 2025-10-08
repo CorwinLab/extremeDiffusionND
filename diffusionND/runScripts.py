@@ -166,7 +166,7 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     # print(os.path.exists(saveOccFileName))
 
     # actually run and save data
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFilename)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, allR, Diff, saveFileName, saveOccupancyFileName)
     print("finished evolving")
 
     # To save space we delete the occupancy when done
