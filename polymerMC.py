@@ -189,40 +189,88 @@ def transferMatrix1D(tMax, temperature=0):
     
 
 @njit
-def computeWeightedEnergy(boltzmannFactor, expectedEnergy, x, y):
-    prevBF = 0
-    weightedEnergy = 0
+def computeWeightedEnergy(partitionFunction, expectedEnergy, x, y):
+    # NOTE: This fails for temperatures that are too small!  If everything is zero then probably we should just take the min or energy?
+    predecessorZ = np.zeros(partitionFunction.shape[2])
+    weightedEnergy = np.zeros(partitionFunction.shape[2])
     for i in [-1,0]:
         for j in [-1,0]:
-            weightedEnergy += boltzmannFactor[x+i,y+j] * expectedEnergy[x+i,y+j]
-            prevBF += boltzmannFactor[x+i,y+j]
-    if prevBF > 0:
-        weightedEnergy /= prevBF
-    else:
-        weightedEnergy = 0
-    return prevBF, weightedEnergy
+            weightedEnergy += partitionFunction[x+i,y+j] * expectedEnergy[x+i,y+j]
+            predecessorZ += partitionFunction[x+i,y+j]
+    weightedEnergy /= predecessorZ
+    # if prevBF > 0:
+    #     weightedEnergy /= prevBF
+    # else:
+    #     weightedEnergy = 0
+    return predecessorZ, weightedEnergy
 
 @njit
-def transferMatrix2D(tMax, temp):
-    expectedEnergy = np.zeros((tMax, tMax))
-    newExpectedEnergy = np.zeros((tMax, tMax))
-    boltzmannFactor = np.zeros((tMax, tMax))
-    newBoltzmannFactor = np.zeros((tMax, tMax))
-    # The t=0 optimal path starts at the origin
-    expectedEnergy[0,0] = np.random.randn()
-    boltzmannFactor[0,0] = 1
+def computeLogPredecessorZ(logZ, x, y):
+    # Find the mean value of logZ for the 4 previous sites, this will be a list of length numTemps
+    # meanLogZ = np.zeros(logZ.shape[2])
+    maxLogZ = np.zeros(logZ.shape[2])
+    predecessorZ = np.zeros(logZ.shape[2])
+    for i in [-1,0]:
+        for j in [-1,0]:
+            for tempIndex in range(logZ.shape[2]):
+                maxLogZ[tempIndex] = max(maxLogZ[tempIndex],logZ[x+i, y+j, tempIndex])
+            # meanLogZ += logZ[x+i, y+j]/4
+            # maxLogZ = np.max((maxLogZ,logZ[x+i, y+j]), 0)
+
+    # Shift the max value so that it gets put at the very top of the range
+    maxLogZ -= 700
+    # print(logZ[x,y] - maxLogZ)
+    # meanLogZ = np.mean(logZ[x-1:x+1,y-1:y+1].reshape(4, logZ.shape[2]),0)
+    # We want to return 
+    # np.sum(np.exp(logZ[x-1:x+1, y-1:y+1].reshape(4, logZ.shape[2])),0)
+    # but this runs into precision problems
+    # Instead, factor out the mean value of logZ before taking exponentials
+    for i in [-1,0]:
+        for j in [-1,0]:
+            predecessorZ += np.exp( logZ[x+i,y+j] - maxLogZ )
+    
+    return np.log(predecessorZ) + maxLogZ
+
+    # return np.log(np.sum(np.exp(logZ[x-1:x+1, y-1:y+1].reshape(4, logZ.shape[2]) - meanLogZ),0)) + meanLogZ 
+
+    # for i in [-1,0]:
+    #     for j in [-1,0]:
+    #         predecessorZ += np.exp(logZ[x+i, y+j])
+    # return np.log(predecessorZ)
+
+# TODO: Rename boltzmannFactor -> partitionFunction
+@njit
+def transferMatrix2D(tMax, tempList):
+    # tempList = np.array(tempList)
+    dataSize = (tMax, tMax, len(tempList))
+    # expectedEnergy = np.zeros(dataSize)
+    # newExpectedEnergy = np.zeros(dataSize)
+    # partitionFunction = np.zeros(dataSize)
+    # newPartitionFunction = np.zeros(dataSize)
+
+    # # The t=0 optimal path starts at the origin
+    # expectedEnergy[0,0,:] = np.random.randn()
+    # partitionFunction[0,0,:] = 1
+
+    logZ = np.zeros(dataSize)
+    newLogZ = np.zeros(dataSize)
 
     for t in range(1,tMax):
-        newWeights = np.random.randn(t+1,t+1)
+        weights = np.random.randn(t+1,t+1)
         for x in range(0,t):
             for y in range(0,t):
-                prevBF, weightedEnergy = computeWeightedEnergy(boltzmannFactor, expectedEnergy, x, y)
-                # This feels sloppy, but it relies on the fact that the boltzmann factor with negative -1 index will be zero                
-                newBoltzmannFactor[x,y] = np.exp(-newWeights[x,y]/temp) * prevBF
-                newExpectedEnergy[x,y] = newWeights[x,y] + weightedEnergy
+                # This feels sloppy, but it relies on the fact that the partitionFunction with negative -1 index will be zero  
+                # predecessorZ, weightedEnergy = computeWeightedEnergy(partitionFunction, expectedEnergy, x, y)  
+                predecessorLogZ = computeLogPredecessorZ(logZ, x, y)
+                newLogZ[x,y] = -weights[x,y]/tempList + predecessorLogZ
+                # newPartitionFunction[x, y] = np.exp(-weights[x,y]/tempList) * prevBF
+                # newExpectedEnergy[x, y] = weights[x,y] + weightedEnergy
         # Put the new values into the regular values
-        expectedEnergy, newExpectedEnergy = newExpectedEnergy, expectedEnergy
-        boltzmannFactor, newBoltzmannFactor = newBoltzmannFactor, boltzmannFactor
-        # Normalize the boltzmannFactor so that it's a probability
-        boltzmannFactor /= np.sum(boltzmannFactor)
-    return expectedEnergy, boltzmannFactor
+        logZ, newLogZ = newLogZ, logZ
+        if np.mod(t,10)==0:
+            print(t)
+
+        # expectedEnergy, newExpectedEnergy = newExpectedEnergy, expectedEnergy
+        # partitionFunction, newPartitionFunction = newPartitionFunction, partitionFunction
+    # return expectedEnergy, partitionFunction
+    return logZ
