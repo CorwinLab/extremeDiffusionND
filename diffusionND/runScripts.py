@@ -88,9 +88,11 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
                 for count, regimeName in enumerate(saveFile['regimes'].keys()):
                     saveFile['regimes'][regimeName][idx,:] = probs[count, :]
 
-                # also save occupancy every time we write to file
+                # # also save occupancy every time we write to file
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
+                s = wallTime()
                 Diff.saveOccupancy(saveOccupancyFileName)
+                print(f"t:{Diff.time}, time to save occ: {wallTime() - s}")
                 # reset timer
                 startTime = wallTime()
         # also save at final time, and if more than 3 hrs have passed since last save
