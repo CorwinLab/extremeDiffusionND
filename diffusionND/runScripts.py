@@ -62,8 +62,9 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
     """
     # setup timer that tracks when file was last saved
     startTime = wallTime()
-    hours = 3
-    seconds = hours * 3600
+    # hours = 3
+    # seconds = hours * 3600
+    seconds = 60
     radiiRegimes = ['linear', 'np.sqrt', 'tOnSqrtLogT']
     # time evolution
     while Diff.time < tMax:
@@ -90,12 +91,13 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
 
                 # # also save occupancy every time we write to file
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
-                s = wallTime()
-                Diff.saveOccupancy(saveOccupancyFileName)
-                print(f"t:{Diff.time}, time to save occ: {wallTime() - s}")
-                # reset timer
-                startTime = wallTime()
+                # s = wallTime()
+                # Diff.saveOccupancy(saveOccupancyFileName)
+                # print(f"t:{Diff.time}, time to save occ: {wallTime() - s}")
+                # # reset timer
+                # startTime = wallTime()
         # also save at final time, and if more than 3 hrs have passed since last save
+        # only save every minute
         if (wallTime() - startTime >= seconds) or (Diff.time == tMax):
             with h5py.File(saveFileName, "r+") as saveFile:
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
