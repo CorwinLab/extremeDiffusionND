@@ -101,7 +101,9 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
         if (wallTime() - startTime >= seconds) or (Diff.time == tMax):
             with h5py.File(saveFileName, "r+") as saveFile:
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
+                s = wallTime()
                 Diff.saveOccupancy(saveOccupancyFileName)
+                print(f"t:{Diff.time}, t to save: {wallTime() - s}")
             # reset timer
             startTime = wallTime()
 
