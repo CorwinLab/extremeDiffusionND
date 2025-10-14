@@ -238,7 +238,6 @@ def computeLogPredecessorZ(logZ, x, y):
     #         predecessorZ += np.exp(logZ[x+i, y+j])
     # return np.log(predecessorZ)
 
-# TODO: Rename boltzmannFactor -> partitionFunction
 @njit
 def transferMatrix2D(tMax, tempList):
     # tempList = np.array(tempList)
@@ -274,3 +273,15 @@ def transferMatrix2D(tMax, tempList):
         # partitionFunction, newPartitionFunction = newPartitionFunction, partitionFunction
     # return expectedEnergy, partitionFunction
     return logZ
+
+def logSumPartitionFunction(logZ):
+    # We want to compute np.log(np.sum(np.exp(logZ))), but this will cause all sorts of precision issues.
+    # Instead, we do the same trick that we do elsewhere of subtracting off the max value of log Z before we do the exponentiation.
+    # Note, when t is fairly large this is going to be equivalent to just taking the max of logZ since the max will be generically 
+    # more than 1400 larger than the second largest element
+
+    # Shift so that the max of logZ is 700, which gives us the full dynamic range    
+    maxLogZ = np.max(logZ) -700
+    sumZ = np.sum(np.exp(logZ - maxLogZ))
+    logSumZ = np.log(sumZ) + maxLogZ
+    return logSumZ
