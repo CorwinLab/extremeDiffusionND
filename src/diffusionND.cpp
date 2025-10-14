@@ -114,11 +114,26 @@ std::vector<std::vector<RealType>> DiffusionND::integratedProbability(std::vecto
 {
 	std::vector<std::vector<RealType> > probabilities;
 	probabilities.resize(radii.size(), std::vector<RealType>(radii.at(0).size()));
-	for (unsigned long int i = 0; i < 2 * L + 1; i++)
-	{ // i is the columns
-		for (unsigned long int j = 0; j < 2 * L + 1; j++)
-		{ // j is the row
+//	for (unsigned long int i = 0; i < 2 * L + 1; i++)
+//	{ // i is the columns
+//		for (unsigned long int j = 0; j < 2 * L + 1; j++)
+//		{ // j is the row
+    // shrink wrapping integrated prob
+	unsigned long int startIdx;
+	unsigned long int endIdx;
+	if (t < L){
+		startIdx = L - t - 1;
+		endIdx = L + t + 1;
+	}
+	else{
+		startIdx = 1;
+		endIdx = 2 * L;
+	}
 
+	for (unsigned long int i = startIdx; i < endIdx; i++)
+	{ // i is the columns
+		for (unsigned long int j = startIdx; j < endIdx; j++)
+            {
 			if (PDF.at(i).at(j) != 0)
 			{
 				int xval = i - L; 
