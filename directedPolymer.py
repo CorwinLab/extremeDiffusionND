@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import skew
 from numba import njit
 from matplotlib import pyplot as plt
+import sys
 
 # Terminology:
 # "jumpLibrary" are the movements that the polymer can take from one site to the next
@@ -266,8 +267,8 @@ def transferMatrix2D(tMax, tempList):
                 # newExpectedEnergy[x, y] = weights[x,y] + weightedEnergy
         # Put the new values into the regular values
         logZ, newLogZ = newLogZ, logZ
-        if np.mod(t,10)==0:
-            print(t)
+        # if np.mod(t,10)==0:
+        #     print(t)
 
         # expectedEnergy, newExpectedEnergy = newExpectedEnergy, expectedEnergy
         # partitionFunction, newPartitionFunction = newPartitionFunction, partitionFunction
@@ -285,3 +286,25 @@ def logSumPartitionFunction(logZ):
     sumZ = np.sum(np.exp(logZ - maxLogZ))
     logSumZ = np.log(sumZ) + maxLogZ
     return logSumZ
+
+if __name__ == "__main__":
+    # Call as `python3 directedPolymer.py tMax tempMin tempMax numTemp numSystems outFile`
+    inputIndex = 1
+    tMax = int(sys.argv[inputIndex]); inputIndex += 1
+    tempMin = float(sys.argv[inputIndex]); inputIndex += 1
+    tempMax = float(sys.argv[inputIndex]); inputIndex += 1
+    numTemp = int(sys.argv[inputIndex]); inputIndex += 1
+    numSystems = int(sys.argv[inputIndex]); inputIndex += 1
+    outFile = sys.argv[inputIndex]; inputIndex += 1
+    
+    tempList = np.geomspace(tempMin, tempMax, numTemp)
+    
+    for sysId in range(numSystems):
+        logZ = transferMatrix2D(tMax, tempList)
+        # Format things so that they save as a row, rather than a column
+        pointToPlane = np.array([logSumPartitionFunction(logZ[:,:,i]) for i in range(numTemp)]).reshape(-1,1).T
+        with open(outFile, 'a') as file:
+            np.savetxt(file, pointToPlane)
+        print(sysId)
+    # for i in range(numTemp):
+    #     print(f'Temp={tempList[i]}, logZ = {logSumPartitionFunction(logZ[:,:,i])}')
