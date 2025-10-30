@@ -3,6 +3,7 @@ from scipy.stats import skew
 from numba import njit
 from matplotlib import pyplot as plt
 import sys
+import glob
 
 # Terminology:
 # "jumpLibrary" are the movements that the polymer can take from one site to the next
@@ -262,6 +263,7 @@ def transferMatrix2D(tMax, tempList):
                 # This feels sloppy, but it relies on the fact that the partitionFunction with negative -1 index will be zero  
                 # predecessorZ, weightedEnergy = computeWeightedEnergy(partitionFunction, expectedEnergy, x, y)  
                 predecessorLogZ = computeLogPredecessorZ(logZ, x, y)
+                # TODO: Make tempList a list that can change as a function of time.  Perhaps just add an index with magnitude tMax?
                 newLogZ[x,y] = -weights[x,y]/tempList + predecessorLogZ
                 # newPartitionFunction[x, y] = np.exp(-weights[x,y]/tempList) * prevBF
                 # newExpectedEnergy[x, y] = weights[x,y] + weightedEnergy
@@ -286,6 +288,12 @@ def logSumPartitionFunction(logZ):
     sumZ = np.sum(np.exp(logZ - maxLogZ))
     logSumZ = np.log(sumZ) + maxLogZ
     return logSumZ
+
+def readLogZFiles(globString):
+    all = []
+    for f in glob.glob(globString):
+        all.append(np.loadtxt(f))
+    return np.array(np.vstack(all))
 
 if __name__ == "__main__":
     # Call as `python3 directedPolymer.py tMax tempMin tempMax numTemp numSystems outFile`
