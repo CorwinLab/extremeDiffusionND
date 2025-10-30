@@ -258,6 +258,10 @@ def transferMatrix2D(tMax, tempList):
 
     for t in range(1,tMax):
         weights = np.random.randn(t+1,t+1)
+        # make exponential numbers with mean of zero and variance of 1
+        # weights = -np.log(np.random.rand(t+1,t+1)) - 1
+        # make uniformly distributed numbers, with mean zero and variance 1
+        # weights = (np.random.rand(t+1,t+1) - .5)*np.sqrt(12)
         for x in range(0,t):
             for y in range(0,t):
                 # This feels sloppy, but it relies on the fact that the partitionFunction with negative -1 index will be zero  

@@ -68,6 +68,8 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
     # time evolution
     while Diff.time < tMax:
         Diff.iterateTimestep()
+        if Diff.time / 100 == 0:
+            print("t:", Diff.time)
         if Diff.time in ts:
             # pull out radii at times we want to measure at
             idx = list(ts).index(Diff.time)
@@ -99,6 +101,7 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
         if (wallTime() - startTime >= seconds) or (Diff.time == tMax):
             with h5py.File(saveFileName, "r+") as saveFile:
                 saveFile.attrs['currentOccupancyTime'] = Diff.time
+                print("about to save occ")
                 s = wallTime()
                 Diff.saveOccupancy(saveOccupancyFileName)
                 print(f"t:{Diff.time}, t to save: {wallTime() - s}")
@@ -127,6 +130,8 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
     occDir = directory.replace("projects","scratch")
     os.makedirs(occDir, exist_ok=True)
     saveOccupancyFileName = os.path.join(occDir, f"Occupancy{systID}.bin")
+    print("prob file name: ",saveFileName)
+    print("occupancy file name: ",saveOccupancyFileName)
 
     # radii calculation
     regimes = [linear, np.sqrt, tOnSqrtLogT]
@@ -142,7 +147,6 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
         # Check if "regimes" group has been made and create otherwise
         if 'regimes' not in saveFile.keys():
             saveFile.create_group("regimes")
-
             for regime in regimes:
                 saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)), track_order=True, dtype=np.quad)
                 # saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
@@ -150,9 +154,16 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
         # Load save if occupancy is already saved
         # Eric says the following should be a function.
         if ('currentOccupancyTime' in saveFile.attrs.keys()) and (os.path.exists(saveOccupancyFileName)):
+            print('existing occ file: ',os.path.exists(saveOccupancyFileName))
             mostRecentTime = saveFile.attrs['currentOccupancyTime']
             print(f"Loaded file from time {mostRecentTime}", flush=True)
             Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
+            # this is going to be an issue tho bc the h5 file wont... do the thing.
+            if np.round(np.sum(Diff.PDF),30) != 1:
+                print("occ not summing to 1, restarting system from t=0")
+                Diff = DiffusionND(params, L)
+                saveFile.attrs['currentOccupancyTime'] = 0
+                mostRecentTime = 0
         else:
             # Otherwise, initialize as normal
             Diff = DiffusionND(params, L)
