@@ -311,11 +311,11 @@ if __name__ == "__main__":
     logScaling = bool(int(sys.argv[inputIndex])); inputIndex +=1
     
     print(logScaling)
-    beta0 = np.geomspace(tempMin, tempMax, numTemp)
+    temp0 = np.geomspace(tempMin, tempMax, numTemp)
     if logScaling:
-        tempList = np.divide.outer(beta0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
+        tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
     else:
-        tempList = np.divide.outer(beta0, np.ones(tMax) )
+        tempList = np.multiply.outer(temp0, np.ones(tMax) )
         
     for sysId in range(numSystems):
         logZ = transferMatrix2D(tMax, tempList)
