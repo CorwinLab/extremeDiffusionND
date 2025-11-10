@@ -201,12 +201,12 @@ void DiffusionND::loadOccupancy(std::string fileName){
     }
     // Verify that goodbit is true        throw std::exception("File not found");
 
-    if (file.good()) {
-        std::cout << "File read correctly and goodbit is True" << std::endl;
-    } else {
-        std::cout << "Goodbit is FALSE" << std::endl;
-        throw std::runtime_error("File too short");
-    }
+//    if (file.good()) {
+//        std::cout << "File read correctly and goodbit is True" << std::endl;
+//    } else {
+//        std::cout << "Goodbit is FALSE" << std::endl;
+//        throw std::runtime_error("File too short");
+//    }
 
 //    file.read(reinterpret_cast<char*>(&loadedSum), sizeof(RealType));
 	file.close();
