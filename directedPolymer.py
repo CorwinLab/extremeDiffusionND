@@ -3,6 +3,7 @@ from scipy.stats import skew
 from numba import njit
 from matplotlib import pyplot as plt
 import sys
+import glob
 
 # Terminology:
 # "jumpLibrary" are the movements that the polymer can take from one site to the next
@@ -242,7 +243,7 @@ def computeLogPredecessorZ(logZ, x, y):
 @njit
 def transferMatrix2D(tMax, tempList):
     # tempList = np.array(tempList)
-    dataSize = (tMax, tMax, len(tempList))
+    dataSize = (tMax, tMax, tempList.shape[0])
     # expectedEnergy = np.zeros(dataSize)
     # newExpectedEnergy = np.zeros(dataSize)
     # partitionFunction = np.zeros(dataSize)
@@ -254,15 +255,20 @@ def transferMatrix2D(tMax, tempList):
 
     logZ = np.zeros(dataSize)
     newLogZ = np.zeros(dataSize)
-
+    
     for t in range(1,tMax):
         weights = np.random.randn(t+1,t+1)
+        # make exponential numbers with mean of zero and variance of 1
+        # weights = -np.log(np.random.rand(t+1,t+1)) - 1
+        # make uniformly distributed numbers, with mean zero and variance 1
+        # weights = (np.random.rand(t+1,t+1) - .5)*np.sqrt(12)
         for x in range(0,t):
             for y in range(0,t):
                 # This feels sloppy, but it relies on the fact that the partitionFunction with negative -1 index will be zero  
                 # predecessorZ, weightedEnergy = computeWeightedEnergy(partitionFunction, expectedEnergy, x, y)  
                 predecessorLogZ = computeLogPredecessorZ(logZ, x, y)
-                newLogZ[x,y] = -weights[x,y]/tempList + predecessorLogZ
+                # TODO: Make tempList a list that can change as a function of time.  Perhaps just add an index with magnitude tMax?
+                newLogZ[x,y] = -weights[x,y]/tempList[:,t] + predecessorLogZ
                 # newPartitionFunction[x, y] = np.exp(-weights[x,y]/tempList) * prevBF
                 # newExpectedEnergy[x, y] = weights[x,y] + weightedEnergy
         # Put the new values into the regular values
@@ -287,6 +293,12 @@ def logSumPartitionFunction(logZ):
     logSumZ = np.log(sumZ) + maxLogZ
     return logSumZ
 
+def readLogZFiles(globString):
+    all = []
+    for f in glob.glob(globString):
+        all.append(np.loadtxt(f))
+    return np.array(np.vstack(all))
+
 if __name__ == "__main__":
     # Call as `python3 directedPolymer.py tMax tempMin tempMax numTemp numSystems outFile`
     inputIndex = 1
@@ -296,9 +308,15 @@ if __name__ == "__main__":
     numTemp = int(sys.argv[inputIndex]); inputIndex += 1
     numSystems = int(sys.argv[inputIndex]); inputIndex += 1
     outFile = sys.argv[inputIndex]; inputIndex += 1
+    logScaling = bool(int(sys.argv[inputIndex])); inputIndex +=1
     
-    tempList = np.geomspace(tempMin, tempMax, numTemp)
-    
+    print(logScaling)
+    temp0 = np.geomspace(tempMin, tempMax, numTemp)
+    if logScaling:
+        tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
+    else:
+        tempList = np.multiply.outer(temp0, np.ones(tMax) )
+        
     for sysId in range(numSystems):
         logZ = transferMatrix2D(tMax, tempList)
         # Format things so that they save as a row, rather than a column
