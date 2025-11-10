@@ -172,22 +172,42 @@ std::vector<std::vector<double> > DiffusionND::logIntegratedProbability(std::vec
 
 void DiffusionND::saveOccupancy(std::string fileName){
 	std::fstream myFile;
+//	RealType runningSum = 0;
 	myFile.open(fileName, std::ios::out|std::ios::binary);
 	for (unsigned long int i=0; i < 2 * L+1; i++){
 		for (unsigned long int j=0; j<2*L+1; j++){
 			myFile.write(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
+//			runningSum += PDF[i][j];
 		}
 	}
-	
+//	myFile.write(reinterpret_cast<char*>(&runningSum),sizeof(RealType));
 	myFile.close();
 }
 
 void DiffusionND::loadOccupancy(std::string fileName){
+    // Check whether file exists before we try to load it
 	std::ifstream file(fileName, std::ios::binary);
+	if (file.good()) {
+        std::cout << "File exists" << std::endl;
+    } else {
+        std::cout << "File doesn't exist" << std::endl;
+        throw std::runtime_error("File not found");
+    }
 	for (unsigned long int i = 0; i < 2*L+1; i++) {
         for (unsigned long int j = 0; j < 2*L+1; j++) {
             file.read(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
+//            occsum += PDF[i][j];
         }
     }
+    // Verify that goodbit is true        throw std::exception("File not found");
+
+    if (file.good()) {
+        std::cout << "File read correctly and goodbit is True" << std::endl;
+    } else {
+        std::cout << "Goodbit is FALSE" << std::endl;
+        throw std::runtime_error("File too short");
+    }
+
+//    file.read(reinterpret_cast<char*>(&loadedSum), sizeof(RealType));
 	file.close();
 }

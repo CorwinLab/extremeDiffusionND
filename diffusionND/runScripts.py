@@ -159,11 +159,11 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             print(f"Loaded file from time {mostRecentTime}", flush=True)
             Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
             # this is going to be an issue tho bc the h5 file wont... do the thing.
-            if np.round(np.sum(Diff.PDF),30) != 1:
-                print("occ not summing to 1, restarting system from t=0")
-                Diff = DiffusionND(params, L)
-                saveFile.attrs['currentOccupancyTime'] = 0
-                mostRecentTime = 0
+            # if np.round(np.sum(Diff.PDF),30) != 1:
+            #     print("occ not summing Wto 1, restarting system from t=0")
+            #     Diff = DiffusionND(params, L)
+            #     saveFile.attrs['currentOccupancyTime'] = 0
+            #     mostRecentTime = 0
         else:
             # Otherwise, initialize as normal
             Diff = DiffusionND(params, L)
