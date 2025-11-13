@@ -309,11 +309,14 @@ if __name__ == "__main__":
     numSystems = int(sys.argv[inputIndex]); inputIndex += 1
     outFile = sys.argv[inputIndex]; inputIndex += 1
     logScaling = bool(int(sys.argv[inputIndex])); inputIndex +=1
+    sqrtScaling = bool(int(sys.argv[inputIndex])); inputIndex +=1
     
     print(logScaling)
     temp0 = np.geomspace(tempMin, tempMax, numTemp)
     if logScaling:
         tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
+    elif sqrtScaling:
+        tempList = np.multiply.outer(temp0, np.sqrt(np.arange(1,tMax+1)))
     else:
         tempList = np.multiply.outer(temp0, np.ones(tMax) )
         
