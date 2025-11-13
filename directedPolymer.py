@@ -316,7 +316,7 @@ if __name__ == "__main__":
     if logScaling:
         tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
     elif sqrtScaling:
-        tempList = np.multiply.outer(temp0, 1/np.sqrt(np.arange(1,tMax+1)))
+        tempList = np.multiply.outer(temp0, np.sqrt(np.arange(1,tMax+1)))
     else:
         tempList = np.multiply.outer(temp0, np.ones(tMax) )
         
