@@ -158,7 +158,8 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             try:
                 Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
             except RuntimeError:
-                print("bad occupancy, starting from 0")
+                print("bad occupancy, starting from 0 and removing old occ file")
+                os.remove(saveOccupancyFileName)
                 Diff = DiffusionND(params, L)
                 saveFile.attrs['currentOccupancyTime'] = 0
                 mostRecentTime = 0
