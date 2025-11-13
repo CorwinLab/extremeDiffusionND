@@ -68,8 +68,6 @@ def evolveAndMeasurePDF(ts, mostRecentTime, tMax, radii, Diff, saveFileName, sav
     # time evolution
     while Diff.time < tMax:
         Diff.iterateTimestep()
-        if Diff.time / 100 == 0:
-            print("t:", Diff.time)
         if Diff.time in ts:
             # pull out radii at times we want to measure at
             idx = list(ts).index(Diff.time)
@@ -157,13 +155,13 @@ def runDirichlet(L, ts, velocities, params, directory, systID):
             print('existing occ file: ',os.path.exists(saveOccupancyFileName))
             mostRecentTime = saveFile.attrs['currentOccupancyTime']
             print(f"Loaded file from time {mostRecentTime}", flush=True)
-            Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
-            # this is going to be an issue tho bc the h5 file wont... do the thing.
-            # if np.round(np.sum(Diff.PDF),30) != 1:
-            #     print("occ not summing Wto 1, restarting system from t=0")
-            #     Diff = DiffusionND(params, L)
-            #     saveFile.attrs['currentOccupancyTime'] = 0
-            #     mostRecentTime = 0
+            try:
+                Diff = DiffusionND.fromOccupancy(params, L, saveOccupancyFileName, mostRecentTime)
+            except RuntimeError:
+                print("bad occupancy, starting from 0")
+                Diff = DiffusionND(params, L)
+                saveFile.attrs['currentOccupancyTime'] = 0
+                mostRecentTime = 0
         else:
             # Otherwise, initialize as normal
             Diff = DiffusionND(params, L)

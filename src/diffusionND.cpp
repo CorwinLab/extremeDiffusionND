@@ -195,8 +195,7 @@ void DiffusionND::loadOccupancy(std::string fileName){
             file.read(reinterpret_cast<char*>(&PDF[i][j]), sizeof(RealType));
         }
     }
-    // Verify that goodbit is true        throw std::exception("File not found");
-
+    // Verify that goodbit is true
     if (file.good()) {
         std::cout << "File read correctly and goodbit is True" << std::endl;
     } else {
