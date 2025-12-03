@@ -13,6 +13,8 @@ import matplotlib
 import copy
 from randNumberGeneration import getRandomDistribution
 from matplotlib.patches import FancyArrowPatch
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.cm import ScalarMappable
 
 # generates gif of RWRE evolution
 def generateGifRWRE(occupancy, maxT, alphas, pathName, startT=1, listOfTimes=None):
@@ -173,16 +175,16 @@ def colorsForLambda(lambdaList):
 
 
 def visualizeLambdaColors():
-    path003 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.03162278/L5000/tMax10000/Stats.h5"
-    path01 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.1/L5000/tMax10000/Stats.h5"
-    path03 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.31622777/L5000/tMax10000/Stats.h5"
-    path1 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/Stats.h5"
-    path3 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3.1622776/L5000/tMax10000/Stats.h5"
-    path10 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10/L5000/tMax10000/Stats.h5"
-    path31 = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/dirichlet/ALPHA31.622776/L5000/tMax10000/Stats.h5"
-    pathLogNormal = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/logNormal/0,1/L5000/tMax10000/Stats.h5"
-    pathDelta = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/Stats.h5"
-    pathCorner = "/mnt/talapasData/data/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
+    path003 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.03162278/L5000/tMax10000/Stats.h5"
+    path01 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.1/L5000/tMax10000/Stats.h5"
+    path03 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA0.31622777/L5000/tMax10000/Stats.h5"
+    path1 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA1/L5000/tMax10000/Stats.h5"
+    path3 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA3.1622776/L5000/tMax10000/Stats.h5"
+    path10 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA10/L5000/tMax10000/Stats.h5"
+    path31 = "/mnt/locustData/memoryEfficientMeasurements/h5data/dirichlet/ALPHA31.622776/L5000/tMax10000/Stats.h5"
+    pathLogNormal = "/mnt/locustData/memoryEfficientMeasurements/h5data/logNormal/0,1/L5000/tMax10000/Stats.h5"
+    pathDelta = "/mnt/locustData/memoryEfficientMeasurements/h5data/Delta/L5000/tMax10000/Stats.h5"
+    pathCorner = "/mnt/locustData/memoryEfficientMeasurements/h5data/Corner/L5000/tMax10000/Stats.h5"
     # pathList = [path003, path01, path03, path1, path3, path10, path31,
     #             pathLogNormal, pathDelta, pathCorner]
     minimalStatsList = [path31, pathCorner, path1, pathDelta, path03, path01, path003]
@@ -210,7 +212,8 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     """
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
-    fig, (ax1, ax2) = plt.subplots(2,1, figsize=(5,10),constrained_layout=True,dpi=300)
+    fig, (ax0, ax1, ax2) = plt.subplots(3,1, figsize=(5,10),constrained_layout=True,dpi=300, gridspec_kw={'height_ratios':[1,10,10]})
+    #ax0 is the colrobar, ax1 and ax2 are the actual plots.
     # mastercurve (ax2), want subset of data
     print('starting mastercurve')
     ax2.set_xlim([1e-11, 5e2])
@@ -255,7 +258,8 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     for i in range(len(fullStatFileList)):
         file2 = fullStatFileList[i]
         tempData2, label2 = d.processStats(file2)  # label is distribution name
-        print(f"{file}")
+        # print(f"{file}")
+        print(i)
         # for constant collapse (ax1)
         vlp = tempData2[0,:]  # var[ln[P(r(t))]]
         r = tempData2[1,:]  # radii
@@ -271,8 +275,11 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
         scalingFuncAll, vlpAll, vsAll, timesAll, lsAll = d.prepLossFunc([file2], tMaxList,
                                                                         vlpMax=1e-3, alpha=1)
         g = vlpAll / (lsAll * vsAll ** 2)
-        print(f"nu, mean g, std g: {label, np.mean(g), np.std(g)}")
-        binnedMedianG = [np.median(g[(timesAll > tedge[i]) * (timesAll < tedge[i + 1])]) for i in range(len(tedge) - 1)]
+        print("len g: ", len(g))
+        #print("g",g[:100])
+        with np.errstate(invalid='ignore', divide='ignore',all='ignore'):
+            binnedMedianG = [np.median(g[(timesAll > tedge[i]) * (timesAll < tedge[i + 1])]) for i in range(len(tedge) - 1)]
+        # print('binnedMedianG', binnedMedianG)
         # to create a gray line behind each line
         ax1.semilogx(tedge[1:], binnedMedianG, linewidth=1.8, color=[0.1]*3)  # gray
         ax1.semilogx(tedge[1:], binnedMedianG, color=fullColors[i])  # actual line
@@ -282,7 +289,32 @@ def plotMasterCurve(savePath, statsFileList, fullStatFileList, tMaxList, minLamb
     ax2.set_ylabel(r"$\mathrm{Var}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r\right)\right)}\right]$")
     ax2.set_xticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
     ax2.set_yticks([1e-10,1e-8,1e-6,1e-4,1e-2,1e0,1e2])
+    # # colorbar with colormaps and plt.colorbar
+    # keys = fullLambdaVal
+    # vals = fullColors"39518748/" Illegal file name
 
+    # sorted_indices = np.argsort(keys)
+    # sorted_vals = vals[
+    #     sorted_indices]  # pass this into an imshow. needs to be (1, n, 3) for horizontal layout; (n,1,3) for vertical
+    # sorted_keys = keys[sorted_indices]  # bounds, or labels
+    # cm = LinearSegmentedColormap.from_list('my_cmap', sorted_vals, N=len(fullLambdaVal))
+    # norm = matplotlib.colors.BoundaryNorm(sorted_keys, cm.N)
+    # sm = ScalarMappable(cmap=cm, norm=norm)
+    # sm.set_array([])
+    # ticks = [sorted_keys[0], sorted_keys[3], sorted_keys[6], sorted_keys[-1]]
+    # plt.colorbar(sm, ax=ax1, label=r"$\lambda_{\mathrm{ext}}$", location='top', ticks=ticks)
+
+    # colorbar with imshow
+    keys = fullLambdaVal
+    vals = fullColors
+    sorted_indices = np.argsort(keys)
+    sorted_vals = np.expand_dims(vals[sorted_indices],axis=0)  # list of colors, as (1,n,3) horizontal
+    sorted_keys = keys[sorted_indices]
+    ax0.imshow(sorted_vals)
+    ax0.set_yticks([])
+    ax0.set_xticks(ticks=[0,3,6,9],labels=[rf"${sorted_keys[0]:.3f}$",rf"${sorted_keys[3]:.3f}$",rf"${sorted_keys[6]:.3f}$",rf"${sorted_keys[9]:.3f}$"],
+                   usetex=True)
+    ax0.set_title(r"$\lambda_{\mathrm{ext}}$")
     fig.savefig(savePath)
 
 # plots -mean[ln[p]] vs r^2/t
@@ -291,16 +323,15 @@ def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers,rMin=3):
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     colors = colorsForLambda(lambdaExtVals)
-    fig, ax = plt.subplots(figsize=(5,5),constrained_layout=True,dpi=300)
+    fig, (ax0,ax) = plt.subplots(2, 1, figsize=(5,5),constrained_layout=True,dpi=300,gridspec_kw={'height_ratios':[1,10]})
     for i in range(len(statsFileList)):
         print(statsFileList[i])
+        file = statsFileList[i]
+        # label: distribution name
+        tempData, label = d.processStats(file)
         for j in range(len(tMaxList)):
-            file = statsFileList[i]
-            # label: distribution name
-            tempData, label = d.processStats(file)
             # grab times we're interested in, and mask out the small radii (r<1) vals.
             indices = np.array(np.where((tempData[2, :] == tMaxList[j]) & (tempData[1, :] >= rMin))).flatten()
-
             # mean inset
             with np.errstate(divide='ignore'):
                 # x-axis, r^2/ t
@@ -309,16 +340,44 @@ def plotMean(savePath, statsFileList, tMaxList, lambdaExtVals, markers,rMin=3):
                 ax.loglog(gaussianbehavior, -tempData[4,:][indices],markers[i],
                            color=colors[i],markeredgecolor='k',ms=4,mew=0.5,label=label,
                            zorder=np.random.rand(), rasterized=True)
+                # ax.scatter(gaussianbehavior, -tempD{ata[4,:][indices], c=tempData[3,:][indices], cmap=cm,
+                #            marker=markers[i], linewidths=0.5, rasterized=True)
     # prediction
     x = np.logspace(-4,3)
     ax.plot(x,x,color='red')
     ax.set(adjustable='box',aspect='equal')
+    # # colorbar with colormaps
+    # keys = lambdaExtVals
+    # vals = colors
+    # sorted_indices = np.argsort(keys)
+    # sorted_vals = vals[sorted_indices]
+    # sorted_keys = keys[sorted_indices]  # bounds
+    # # cm = LinearSegmentedColormap.from_list('my_cmap',colors, N=len(lambdaExtVals))
+    # cm = LinearSegmentedColormap.from_list('my_cmap',sorted_vals, N=len(lambdaExtVals))
+    # norm = matplotlib.colors.BoundaryNorm(sorted_keys,cm.N)
+    # sm = ScalarMappable(cmap=cm, norm=norm)
+    # sm.set_array([])
+    # ticks = [sorted_keys[0],sorted_keys[3],sorted_keys[6], sorted_keys[-1]]
+    # # plt.colorbar(sm, ax=ax, label=r"$\lambda_{\mathrm{ext}}$", shrink=0.6,ticks=ticks)
+    # fig.colorbar(sm, ax=ax, label=r"$\lambda_{\mathrm{ext}}$", ticks=ticks, shrink=0.8, location='top')
     ax.set_xlabel(r"$r^2 / t$")
     ax.set_ylabel(r"$-\mathbb{E}_\nu \left[\ln{\left(\mathbb{P}^{\bm{\xi}}\left(|\vec{S}(t)|\geq r\right)\right)}\right]$")
     ax.set_xlim([1e-4, 1e3])
     ax.set_ylim([1e-4, 1e3])
     ax.set_xticks([1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3])
     ax.set_yticks([1e-4,1e-3,1e-2,1e-1,1e0,1e1,1e2,1e3])
+
+    # colorbar with imshow
+    keys = lambdaExtVals
+    vals = colors
+    sorted_indices = np.argsort(keys)
+    sorted_vals = np.expand_dims(vals[sorted_indices],axis=0)  # list of colors, as (1,n,3) horizontal
+    sorted_keys = keys[sorted_indices]
+    ax0.imshow(sorted_vals)
+    ax0.set_yticks([])
+    ax0.set_xticks(ticks=[0,3,6,9],labels=[rf"${sorted_keys[0]:.3f}$",rf"${sorted_keys[3]:.3f}$",rf"${sorted_keys[6]:.3f}$",rf"${sorted_keys[9]:.3f}$"],
+                   usetex=True)
+    ax0.set_title(r"$\lambda_{\mathrm{ext}}$")
     fig.savefig(savePath)
 
 
@@ -348,10 +407,10 @@ if __name__ == "__main__":
     tMaxList = np.array(variables['ts'])
 
     # # for dropping distributions which have very close values of lambda
-    minSavePath = "/home/fransces/Documents/Figures/2DRWREMastercurve.pdf"
+    minSavePath = "/home/fransces/Documents/Figures/2DRWREMastercurveFakedColorbar.pdf"
 
     plotMasterCurve(minSavePath, minimalStatsList, fullList, tMaxList,
                     minLambdaList, lambdaListFull, minMarkers, verticalLine=True)
 
-    meanPath2 = "/home/fransces/Documents/Figures/2DRWREMeans.pdf"
+    meanPath2 = "/home/fransces/Documents/Figures/2DRWREMeansWithFakedColorbar.pdf"
     plotMean(meanPath2, fullList, tMaxList, markers=fullMarkers, lambdaExtVals=lambdaListFull)

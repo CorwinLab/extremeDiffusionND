@@ -218,7 +218,7 @@ def prepLossFunc(statsList, tMaxList, vlpMax, alpha=1, rMin=3):
     times = np.array([])
     ls = np.array([])
     for i in range(len(statsList)):
-        print(statsList[i])
+        # print(statsList[i])
         file = statsList[i]
         tempData, label = processStats(file)
         for j in range(len(tMaxList)):
