@@ -19,11 +19,11 @@ import shutil
 
 def moveProbabilityFromSite(logP, i, j, biases):
     """ procedure to move probability from site i,j to its nearest neighbor sites, stored as logP, using biases"""
-    # iterate over direcitons... i +-1, j+- 1?
+    # iterate over direcitons
     directions = [(i, j - 1), (i + 1, j), (i - 1, j), (i, j + 1)]
     for index, direction in enumerate(directions):
-        # if the adjcent site is unoccupied (filled with -infs)
         logTransitionProb = np.log(biases[index]) + logP[i, j]  # ln(xi*p) = ln(xi) + ln(p)
+        # if the adjcent site is unoccupied (filled with -infs)
         if np.isneginf(logP[direction]):
             # update the unoccupied adjacent site with (ln(xi) + ln(P[i,j])
             logP[direction] = logTransitionProb
@@ -58,13 +58,13 @@ def updateLogOccupancy(logP, time):
     return logP
 
 def logOccupancyGenerator(logOccupancy, maxT, startT=1):
-    """ generator for updateLogOccupancy """
+    """ generator for updateLogOccupancy to evolve in time"""
     for t in range(startT, maxT):
         logOccupancy = updateLogOccupancy(logOccupancy, t)
         yield t, logOccupancy
 
 def sumLogList(logArray):
-    """ implements DPRM precision scheme for adding small numbers, given a 1d array of numbers to be addeed"""
+    """ implements DPRM precision scheme for adding small numbers, given a 1d array of numbers (stored as logP) to be addeed"""
     # return logList[bigIndex] + np.sum(exp(logList - logList[bigIndex))
     bigIndex = np.argmax(logArray)
     return logArray[bigIndex] + np.log( np.sum( np.exp(logArray - logArray[bigIndex] ) ) )
@@ -127,7 +127,8 @@ def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
                 for index, rSq in enumerate(radiiListSq):
                     # if the site i,j is greater than the r_measurement, add it to that corresponding index
                     # in cumLogProbList
-                    if distSq > rSq:
+                    if distSq >= rSq:
                         print("distSq, rSq",distSq, rSq)
                         cumLogProbList[index] = sumLogList(np.array([sumRepeats, cumLogProbList[index]]))
     return cumLogProbList
+
