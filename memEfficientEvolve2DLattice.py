@@ -1,5 +1,5 @@
 import numpy as np
-import npquad
+# import npquad
 import os
 from time import time as wallTime  # start = wallTime() to avoid issues with using time as variable
 from numba import njit
@@ -13,7 +13,7 @@ import shutil
 
 
 @njit
-def updateOccupancy(occupancy, time, func):
+def updateOccupancy(occupancy, time, L):
     """
 	memory efficient version of executeMoves from evolve2DLattice
 	:param occupancy: np array of size L
@@ -56,7 +56,17 @@ def updateOccupancy(occupancy, time, func):
         for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
-                biases = func()
+                x = i - origin
+                y = j - origin
+                #print('x, y, t;', x, y, time)
+                #print('i, j: ',i, j)
+                seed = (x * (2 * (3*L) + 1) ** 2 + y * (2 * (3*L) + 1) + time)
+                #print("seed: ", seed)
+                np.random.seed(seed)
+                #func = getRandomDistribution(distName, seed, params)
+                #biases = func()
+                biases = np.random.dirichlet(params)
+                # print("biases: ", biases)
 
                 occupancy[i, j - 1] += occupancy[i, j] * biases[0]  # left
                 occupancy[i + 1, j] += occupancy[i, j] * biases[1]  # down
@@ -69,7 +79,7 @@ def updateOccupancy(occupancy, time, func):
     return occupancy
 
 
-def evolve2DDirichlet(occupancy, maxT, func, startT=1):
+def evolve2DDirichlet(occupancy, maxT, L, startT=1):
     """ generator object, memory efficient version of evolve2DLattice
 	note that there's no absorbingBoundary because of the way i and j are indexed
 	in updateOccupancy
@@ -79,7 +89,7 @@ def evolve2DDirichlet(occupancy, maxT, func, startT=1):
 	:param startT: optional int default 1, the time at which you want to start evolution
 	"""
     for t in range(startT, maxT):
-        occupancy = updateOccupancy(occupancy, t, func)
+        occupancy = updateOccupancy(occupancy, t, L)
         yield t, occupancy
 
 
@@ -174,7 +184,7 @@ def getListOfTimes(maxT, startT=1, num=500):
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
-def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFileName):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, saveFileName, tempFileName):
     """
 	evolves occupancy lattice and makes probability lattice, through the generator loop
     writes & saves files, no returns
@@ -186,7 +196,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFil
 	alphas: np array, floats; array of alpha1=alpha2=alpha3=alpha4 for dirichlet distribution
 	saveFile: h5 object; this is the file we are going to be saving data to
 	"""
-    for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
+    for t, occ in evolve2DDirichlet(occupancy, tMax, tMax, startT):
         if t in ts:
             # Copy the num.h5 file to tempnum.h5
             print(f"creating temp file {tempFileName} at t = {t}")
@@ -236,7 +246,8 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
 	"""
 
     # setup random distribution
-    func = getRandomDistribution(distName, params)
+    np.random.seed(42)
+    # func = getRandomDistribution(distName, params)
     ts = np.array(ts)
     velocities = np.array(velocities)
     tMax = max(ts) + 1  # the +1 is there for a range issue
@@ -256,26 +267,27 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         if 'regimes' not in saveFile.keys():
             saveFile.create_group("regimes")
             for regime in regimes:
-                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.quad,track_order=True)
+                saveFile['regimes'].create_dataset(regime.__name__, shape=(len(ts), len(velocities)),dtype=np.float64,track_order=True)
                 saveFile['regimes'][regime.__name__].attrs['radii'] = calculateRadii(ts, velocities, regime)
             # initialize occupancy
             occ = np.zeros((2 * L + 1, 2 * L + 1))
             occ[L, L] = 1
             mostRecentTime = 1
-            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.quad)
+            saveFile.create_dataset('currentOccupancy', data=occ, compression='gzip',dtype=np.float64)
             saveFile.attrs['currentOccupancyTime'] = mostRecentTime
         # Load save if occupancy is already saved; Extract time and occupancy from h5
         mostRecentTime = saveFile.attrs['currentOccupancyTime']
         occ = saveFile['currentOccupancy'][:]
 
     # actually run and save data, passing in occ and time and stuff
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, saveFileName, tempFileName)
 
     # Once finished, create a final file which does not contain the occupancy
-    print("Copying working to final (and deleting occ from final")
+    # print("Copying working to final (and deleting occ from final")
+    print("Copying working to final, and saving occ from final (for debugging)")
     shutil.copy(saveFileName, finalFileName)
-    with h5py.File(finalFileName, 'r+') as finalFile:
-        del finalFile['currentOccupancy']
+    # with h5py.File(finalFileName, 'r+') as finalFile:
+    #     del finalFile['currentOccupancy']
     print('deleting working')
     os.remove(saveFileName)
 

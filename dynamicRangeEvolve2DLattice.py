@@ -2,10 +2,8 @@ import numpy as np
 import os
 from time import time as wallTime
 from numba import njit
-from randNumberGeneration import getRandomDistribution
 import json
 from datetime import date
-import h5py
 import sys
 import shutil
 
@@ -16,7 +14,9 @@ import shutil
 # dynamic range. we store the occupancy in the form of log(occ).
 # this is to avoid quads and c++
 # note: we are doing a minimal version with the most specific posibile choices of RWRE
+# also keep the idea in mind that the functions should have as minimal interface as possible? (pass in the least amount of info possible)
 
+@njit
 def moveProbabilityFromSite(logP, i, j, biases):
     """ procedure to move probability from site i,j to its nearest neighbor sites, stored as logP, using biases"""
     # iterate over direcitons
@@ -35,6 +35,8 @@ def moveProbabilityFromSite(logP, i, j, biases):
     logP[i, j] = -np.inf
     return  # return tells it when the proecedure is done
 
+
+@njit
 def updateLogOccupancy(logP, time):
     """
     update occupancy (stored as logP) from time t-1 to time t using precision scheme from DPRM
@@ -42,20 +44,21 @@ def updateLogOccupancy(logP, time):
     time: int, time at which occupancy is being updated to
     """
     L = logP.shape[0] // 2
-    if time < (L-1):  # shrinkwrap array scan
+    if time < (L - 1):  # shrinkwrap array scan
         start = L - time  # if t = 9999, 10000 - 9999 = 1
         end = L + time  # if t= 09999, 10000 + 9999 = 19999
     else:  # start at 1 and end at 2L to preserve final square as absorbing boundary
         start = 1
-        end = logP.shape[0] - 1 # the last index is 2L-1 (the absorbing boundary) and setting the end will stop the range 1 before that
+        end = logP.shape[0] - 1  # the last index is 2L-1 (the absorbing boundary) and setting the end will stop the range 1 before that
     # iterate over current state of the array, only occupied sites
     for i in range(start, end):
         for j in range(start, end):
             if (i + j + time) % 2 == 1:
-                biases = np.random.dirichlet([1]*4)  # draw set of biases for site i,j to move
+                biases = np.random.dirichlet([1] * 4)  # draw set of biases for site i,j to move
                 # update logP arary using precision scheme for each direction
                 moveProbabilityFromSite(logP, i, j, biases)
     return logP
+
 
 def logOccupancyGenerator(logOccupancy, maxT, startT=1):
     """ generator for updateLogOccupancy to evolve in time"""
@@ -63,33 +66,39 @@ def logOccupancyGenerator(logOccupancy, maxT, startT=1):
         logOccupancy = updateLogOccupancy(logOccupancy, t)
         yield t, logOccupancy
 
+
+@njit
 def sumLogList(logArray):
     """ implements DPRM precision scheme for adding small numbers, given a 1d array of numbers (stored as logP) to be addeed"""
     # return logList[bigIndex] + np.sum(exp(logList - logList[bigIndex))
     bigIndex = np.argmax(logArray)
-    return logArray[bigIndex] + np.log( np.sum( np.exp(logArray - logArray[bigIndex] ) ) )
+    return logArray[bigIndex] + np.log(np.sum(np.exp(logArray - logArray[bigIndex])))
 
+
+@njit
 def sumOctantLog(logOccupancy, i, j):
     """ given an array of logP values (logOccupancy), using site (i,j) find all the octant symmetries and sum them """
     L = logOccupancy.shape[0] // 2
     # Origin i == j == L
     if (i == L) and (j == L):
-        print('Origin')
-        return logOccupancy[i,j]
+        return logOccupancy[i, j]
     # Diagonal i == j
     elif (i == j):
-        print('Diagonal')
-        return sumLogList(np.array([logOccupancy[i,j], logOccupancy[i,2*L-j], logOccupancy[2*L-i,2*L-j], logOccupancy[2*L-i,j]]))
+        return sumLogList(np.array([logOccupancy[i, j], logOccupancy[i, 2 * L - j], logOccupancy[2 * L - i, 2 * L - j],
+                                    logOccupancy[2 * L - i, j]]))
     # Cardinal i == L
     elif (i == L):
-        print('Cardinal')
-        return sumLogList(np.array([logOccupancy[j,L], logOccupancy[2*L-j,L], logOccupancy[L,j], logOccupancy[L,2*L-j]]))
+        return sumLogList(
+            np.array([logOccupancy[j, L], logOccupancy[2 * L - j, L], logOccupancy[L, j], logOccupancy[L, 2 * L - j]]))
     # General
     else:
-        print('General')
-        return sumLogList(np.array([logOccupancy[i,j], logOccupancy[i,2*L-j], logOccupancy[2*L-i,2*L-j], logOccupancy[2*L-i,j],
-                                    logOccupancy[j,i], logOccupancy[2*L-j,i], logOccupancy[2*L-j,2*L-i], logOccupancy[j,2*L-i]]))
+        return sumLogList(np.array([logOccupancy[i, j], logOccupancy[i, 2 * L - j], logOccupancy[2 * L - i, 2 * L - j],
+                                    logOccupancy[2 * L - i, j],
+                                    logOccupancy[j, i], logOccupancy[2 * L - j, i], logOccupancy[2 * L - j, 2 * L - i],
+                                    logOccupancy[j, 2 * L - i]]))
 
+
+@njit
 def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
     """
     given a logOccupancy at a time, meeasure the sum of probabilities past a
@@ -108,7 +117,7 @@ def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
     # setup/initialization
     cumLogProbList = np.full_like(radiiListSq, -np.inf)
     L = logOccupancy.shape[0] // 2
-    if time < (L-1):  # shrinkwrap array scan; end val. only needed for one octant
+    if time < (L - 1):  # shrinkwrap array scan; end val. only needed for one octant
         end = L + time  # if t= 09999, 10000 + 9999 = 19999
     else:  # for the measurement we WANT the absorbing boundary, so no -1
         end = logOccupancy.shape[0]
@@ -117,18 +126,107 @@ def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
     for i in range(L, end):
         for j in range(i, end):
             # Only look at occupied sites, which we can check by looking for finite vals
-            if np.isfinite(logOccupancy[i,j]):
-                distSq = (i-L)**2 + (j-L)**2
+            if np.isfinite(logOccupancy[i, j]):
+                distSq = (i - L) ** 2 + (j - L) ** 2
                 # compute the sum of every point along the circle given by (i,j)?
                 # this works because of circular symmetry
                 sumRepeats = sumOctantLog(logOccupancy, i, j)  # this function contains the octant logic
-                print(i, j, logOccupancy[i, j], sumRepeats)
+                # print(i, j, logOccupancy[i, j], sumRepeats)
                 # now build up cumulative sum as each measurement r gets bigger and bigger
                 for index, rSq in enumerate(radiiListSq):
                     # if the site i,j is greater than the r_measurement, add it to that corresponding index
                     # in cumLogProbList
                     if distSq >= rSq:
-                        print("distSq, rSq",distSq, rSq)
+                        # print("distSq, rSq", distSq, rSq)
                         cumLogProbList[index] = sumLogList(np.array([sumRepeats, cumLogProbList[index]]))
     return cumLogProbList
 
+
+def saveLogOccupancy(logOcc, time, logOccFileName):
+    """"
+    process to save the logOcc array at time t using npz compressed
+    note: on talapas, the filename should be /scratch/jamming/...etc../sysid/occupancy ? (.npz gets added autmatically)
+    """
+    np.savez_compressed(logOccFileName, logOcc=logOcc, time=time)
+    return
+
+
+def loadLogOcccupancy(logOccFileName):
+    """ return a time and LogOcc so that evolution is restartable """
+    temp = np.load(logOccFileName)  # keys should be logOcc, time
+    return int(temp['time']), temp['logOcc']
+
+
+def saveCumLogProb(cumLogProb, cumLogProbFileName):
+    """ process to save the cumulative logProb measurements """
+    np.save(cumLogProbFileName, cumLogProb)
+    return
+
+
+def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, rSqArray, times, startT=1, saveInterval=3):
+    """
+    process
+    given array of logOccupancy (occupancy stored as logOcc vals) and list of times t and list of measurement radii rSqList
+    return cumulative logProb array of shape (num of times, num of radii)
+    saves every "saveInterval" hours
+    """
+    # return an array of cumLogProbList which is an unstructured array
+    # that corresponds to r's and t's
+    startWallTime = wallTime()
+    seconds = saveInterval * 3600  # num of seconds in saveInterval (hours)
+    if np.any(times < 1):  # never encounter t<1.
+        raise ValueError("t < 1 included in list of times.")
+    for t, occ in logOccupancyGenerator(logOcc, max(times)+1, startT=startT):  # time evolve using the generator
+        # if at a measurement time
+        if t in times:
+            print(t)
+            tIndex = np.where(times == t)[0][0]
+            # grab radii that correspond to that time, should be a 1d slice
+            radiiAtTimeT = rSqArray[tIndex, :]
+            # do the measurement using measureProbabilityPastCircle
+            cumLogProbList.append(measureProbabilityPastCircle(logOcc, radiiAtTimeT, t))
+        if (wallTime() - startWallTime >= seconds):  # save every 3 hours or at final time
+            saveLogOccupancy(logOcc, t, logOccFileName)  # save occupancy
+            # TODO: also save measurements past circle (cumLogProbList)
+            # but maybe I want to pre-allocate the memory so that at each time it doesn't keep growing?
+            saveCumLogProb(cumLogProbFileName, cumLogProbList)
+    # shape: (num of times, num of radii)
+    print(f"run time: {wallTime() - startWallTime}")
+    # Save the measurement and delete the occupancy
+    saveCumLogProb(cumLogProbFileName, cumLogProbList)
+    os.remove(logOccFileName)
+    print("finished evolving! saved final cumulative probability list, deleted final occupancy")
+    return
+
+
+def runSystem(L, velocities, tMax, topDir, sysID):
+    """
+    initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
+    """
+    # largest = np.max([L, sysID, tMax])  # in case we want reproducible random numbers
+    # we start 1 to tmax instead of 0 to tmax-1
+    times = np.unique(np.geomspace(1, tMax,num=500).astype(int))
+    # hard-code in the linearly scaled radii
+    radiiSqArray = (velocities * np.expand_dims(times,1))**2
+
+    # assumes topDir is /projects/jamming/fransces/data/...etc.../
+    cumLogProbFileName = os.path.join(topDir,f"{sysID}.npy")
+    logOccFileName = cumLogProbFileName.replace("projects","scratch")  # no sub-dirctory for sys/id. because npz
+
+    # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
+    if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
+        # if logOcc File exists
+        temp = np.load(logOccFileName)
+        logOcc = temp['logOcc']
+        currentTime = int(temp['time'])  # otherwise outputs array(t) or something weird.
+        cumLogProbList = np.load(cumLogProbFileName)
+        # Reload state of random number generator ?
+    else:  # initialize from t = 0
+        # seed = L * largest ** 2 + tMax * largest + sysID
+        cumLogProbList = []
+        logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
+        logOcc[L, L] = np.log(1)  # 0
+        currentTime = times[0]
+    # run evolution and saving
+    evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times, startT=currentTime, saveInterval=3)
+    return  # end of runSystem process
