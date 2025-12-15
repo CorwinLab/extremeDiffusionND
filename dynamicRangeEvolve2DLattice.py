@@ -17,12 +17,13 @@ import shutil
 # also keep the idea in mind that the functions should have as minimal interface as possible? (pass in the least amount of info possible)
 
 @njit
-def moveProbabilityFromSite(logP, i, j, biases):
+def moveProbabilityFromSite(logP, i, j, logBiases):
     """ procedure to move probability from site i,j to its nearest neighbor sites, stored as logP, using biases"""
     # iterate over direcitons
     directions = [(i, j - 1), (i + 1, j), (i - 1, j), (i, j + 1)]
     for index, direction in enumerate(directions):
-        logTransitionProb = np.log(biases[index]) + logP[i, j]  # ln(xi*p) = ln(xi) + ln(p)
+        # logTransitionProb = np.log(biases[index]) + logP[i, j]  # ln(xi*p) = ln(xi) + ln(p)
+        logTransitionProb = logBiases[index] + logP[i, j]
         # if the adjcent site is unoccupied (filled with -infs)
         if np.isneginf(logP[direction]):
             # update the unoccupied adjacent site with (ln(xi) + ln(P[i,j])
@@ -51,19 +52,24 @@ def updateLogOccupancy(logP, time):
         start = 1
         end = logP.shape[0] - 1  # the last index is 2L-1 (the absorbing boundary) and setting the end will stop the range 1 before that
     # iterate over current state of the array, only occupied sites
+    logBiasesAll = np.log(np.random.dirichlet([1]*4,size=(end-start+1,end-start+1)))
     for i in range(start, end):
         for j in range(start, end):
             if (i + j + time) % 2 == 1:
-                biases = np.random.dirichlet([1] * 4)  # draw set of biases for site i,j to move
+                # logBiases = np.log(np.random.dirichlet([1]*4))  # logBiases
+                logBiases = logBiasesAll[i-start,j-start,:]  # pull out the set of 4 logBiases for site i,j
                 # update logP arary using precision scheme for each direction
-                moveProbabilityFromSite(logP, i, j, biases)
+                moveProbabilityFromSite(logP, i, j, logBiases)
     return logP
 
 
 def logOccupancyGenerator(logOccupancy, maxT, startT=1):
     """ generator for updateLogOccupancy to evolve in time"""
+    print("outisde loop generation")
     for t in range(startT, maxT):
+        startWallTime = wallTime()
         logOccupancy = updateLogOccupancy(logOccupancy, t)
+        print(f"{wallTime() - startWallTime}")
         yield t, logOccupancy
 
 
@@ -142,7 +148,7 @@ def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
     return cumLogProbList
 
 
-def saveLogOccupancy(logOcc, time, logOccFileName):
+def saveLogOccupancy(logOccFileName, logOcc, time):
     """"
     process to save the logOcc array at time t using npz compressed
     note: on talapas, the filename should be /scratch/jamming/...etc../sysid/occupancy ? (.npz gets added autmatically)
@@ -157,7 +163,7 @@ def loadLogOcccupancy(logOccFileName):
     return int(temp['time']), temp['logOcc']
 
 
-def saveCumLogProb(cumLogProb, cumLogProbFileName):
+def saveCumLogProb(cumLogProbFileName, cumLogProb):
     """ process to save the cumulative logProb measurements """
     np.save(cumLogProbFileName, cumLogProb)
     return
@@ -186,15 +192,14 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc,
             # do the measurement using measureProbabilityPastCircle
             cumLogProbList.append(measureProbabilityPastCircle(logOcc, radiiAtTimeT, t))
         if (wallTime() - startWallTime >= seconds):  # save every 3 hours or at final time
-            saveLogOccupancy(logOcc, t, logOccFileName)  # save occupancy
-            # TODO: also save measurements past circle (cumLogProbList)
-            # but maybe I want to pre-allocate the memory so that at each time it doesn't keep growing?
-            saveCumLogProb(cumLogProbFileName, cumLogProbList)
+            saveLogOccupancy(logOccFileName, logOcc, t)  # save occupancy
+            saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))
     # shape: (num of times, num of radii)
     print(f"run time: {wallTime() - startWallTime}")
     # Save the measurement and delete the occupancy
-    saveCumLogProb(cumLogProbFileName, cumLogProbList)
-    os.remove(logOccFileName)
+    saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))
+    if os.path.exists(logOccFileName):
+        os.remove(logOccFileName)
     print("finished evolving! saved final cumulative probability list, deleted final occupancy")
     return
 
@@ -211,15 +216,24 @@ def runSystem(L, velocities, tMax, topDir, sysID):
 
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir,f"{sysID}.npy")
-    logOccFileName = cumLogProbFileName.replace("projects","scratch")  # no sub-dirctory for sys/id. because npz
+    print(f"cumLogProbFileName: {cumLogProbFileName}")
+    # TODO: put back in the talapas naming once done testing
+    # occTopDir = topDir.replace("projects","scratch")
+    # logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    logOccFileName = os.path.join(topDir,f"Occupancy{sysID}.npz")
+    print(f"logOccFileName: {logOccFileName}")
+    # logOccFileName = cumLogProbFileName.replace("projects","scratch")  # no sub-dirctory for sys/id. because npz
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
     if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
+        print("existing logOcc")
         # if logOcc File exists
-        temp = np.load(logOccFileName)
-        logOcc = temp['logOcc']
-        currentTime = int(temp['time'])  # otherwise outputs array(t) or something weird.
-        cumLogProbList = np.load(cumLogProbFileName)
+        currentTime, logOcc = loadLogOcccupancy(logOccFileName)
+        print(f"loading from {currentTime}")
+        # temp = np.load(logOccFileName)
+        # logOcc = temp['logOcc']
+        # currentTime = int(temp['time'])  # otherwise outputs array(t) or something weird.
+        cumLogProbList = list(np.load(cumLogProbFileName))
         # Reload state of random number generator ?
     else:  # initialize from t = 0
         # seed = L * largest ** 2 + tMax * largest + sysID
@@ -228,5 +242,17 @@ def runSystem(L, velocities, tMax, topDir, sysID):
         logOcc[L, L] = np.log(1)  # 0
         currentTime = times[0]
     # run evolution and saving
-    evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times, startT=currentTime, saveInterval=3)
+    evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times, startT=currentTime, saveInterval=1/60)
     return  # end of runSystem process
+
+
+def saveVars(variables, save_file):
+    """
+    Procedure to save experiment variables to a file along with date it was ran
+    """
+    for key, item in variables.items():
+        if isinstance(item, np.ndarray):
+            variables[key] = item.tolist()
+    with open(save_file, "w+") as file:
+        json.dump(variables, file)
+    return
