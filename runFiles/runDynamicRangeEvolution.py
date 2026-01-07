@@ -26,6 +26,7 @@ if __name__ == "__main__":
     os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
+    print(f"vars: {vars}")
     today = date.today()
     text_date = today.strftime("%b-%d-%Y")
 

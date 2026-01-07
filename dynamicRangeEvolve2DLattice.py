@@ -200,6 +200,7 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc,
         if (wallTime() - startWallTime >= seconds):  # save every 3 hours
             saveLogOccupancy(logOccFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
+            print(f"saved logOcc file and cumulativeLogProb array at time {t}")
     # shape: (num of times, num of radii)
     print(f"run time: {wallTime() - startWallTime}")
     # Save the measurement and delete the occupancy after evolution
