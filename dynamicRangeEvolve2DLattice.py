@@ -223,9 +223,11 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}")
-    # occupancy file goes into the scratch directory
-    occTopDir = topDir.replace("projects", "scratch")
-    logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    # # occupancy file goes into the scratch directory
+    # occTopDir = topDir.replace("projects", "scratch")
+    # logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    # occupancy naming for debugging
+    logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
