@@ -239,6 +239,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
     if os.path.exists(finalCumLogProbFileName):  # if cumLogProb file exists and is final
+        print("finalCumLogProbFileName exists, evoultion already complete. exiting")
         return
     else:
         if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
