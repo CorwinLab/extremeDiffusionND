@@ -10,7 +10,7 @@ if __name__ == "__main__":
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
-    saveInterval = int(sys.argv[5])  # in hours
+    saveInterval = float(sys.argv[5])  # in hours
     # velocities we're interested in are
     velocities = np.concatenate(
         (np.linspace(0.1, 0.6, 11),
