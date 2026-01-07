@@ -21,7 +21,7 @@ if __name__ == "__main__":
             'velocities': velocities,
             'tMax': tMax,
             'topDir': topDirectory,
-            'sysID': sysID
+            'sysID': sysID,
             'saveInterval': saveInterval}
     print(f"vars: {vars}")
     os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
