@@ -175,7 +175,7 @@ def saveCumLogProb(cumLogProbFileName, cumLogProb):
     return
 
 
-def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, rSqArray, times,
+def evolveAndMeasure(logOccFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, rSqArray, times,
                      saveInterval, startT=1,):
     """
     process
@@ -204,17 +204,21 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc,
     # shape: (num of times, num of radii)
     print(f"run time: {wallTime() - startWallTime}")
     # Save the measurement and delete the occupancy after evolution
-    saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))
+    saveCumLogProb(finalCumLogProbFileName, np.array(cumLogProbList))
     print("finished evolving! saved final cumulative probability list")
     if os.path.exists(logOccFileName):
         os.remove(logOccFileName)
-    print("deleted final occupancy")
+    if os.path.exists(cumLogProbFileName):
+        os.remove(cumLogProbFileName)
+    print("deleted final occupancy and intermediate cumLogProb file")
     return
 
 
 def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     """
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
+
+    NOTE: if a file is completed (thus has
     """
     # largest = np.max([L, sysID, tMax])  # in case we want reproducible random numbers
     # we start 1 to tmax instead of 0 to tmax-1
@@ -224,33 +228,36 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
 
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
+    finalCumLogProbFileName = "Final"+cumLogProbFileName
     print(f"cumLogProbFileName: {cumLogProbFileName}")
     # occupancy file goes into the scratch directory
     occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
-    # # occupancy naming for debugging
     # logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
-    if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
-        print("existing logOcc")
-        # if logOcc File exists
-        currentTime, logOcc = loadLogOcccupancy(logOccFileName)
-        print(f"loaded from {currentTime}")
-        cumLogProbList = list(np.load(cumLogProbFileName))
-        # Reload state of random number generator ? if we want reproducible random numbers
-    else:  # initialize from t = 0 (where all prob. at origin)
-        # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
-        cumLogProbList = []
-        logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
-        logOcc[L, L] = np.log(1)  # 0
-        currentTime = times[0]
-    # run evolution and saving
-    evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times,
+    if os.path.exists(finalCumLogProbFileName):  # if cumLogProb file exists and is final
+        return
+    else:
+        if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
+            print("existing logOcc")
+            # if logOcc File exists
+            currentTime, logOcc = loadLogOcccupancy(logOccFileName)
+            print(f"loaded from {currentTime}")
+            cumLogProbList = list(np.load(cumLogProbFileName))
+            # Reload state of random number generator ? if we want reproducible random numbers
+        else:  # initialize from t = 0 (where all prob. at origin)
+            # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
+            cumLogProbList = []
+            logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
+            logOcc[L, L] = np.log(1)  # 0
+            currentTime = times[0]
+        # run evolution and saving
+        evolveAndMeasure(logOccFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times,
                      saveInterval=saveInterval, startT=currentTime)
-    return  # end of runSystem process
+        return  # end of runSystem process
 
 
 def saveVars(variables, save_file):
