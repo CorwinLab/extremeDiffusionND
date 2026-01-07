@@ -191,7 +191,7 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc,
         raise ValueError("t < 1 included in list of times.")
     for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT):  # time evolve using the generator
         if t in times:  # if at a measurement time
-            print(t)
+            # print(t)
             tIndex = np.where(times == t)[0][0]
             # grab radii that correspond to that time, should be a 1d slice
             radiiAtTimeT = rSqArray[tIndex, :]
@@ -204,9 +204,10 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, cumLogProbList, logOcc,
     print(f"run time: {wallTime() - startWallTime}")
     # Save the measurement and delete the occupancy after evolution
     saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))
+    print("finished evolving! saved final cumulative probability list")
     if os.path.exists(logOccFileName):
         os.remove(logOccFileName)
-    print("finished evolving! saved final cumulative probability list, deleted final occupancy")
+    print("deleted final occupancy")
     return
 
 
@@ -223,11 +224,11 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}")
-    # # occupancy file goes into the scratch directory
-    # occTopDir = topDir.replace("projects", "scratch")
-    # logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
-    # occupancy naming for debugging
-    logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
+    # occupancy file goes into the scratch directory
+    occTopDir = topDir.replace("projects", "scratch")
+    logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    # # occupancy naming for debugging
+    # logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
