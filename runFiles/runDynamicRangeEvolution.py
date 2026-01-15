@@ -11,13 +11,14 @@ if __name__ == "__main__":
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
     saveInterval = float(sys.argv[5])  # in hours
+    print(f"sysID: {sysID}")
     # velocities we're interested in are
     velocities = np.concatenate(
         (np.linspace(0.1, 0.6, 11),
          np.linspace(0.61, 0.99,39),
          np.linspace(0.991, 1, 10)))
 
-    vars = {'L': L,
+    variables = {'L': L,
             'velocities': velocities,
             'tMax': tMax,
             'topDir': topDirectory,
@@ -26,16 +27,16 @@ if __name__ == "__main__":
     os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
-    print(f"vars: {vars}")
+    print(f"vars: {variables}")
     today = date.today()
     text_date = today.strftime("%b-%d-%Y")
 
     # Only save the variables file if on the first system
     if sysID == 0:
         print(f"systID is {sysID}")
-        vars.update({"Date": text_date})
-        print(f"vars: {vars}")
-        saveVars(vars, vars_file)
-        vars.pop("Date")
+        variables.update({"Date": text_date})
+        print(f"vars: {variables}")
+        saveVars(variables, vars_file)
+        variables.pop("Date")
 
-    runSystem(**vars)
+    runSystem(**variables)
