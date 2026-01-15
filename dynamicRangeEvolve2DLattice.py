@@ -259,6 +259,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
                 print('loading from old npz format')
                 temp = np.load(logOccFileName)
                 currentTime, logOcc = temp["time"], temp["logOcc"]
+                cumLogProbList = list(np.load(cumLogProbFileName))
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []
