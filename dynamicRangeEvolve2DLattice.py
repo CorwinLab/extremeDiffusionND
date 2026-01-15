@@ -154,19 +154,21 @@ def measureProbabilityPastCircle(logOccupancy, radiiListSq, time):
     return cumLogProbList
 
 
-def saveLogOccupancy(logOccFileName, logOcc, time):
+def saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, time):
     """"
     process to save the logOcc array at time t using npz compressed
     note: on talapas, the filename should be /scratch/jamming/...etc../sysid/occupancy ? (.npz gets added autmatically)
     """
-    np.savez(logOccFileName, logOcc=logOcc, time=time)
+    np.save(logOccFileName, logOcc)
+    np.save(logOccTimeFileName, time)
     return
 
 
-def loadLogOcccupancy(logOccFileName):
+def loadLogOcccupancy(logOccFileName, logOccTimeFileName):
     """ return a time and LogOcc so that evolution is restartable """
-    temp = np.load(logOccFileName)  # keys should be logOcc, time
-    return int(temp['time']), temp['logOcc']
+    logOcc = np.load(logOccFileName)
+    time = np.load(logOccTimeFileName)
+    return time, logOcc
 
 
 def saveCumLogProb(cumLogProbFileName, cumLogProb):
@@ -175,7 +177,7 @@ def saveCumLogProb(cumLogProbFileName, cumLogProb):
     return
 
 
-def evolveAndMeasure(logOccFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, rSqArray, times,
+def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, rSqArray, times,
                      saveInterval, startT=1,):
     """
     process
@@ -198,7 +200,7 @@ def evolveAndMeasure(logOccFileName, cumLogProbFileName, finalCumLogProbFileName
             # do the measurement using measureProbabilityPastCircle
             cumLogProbList.append(measureProbabilityPastCircle(logOcc, radiiAtTimeT, t))
         if (wallTime() - startWallTime >= seconds):  # save every 3 hours
-            saveLogOccupancy(logOccFileName, logOcc, t)  # save occupancy
+            saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
             print(f"saved logOcc file and cumulativeLogProb array at time {t}")
     # shape: (num of times, num of radii)
@@ -235,6 +237,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
     # logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
 
@@ -246,7 +249,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
         if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):  # continue evolution
             print("existing logOcc")
             # if logOcc File exists
-            currentTime, logOcc = loadLogOcccupancy(logOccFileName)
+            currentTime, logOcc = loadLogOcccupancy(logOccFileName, logOccTimeFileName)
             print(f"loaded from {currentTime}")
             cumLogProbList = list(np.load(cumLogProbFileName))
             # Reload state of random number generator ? if we want reproducible random numbers
@@ -257,7 +260,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
             logOcc[L, L] = np.log(1)  # 0
             currentTime = times[0]
         # run evolution and saving
-        evolveAndMeasure(logOccFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times,
+        evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times,
                      saveInterval=saveInterval, startT=currentTime)
         return  # end of runSystem process
 
