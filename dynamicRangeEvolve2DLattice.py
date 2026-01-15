@@ -246,13 +246,19 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
         print("finalCumLogProbFileName exists, evoultion already complete. exiting")
         return
     else:  # otherwise evolve
-        if os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):  # continue evolution
+        if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(cumLogProbFileName):  # continue evolution
             print("existing logOcc")
             # if logOcc File exists
             currentTime, logOcc = loadLogOcccupancy(logOccFileName, logOccTimeFileName)
             print(f"loaded from {currentTime}")
             cumLogProbList = list(np.load(cumLogProbFileName))
             # Reload state of random number generator ? if we want reproducible random numbers
+        elif os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
+            # this is solely to deal with the fact that i restarted code that previously used the npz file save format
+            if logOccFileName.endswith(".npz"):
+                print('loading from old npz format')
+                temp = np.load(logOccFileName)
+                currentTime, logOcc = temp["time"], temp["logOcc"]
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []
