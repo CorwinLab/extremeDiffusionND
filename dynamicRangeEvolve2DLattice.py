@@ -159,7 +159,7 @@ def saveLogOccupancy(logOccFileName, logOcc, time):
     process to save the logOcc array at time t using npz compressed
     note: on talapas, the filename should be /scratch/jamming/...etc../sysid/occupancy ? (.npz gets added autmatically)
     """
-    np.savez_compressed(logOccFileName, logOcc=logOcc, time=time)
+    np.savez(logOccFileName, logOcc=logOcc, time=time)
     return
 
 
