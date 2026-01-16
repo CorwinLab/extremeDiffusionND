@@ -236,7 +236,7 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     # occupancy file goes into the scratch directory
     occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
-    logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npz")
+    logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npy")
     logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
     # logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
