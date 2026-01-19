@@ -3,6 +3,7 @@ import os
 from time import time as wallTime
 from numba import njit
 import json
+import tracemalloc
 from datetime import date
 import sys
 import shutil
@@ -178,7 +179,7 @@ def saveCumLogProb(cumLogProbFileName, cumLogProb):
 
 
 def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, rSqArray, times,
-                     saveInterval, startT=1,):
+                     saveInterval, startT=1):
     """
     process
     given array of logOccupancy (occupancy stored as logOcc vals) and list of times t and list of measurement radii rSqList
@@ -188,6 +189,8 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     # return an array of cumLogProbList which is an unstructured array
     # that corresponds to r's and t's
     startWallTime = wallTime()
+    tracemalloc.start()
+    snapshots = []
     seconds = saveInterval * 3600  # num of seconds in saveInterval (hours)
     if np.any(times < 1):  # never encounter t < 1.
         raise ValueError("t < 1 included in list of times.")
@@ -202,7 +205,9 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
         if (wallTime() - startWallTime >= seconds):  # save every 3 hours
             saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
+            snapshots.append(tracemalloc.take_snapshot())
             print(f"saved logOcc file and cumulativeLogProb array at time {t}")
+            startWallTime = wallTime()  # reset timer
     # shape: (num of times, num of radii)
     print(f"run time: {wallTime() - startWallTime}")
     # Save the measurement and delete the occupancy after evolution
@@ -213,7 +218,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     if os.path.exists(cumLogProbFileName):
         os.remove(cumLogProbFileName)
     print("deleted final occupancy and intermediate cumLogProb file")
-    return
+    return snapshots
 
 
 def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
