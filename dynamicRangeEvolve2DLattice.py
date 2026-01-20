@@ -190,7 +190,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     # that corresponds to r's and t's
     startWallTime = wallTime()
     tracemalloc.start()
-    snapshots = []
+    # snapshots = []
     if np.any(times < 1):  # never encounter t < 1.
         raise ValueError("t < 1 included in list of times.")
     for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT):  # time evolve using the generator
@@ -205,19 +205,23 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
             startWallTime = wallTime()  # reset timer once checked
             saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
-            snapshots.append(tracemalloc.take_snapshot())
-            print(f"snapshot: {snapshots[-1]}")
+            size,peak = tracemalloc.get_traced_memory()
+            print(f"t: {t}, size, peak: {size}, {peak} ")
+            tracemalloc.reset_peak()
+            # snapshots.append(tracemalloc.take_snapshot())
+            # print(f"snapshot: {snapshots[-1]}")
             print(f"saved logOcc file and cumulativeLogProb array at time {t}")
     # shape: (num of times, num of radii)
     # Save the measurement and delete the occupancy after evolution
     saveCumLogProb(finalCumLogProbFileName, np.array(cumLogProbList))
     print("finished evolving! saved final cumulative probability list")
-    if os.path.exists(logOccFileName):
+    if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
         os.remove(logOccFileName)
-    if os.path.exists(logOccTimeFileName):
         os.remove(logOccTimeFileName)
+    if os.path.exists(cumLogProbFileName):
+        os.remove(cumLogProbFileName)
     print("deleted final occupancy and intermediate cumLogProb file")
-    return snapshots
+    return
 
 
 def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
