@@ -215,8 +215,8 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     print("finished evolving! saved final cumulative probability list")
     if os.path.exists(logOccFileName):
         os.remove(logOccFileName)
-    if os.path.exists(cumLogProbFileName):
-        os.remove(cumLogProbFileName)
+    if os.path.exists(logOccTimeFileName):
+        os.remove(logOccTimeFileName)
     print("deleted final occupancy and intermediate cumLogProb file")
     return snapshots
 
