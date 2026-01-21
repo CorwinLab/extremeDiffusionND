@@ -58,15 +58,16 @@ def updateLogOccupancy(logP, time):
         end = logP.shape[
                   0] - 1  # the last index is 2L-1 (the absorbing boundary) and setting the end will stop the range 1 before that
     # pre-generating the (log) biases for our shrinkwrapped, checkerboarded sub-area
-    logBiasesAll = np.log(
-        np.random.dirichlet([1] * 4,
-                            size=(((end - start + 1) // 2), ((end - start + 1) // 2))))
+    # logBiasesAll = np.log(
+    #     np.random.dirichlet([1] * 4,
+    #                         size=(((end - start + 1) // 2), ((end - start + 1) // 2))))
     # iterate over current state of the array, only occupied sites
     for i in range(start, end):
         for j in range(start, end):
             if (i + j + time) % 2 == 1:
-                logBiases = logBiasesAll[
-                    (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
+                logBiases = np.log(np.random.dirichlet([1]*4))
+                # logBiases = logBiasesAll[
+                #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
                 # update logP arary using precision scheme for each direction
                 moveProbabilityFromSite(logP, i, j, logBiases)
     return logP
