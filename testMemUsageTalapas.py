@@ -4,7 +4,7 @@ import dynamicRangeEvolve2DLattice as d
 if __name__ == "__main__":
     L = 10000
     tMax = 10000
-    startT = 9000
+    startT = 9990
     #logOcc = np.full((2*L+1, 2*L+1), -np.inf)
     #logOcc[11000:19000, 11000:19000] = np.random.rand(18000,18000)
     logOccFileName = "/scratch/jamming/fransces/data/numbaHistograms/10000/memTest.npy"
