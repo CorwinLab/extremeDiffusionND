@@ -3,7 +3,7 @@ import os
 from time import time as wallTime
 from numba import njit
 import json
-import tracemalloc
+# import tracemalloc
 from datetime import date
 import sys
 import shutil
@@ -48,6 +48,9 @@ def updateLogOccupancy(logP, time):
     update occupancy (stored as logP) from time t-1 to time t using precision scheme from DPRM
     logP: np array (2L+1,2L+1) filled with -infs(unoccupied) and log(p) values
     time: int, time at which occupancy is being updated to
+
+    note: generating biases inside the double for loop prioritizes memory. to prioritize
+    speed, pre-generate all the biases
     """
     L = logP.shape[0] // 2
     if time < (L - 1):  # shrinkwrap array scan
@@ -166,7 +169,7 @@ def saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, time):
     return
 
 
-def loadLogOcccupancy(logOccFileName, logOccTimeFileName):
+def loadLogOcccupancyAndTime(logOccFileName, logOccTimeFileName):
     """ return a time and LogOcc so that evolution is restartable """
     logOcc = np.load(logOccFileName)
     time = np.load(logOccTimeFileName)
@@ -190,8 +193,6 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     # return an array of cumLogProbList which is an unstructured array
     # that corresponds to r's and t's
     startWallTime = wallTime()
-    tracemalloc.start()
-    # snapshots = []
     if np.any(times < 1):  # never encounter t < 1.
         raise ValueError("t < 1 included in list of times.")
     for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT):  # time evolve using the generator
@@ -206,11 +207,6 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
             startWallTime = wallTime()  # reset timer once checked
             saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
-            size,peak = tracemalloc.get_traced_memory()
-            print(f"t: {t}, size, peak: {size}, {peak} ")
-            tracemalloc.reset_peak()
-            # snapshots.append(tracemalloc.take_snapshot())
-            # print(f"snapshot: {snapshots[-1]}")
             print(f"saved logOcc file and cumulativeLogProb array at time {t}")
     # shape: (num of times, num of radii)
     # Save the measurement and delete the occupancy after evolution
@@ -219,7 +215,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
         os.remove(logOccFileName)
         os.remove(logOccTimeFileName)
-    if os.path.exists(cumLogProbFileName):
+    if os.path.exists(cumLogProbFileName) and os.path.exists(finalCumLogProbFileName):
         os.remove(cumLogProbFileName)
     print("deleted final occupancy and intermediate cumLogProb file")
     return
@@ -228,9 +224,8 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
 def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     """
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
-
-    NOTE: if a file is completed (thus has
     """
+
     # largest = np.max([L, sysID, tMax])  # in case we want reproducible random numbers
     # we start 1 to tmax instead of 0 to tmax-1
     times = np.unique(np.geomspace(1, tMax, num=500).astype(int))
@@ -240,14 +235,12 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
     finalCumLogProbFileName = os.path.join(topDir, "Final"+f"{sysID}.npy")
-    # finalCumLogProbFileName = "Final"+cumLogProbFileName
     print(f"cumLogProbFileName: {cumLogProbFileName}")
-    # occupancy file goes into the scratch directory
+    # occupancy & time files go into the scratch directory
     occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npy")
     logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
-    # logOccFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Occupancy{sysID}.npz")
     print(f"logOccFileName: {logOccFileName}")
 
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
@@ -256,19 +249,12 @@ def runSystem(L, velocities, tMax, topDir, sysID, saveInterval):
         return
     else:  # otherwise evolve
         if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(cumLogProbFileName):  # continue evolution
-            print("existing logOcc")
             # if logOcc File exists
-            currentTime, logOcc = loadLogOcccupancy(logOccFileName, logOccTimeFileName)
+            print("existing logOcc")
+            currentTime, logOcc = loadLogOcccupancyAndTime(logOccFileName, logOccTimeFileName)
             print(f"loaded from {currentTime}")
             cumLogProbList = list(np.load(cumLogProbFileName))
             # Reload state of random number generator ? if we want reproducible random numbers
-        elif os.path.exists(logOccFileName) and os.path.exists(cumLogProbFileName):
-            # this is solely to deal with the fact that i restarted code that previously used the npz file save format
-            if logOccFileName.endswith(".npz"):
-                print('loading from old npz format')
-                temp = np.load(logOccFileName)
-                currentTime, logOcc = temp["time"], temp["logOcc"]
-                cumLogProbList = list(np.load(cumLogProbFileName))
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []

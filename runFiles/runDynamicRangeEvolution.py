@@ -10,9 +10,9 @@ if __name__ == "__main__":
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
-    # saveInterval = float(sys.argv[5])  # in hours
-    saveInterval = float(1/60)  # 1 minute 
-    print(f"sysID: {sysID}")
+    saveInterval = float(sys.argv[5])  # in hours
+    # saveInterval = float(1/60)  # 1 minute
+    print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.concatenate(
         (np.linspace(0.1, 0.6, 11),
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     if sysID == 0:
         print(f"systID is {sysID}")
         variables.update({"Date": text_date})
-        print(f"vars: {variables}")
+        print(f"vars: {variables}", flush=True)
         saveVars(variables, vars_file)
         variables.pop("Date")
 
