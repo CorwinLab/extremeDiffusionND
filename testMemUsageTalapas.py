@@ -1,5 +1,5 @@
 import numpy as np
-import dynamicRangeEvolve2Dlattice as d
+import dynamicRangeEvolve2DLattice as d
 
 if __name__ == "__main__":
     L = 10000
