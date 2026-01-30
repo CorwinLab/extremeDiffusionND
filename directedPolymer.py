@@ -308,19 +308,20 @@ if __name__ == "__main__":
     # make tMax one more so that our measurements end at the input value, rather than input value-1
     tMax += 1
     beta = eval(betaString)
-
+    beta0List = np.geomspace(.1,10,9)
     s = time.time()
     with open(outFileName, 'a') as file:        
         for _ in range(numSystems):
-            measureIndex = 0
-            for logZ, t in transferMatrix2D(tMax, beta):
-                # Make measurements that are log-spaced
-                if measurementTimes[measureIndex] == t:
-                    measureIndex += 1
-                    p2Plane, p2Line, p2Point = measurePartitionFunction(logZ, t, tMax)
-                    # measurementTimes = np.delete(measurementTimes, 0)
-                    file.write(f'{t}, {p2Plane}, {p2Line}, {p2Point} \n')
-                    # print(t, time.time()-s, p2Plane, p2Line, p2Point)
+            for beta0 in beta0List:
+                measureIndex = 0
+                for logZ, t in transferMatrix2D(tMax, beta0*beta):
+                    # Make measurements that are log-spaced
+                    if measurementTimes[measureIndex] == t:
+                        measureIndex += 1
+                        p2Plane, p2Line, p2Point = measurePartitionFunction(logZ, t, tMax)
+                        # measurementTimes = np.delete(measurementTimes, 0)
+                        file.write(f'{t}, {beta0}, {p2Plane}, {p2Line}, {p2Point} \n')
+                        # print(t, time.time()-s, p2Plane, p2Line, p2Point)
 
 
     # print(logScaling)
