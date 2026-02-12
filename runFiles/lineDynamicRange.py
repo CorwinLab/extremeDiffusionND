@@ -16,15 +16,15 @@ if __name__ == "__main__":
     # velocities we're interested in are
     velocities = np.geomspace(1e-2, 3)  # 50 of these???
 
-    variables = {'L': L,
-            'velocities': velocities,
-            'tMax': tMax,
-            'topDir': topDirectory,
-            'sysID': sysID,
-            'saveInterval': saveInterval}
     # .../$TMAX/LINE/0.npy for past a line or .../L$L/LINE/Final0.npy
     newTopDir = os.path.join(topDirectory, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/    os.makedirs(newTopDir, exist_ok=True)
     os.makedirs(newTopDir, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
+    variables = {'L': L,
+            'velocities': velocities,
+            'tMax': tMax,
+            'topDir': newTopDir,
+            'sysID': sysID,
+            'saveInterval': saveInterval}
     vars_file = os.path.join(newTopDir, "variables.json")
     print(f"vars_file is {vars_file}")
     print(f"vars: {variables}", flush=True)
