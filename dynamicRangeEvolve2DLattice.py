@@ -399,16 +399,16 @@ def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
     radiiSqArray = np.hstack((sqrtRadii, criticalRadii, linearRadii))
 
     # assumes topDir is /projects/jamming/fransces/data/...etc.../Line/
-    cumLogProbFileName = os.path.join(newTopDir, f"{sysID}.npy")
-    finalCumLogProbFileName = os.path.join(newTopDir, "Final"+f"{sysID}.npy")
+    cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
+    finalCumLogProbFileName = os.path.join(topDir, "Final"+f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}", flush=True)
     # .../L$L/LINE/Point0.npy or .../L$L/LINE/FinalPoint0.npy
     pointCumLogProbFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Point{sysID}.npy")
-    finalPointCumLogProbFileName = os.path.join(newTopDir, "Final"+f"Point{sysID}.npy")
+    finalPointCumLogProbFileName = os.path.join(topDir, "Final"+f"Point{sysID}.npy")
 
     # occupancy & time files go into the scratch directory
     # /scratch/jamming/fransces/data/.../L$L/LINE/...
-    occTopDir = newTopDir.replace("projects", "scratch")
+    occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     # /scratch/jamming/fransces/data/.../L$L/LINE/LineOccupancy0.npy
     logOccFileName = os.path.join(occTopDir,f"LineOccupancy{sysID}.npy")
