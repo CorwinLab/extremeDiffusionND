@@ -1,4 +1,4 @@
-from dynamicRangeEvolve2DLattice import saveVars, runSystemCircle
+from dynamicRangeEvolve2DLattice import saveVars, runSystemLine
 import numpy as np
 import sys
 import os
@@ -11,13 +11,10 @@ if __name__ == "__main__":
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
     saveInterval = float(sys.argv[5])  # in hours
-    # saveInterval = float(1/60)  # 1 minute
+    # saveInterval = float(1/60)  # 1 minute for testing
     print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
-    velocities = np.concatenate(
-        (np.linspace(0.1, 0.6, 11),
-         np.linspace(0.61, 0.99,39),
-         np.linspace(0.991, 1, 10)))
+    velocities = np.geomspace(1e-2, 3)  # 50 of these???
 
     variables = {'L': L,
             'velocities': velocities,
@@ -40,4 +37,4 @@ if __name__ == "__main__":
         saveVars(variables, vars_file)
         variables.pop("Date")
 
-    runSystemCircle(**variables)
+    runSystemLine(**variables)
