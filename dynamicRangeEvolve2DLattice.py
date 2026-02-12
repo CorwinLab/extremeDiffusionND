@@ -398,10 +398,7 @@ def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
     # this should be a # oft by 3*# ofvelocities 2d array
     radiiSqArray = np.hstack((sqrtRadii, criticalRadii, linearRadii))
 
-    # assumes topDir is /projects/jamming/fransces/data/...etc.../
-    newTopDir = os.path.join(topDir, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/
-    os.makedirs(newTopDir, exist_ok=True)
-    # .../$TMAX/LINE/0.npy for past a line or .../L$L/LINE/Final0.npy
+    # assumes topDir is /projects/jamming/fransces/data/...etc.../Line/
     cumLogProbFileName = os.path.join(newTopDir, f"{sysID}.npy")
     finalCumLogProbFileName = os.path.join(newTopDir, "Final"+f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}", flush=True)

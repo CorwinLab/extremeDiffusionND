@@ -22,8 +22,10 @@ if __name__ == "__main__":
             'topDir': topDirectory,
             'sysID': sysID,
             'saveInterval': saveInterval}
-    os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
-    vars_file = os.path.join(topDirectory, "variables.json")
+    # .../$TMAX/LINE/0.npy for past a line or .../L$L/LINE/Final0.npy
+    newTopDir = os.path.join(topDirectory, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/    os.makedirs(newTopDir, exist_ok=True)
+    os.makedirs(newTopDir, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
+    vars_file = os.path.join(newTopDir, "variables.json")
     print(f"vars_file is {vars_file}")
     print(f"vars: {variables}", flush=True)
     today = date.today()
