@@ -67,7 +67,9 @@ def updateLogOccupancy(logP, time):
     # iterate over current state of the array, only occupied sites
     for i in range(start, end):
         for j in range(start, end):
-            if (i + j + time) % 2 == 1:
+            # print(i, j, time)
+            if (i + j + time) % 2 == 1:  # old checkerboard condition, ie. at t=0 move from origin to first 4 neighbors
+                # print("occupied, logP[i,j]:",logP[i,j])
                 logBiases = np.log(np.random.dirichlet([1]*4))
                 # logBiases = logBiasesAll[
                 #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
@@ -115,38 +117,6 @@ def sumOctantLog(logOccupancy, i, j):
                                     logOccupancy[j, i], logOccupancy[2 * L - j, i], logOccupancy[2 * L - j, 2 * L - i],
                                     logOccupancy[j, 2 * L - i]]))
 
-# # TO DO: i need up, right, and down cardinal directions ONLY at the origin
-# # but then I need the caridnal directions all the way out to time whatever.. so idk.
-# @njit
-# def sumPastLineLog(logOccupancy, i, j):
-#     """ procedure. given an array of log prob values (logOccupancy),
-#     using site (i,j), find the symmetries across the line located at some r x_hat
-#     ie. we want to the right of some vertical line placed at r>L"""
-#     L = logOccupancy.shape[0] // 2
-#     # oriign i == j == L, need to sweep the y-axis
-#     print(f"i, j: {i},{j}")
-#     if (i == L) and (j == L):
-#         print("origin")
-#         return logOccupancy[i,j]
-#     # diagonal i == j
-#     elif (i == j):
-#         print("diagonal")
-#         print(f"2L-i, j: {2*L-i},{j}")
-#         return sumLogList(np.array([logOccupancy[i,j],
-#                                     logOccupancy[2*L-i, j]]))
-#     # cardinal i == L: (along +xhat)
-#     elif (i == L):  # no symmetry either because we only want 1 cardinal direction
-#         print("x axis (i = L)")
-#         return logOccupancy[i, j]
-#     # general
-#     else:  # there should be 4 octants to the right of the vertical line at rx_hat
-#         print("general")
-#         print(f"j,i: {j},{i} \n 2L-i, j: {2 * L-i},{j} \n 2L-j, i: {2 *L- j},{i}")
-#         return sumLogList(np.array([logOccupancy[i, j],
-#                                     logOccupancy[j, i],
-#                                     logOccupancy[2*L-i, j],
-#                                     logOccupancy[2*L-j, i]
-#                                     ]))
 
 # if i = L and j is along the + x-axis
 # this gets its own measureProbabilityPastShape because it just iterates past the
@@ -174,7 +144,6 @@ def measureProbabilityPastClosestApproach(logOccupancy, measListSq, time):
             distSq = (j - L)**2  # compute dist. from x-origin i = L so L - L = 0
             for index, rSq in enumerate(measListSq):
                 if distSq >= rSq:
-                    # TODO: check if this is right!!!!
                     cumLogProbList[index] = sumLogList(np.array([logOccupancy[L,j],cumLogProbList[index]]))
     return cumLogProbList
 
@@ -236,16 +205,22 @@ def measureProbabilityPastLine(logOccupancy, measListSq, time):
     L = logOccupancy.shape[0] // 2
     if time < (L -1):
         start = L - time
-        end = L + time
+        end = L + time + 1
     else:
         start = 1  # boundary conditions
         end = logOccupancy.shape[0]  # this should be 2L?
+    # print("start, end", start, end)
     for i in range(start, end):  # iterate from height L - t to L + t
         for j in range(L, end):  # iterate from x=L to x = 2L ?
+            # print(i,j)
             if np.isfinite(logOccupancy[i, j]):
-                distSq = (j - L)**2 # x-axis distance
+                # print("is occupied in measurement func.")
+                distSq = (j - L)**2 # x-axis distance  # if J = L then it will never be
+                # greater tha 0.01 or 0.03 or whatever...
                 for index, rSq in enumerate(measListSq):
-                    if distSq >= rSq:  # at or past line
+                    # print(f"dist sq, rsq", distSq, rSq)
+                    if distSq >= rSq or ( j==L ):  # at or past line
+                        # the "or j == L" part should be ok because of the i j indexing
                         # we use logOccupancy[i,j] instead of sumRepeats here because there's no octant symmetry
                         cumLogProbList[index] = sumLogList(np.array([logOccupancy[i,j], cumLogProbList[index]]))
     return cumLogProbList
