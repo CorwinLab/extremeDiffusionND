@@ -216,10 +216,14 @@ def measureProbabilityPastLine(logOccupancy, measListSq, time):
             if np.isfinite(logOccupancy[i, j]):
                 # print("is occupied in measurement func.")
                 distSq = (j - L)**2 # x-axis distance  # if J = L then it will never be
-                # greater tha 0.01 or 0.03 or whatever...
+                # greater tha 0.01 or 0.03 or whatever..
                 for index, rSq in enumerate(measListSq):
+                    # # I need to include the j=L line for all distances less than 1?
+                    if (rSq < 1):  # if the measurement distance is effectively at the origin
+                        if (distSq >= rSq) or (j==L):
+                            cumLogProbList[index] = sumLogList(np.array([logOccupancy[i,j],cumLogProbList[index]]))
                     # print(f"dist sq, rsq", distSq, rSq)
-                    if distSq >= rSq or ( j==L ):  # at or past line
+                    if distSq >= rSq:  # at or past line
                         # the "or j == L" part should be ok because of the i j indexing
                         # we use logOccupancy[i,j] instead of sumRepeats here because there's no octant symmetry
                         cumLogProbList[index] = sumLogList(np.array([logOccupancy[i,j], cumLogProbList[index]]))
