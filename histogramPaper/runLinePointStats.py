@@ -5,9 +5,13 @@ if __name__ == "__main__":
     # runs for past point and past line (500 each)
 
     # dataDirectory, savePathDirectory
-    dataDirectory = "/mnt/talapasData/data/pastLine/1000/Line/"
-    savePathDirectory = "/mnt/talapasData/data/pastLine/1000/Line/"
-    lookAtNum = 500
+    # dataDirectory = "/mnt/talapasData/data/pastLine/1000/Line/"
+    # savePathDirectory = "/mnt/talapasData/data/pastLine/1000/Line/"
+    # dataDirectory = "/mnt/talapasData/data/pastLineTake2/1000/Line/"
+    # savePathDirectory = "/mnt/talapasData/data/pastLineTake2/1000/Line/"
+    dataDirectory = "/mnt/talapasData/data/pastLineTake3/1000/Line/"
+    savePathDirectory = "/mnt/talapasData/data/pastLineTake3/1000/Line/"
+    lookAtNum = 30000
 
     # line
     # iterates through all the files in dataDirectory and writes statsfile in SavePathDirectory

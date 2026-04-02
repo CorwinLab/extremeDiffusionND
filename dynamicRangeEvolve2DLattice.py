@@ -70,7 +70,11 @@ def updateLogOccupancy(logP, time):
             # print(i, j, time)
             if (i + j + time) % 2 == 1:  # old checkerboard condition, ie. at t=0 move from origin to first 4 neighbors
                 # print("occupied, logP[i,j]:",logP[i,j])
+                # # SSRW
+                # logBiases = np.log(np.array([1/4]*4))
+                # generate in the loop
                 logBiases = np.log(np.random.dirichlet([1]*4))
+                # if we pre-generate all biases
                 # logBiases = logBiasesAll[
                 #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
                 # update logP arary using precision scheme for each direction
