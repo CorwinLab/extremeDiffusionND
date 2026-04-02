@@ -10,8 +10,8 @@ if __name__ == "__main__":
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
-    saveInterval = float(sys.argv[5])  # in hours
-    # saveInterval = float(1/60)  # 1 minute for testing
+    # saveInterval = float(sys.argv[5])  # in hours
+    saveInterval = float(1/60)  # 1 minute for testing
     print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.geomspace(1e-2, 3)  # 50 of these???

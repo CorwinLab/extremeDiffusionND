@@ -1,15 +1,12 @@
 import numpy as np
-import npquad
-import h5py
 from tqdm import tqdm
 import os
 import json
-import sys
 
 # TODO: at some point fix this to deal with my stupid filename convention
 # for past a line & past a point. because i'm STUPID.
 ### rewriting for new format
-def calculateStatistics(path, savePath, takeLog=True, lookAtNum=None,measurement='circle'):
+def calculateStatistics(path, savePath, lookAtNum=None, measurement=None):
     """
     procedure. calculates mean, 2nd moment, variance, 3rd moment, and kurtosis (?) of ln[Prob(meas)]
     or, if takeLog=False, just the moments of Prob(meas).saves to a stats file.
@@ -29,16 +26,13 @@ def calculateStatistics(path, savePath, takeLog=True, lookAtNum=None,measurement
         variables = json.load(v)
     tMax = variables['tMax']
     # times = np.unique(np.geomspace(1,tMax,500).astype(int))
-    if takeLog:
-        fileName = "Stats.npy"
-    else:
-        fileName = "StatsNoLog.npy"
+    fileName = "Stats.npy"
     # initialize stats files
     # first file, should be (t by # radii)
     # note that w/ past line/point, the # radii is sectioned into 3 parts
     # [:, :50] sqrt, [:,50:100] critical, [:,100:] linear
     if measurement == 'line':
-        firstFile = np.load(os.path.join(path,"FinalPoint0.npy"))
+        firstFile = np.load(os.path.join(path,"Final0.npy"))
         finalProbsFileName = os.path.join(savePath, "FinalProbs"+"Line"+".npy")
         statsFileName = os.path.join(savePath, "Line"+fileName)
     elif measurement == 'point':  # point
@@ -47,13 +41,14 @@ def calculateStatistics(path, savePath, takeLog=True, lookAtNum=None,measurement
         finalProbsFileName = os.path.join(savePath, "FinalProbs"+"Point"+".npy")
         statsFileName = os.path.join(savePath, "Point"+fileName)
     else:  #circle, should be named w/o ayny weird naming
+        # this one should only be the vt regime (60 velocities)
         firstFile = np.load(os.path.join(path,"Final0.npy"))
         finalProbsFileName = os.path.join(savePath, "FinalProbs.npy")
         statsFileName = os.path.join(savePath, fileName)
     print(f"filenames: \n {finalProbsFileName} \n {statsFileName}")
     # initialize finalProbs as (#files, # radii)
     finalProbs = np.zeros(shape=(expected_file_num,firstFile.shape[1]))
-    moment1, moment2, moment3, moment4 = firstFile, firstFile*firstFile, np.power(firstFile,3), np.power(firstFile,4)
+    moment1, moment2, moment3, moment4 = 0,0,0,0  # the fileID starts at 0 so its ok?
     if lookAtNum is not None:  # only look at 0-lookAtNum (ie a subset)
         maxID = lookAtNum
     else:
@@ -65,20 +60,21 @@ def calculateStatistics(path, savePath, takeLog=True, lookAtNum=None,measurement
         try:
             # handle the stupid fucking filenaming. why am i stupid.
             if measurement == 'line':
-                logProbs = np.load(os.path.join(path, f"FinalPoint{fileID}.npy"))
+                logProbs = np.load(os.path.join(path, f"Final{fileID}.npy"))
             elif measurement == 'point':  # point
                 logProbs = np.load(os.path.join(path, f"FinalPoint{fileID}.npy"))
             else:  # circle
                 logProbs = np.load(os.path.join(path, f"Final{fileID}.npy"))
-            # update moments. prevent it from getting mad about divide by 0
+                # update moments. prevent it from getting mad about divide by 0
             with np.errstate(divide='ignore'):  # we are going to += the shit out of this
                 moment1 += logProbs
                 moment2 += logProbs * logProbs
                 moment3 += np.power(logProbs, 3)
                 moment4 += np.power(logProbs, 4)
-            num_files += 1
             # update the final probability list
             finalProbs[num_files, :] = logProbs[-1, :]
+            # now advance the counter
+            num_files += 1
         except Exception as e:  # skip file if corrupted, also say its corrupted
             print(f"{fileID} is corrupted!")
             n_corrupted += 1
@@ -95,6 +91,7 @@ def calculateStatistics(path, savePath, takeLog=True, lookAtNum=None,measurement
         kurtosis = (moment4 - 4*moment1*moment3 + 6*(moment1**2)*moment2 - 3*np.power(moment1,4))/np.square(variance)
     # save files
     stats = np.array([mean,variance,skew,kurtosis])
+    print("# corrupted: ",n_corrupted)
     np.save(statsFileName, stats)
     # save final probs to file
     nonzeroProbs = finalProbs[:num_files,:]  # chop off the part of the array we didn't use, if any

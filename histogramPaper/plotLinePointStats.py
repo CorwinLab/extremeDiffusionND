@@ -204,7 +204,7 @@ def plotDifferentScalings(topDir, savePath, lambdaExt, rMin=3):
     # load in all data
     fileName = statsFile
     plt.title(f"{os.path.split(fileName)[1]}, \n rMin={rMin}")
-    data = processStatsNPY(fileName)  # mean, var, skew, r, t
+    data = processLinePointStatsNPY(fileName)  # mean, var, skew, r, t
     # mean = data[0,:]
     var = data[1, :]
     # skew = data[2,:]
@@ -260,7 +260,7 @@ def collapseMean(topDir, savePath, rMin=3):
 
     # load in the stats for the 30k systems
     statsFile = os.path.join(topDir, "LineStats.npy")
-    data = processStatsNPY(statsFile)  # mean, var, sskew, r, t
+    data = processLinePointStatsNPY(statsFile)  # mean, var, sskew, r, t
     mean = data[0,:]
     r = data[3,:]
     t = data[4, :]
@@ -269,11 +269,11 @@ def collapseMean(topDir, savePath, rMin=3):
     x = np.logspace(0,3)
     with np.errstate(divide='ignore'):
         # gaussianBehavior = r**2 / t  # -mean vs r^2/t should be a straight line
-        meanLineBehavior = np.log(erfc((r-1)/(np.sqrt(t-1)))/2)
-        ax.loglog(-meanLineBehavior[indices], -mean[indices], linewidth=0.5, alpha=0.7)
+        meanLineBehavior = np.log(erfc((r)/(np.sqrt(t-1)))/2)
+        ax.loglog(-meanLineBehavior[indices], -mean[indices], linewidth=0.5, alpha=0.7,label=r"Dirichlet $\alpha=1$")
         # ax.loglog(gaussianBehavior[indices], -mean[indices],linewidth=0.5,alpha=0.7)
     # ax.set_xlabel(r"$r^2/t$")
-    ax.set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}((r-1)/\sqrt{t-1}))}$")  # for past a line
+    ax.set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}((r)/\sqrt{t-1}))}$")  # for past a line
     ax.set_ylabel(r"$-\mathbb{E}_{\nu}[\ln{P}]$")
     ax.set_title(f"all data past line,regardless of scaling \n r>{rMin} \n {statsFile}")
 
@@ -293,12 +293,14 @@ def collapseMean(topDir, savePath, rMin=3):
     radii = (np.hstack((sqrtRadii, criticalRadii, linearRadii))).flatten("F")
     ssrwData = np.array([SSRW.flatten("F"), radii, longTs])
     with np.errstate(divide='ignore'):
-        SSRWMean = np.log(erfc((ssrwData[1,:]-1)/np.sqrt(ssrwData[2,:]-1))/2)
+        SSRWMean = np.log(erfc((ssrwData[1,:])/np.sqrt(ssrwData[2,:]-1))/2)
         ssrwIndices = (ssrwData[1,:] > rMin)
-        ax.loglog(-SSRWMean[ssrwIndices], -ssrwData[0,:][ssrwIndices],color='green',linewidth=0.5)
+        ax.loglog(-SSRWMean[ssrwIndices], -ssrwData[0,:][ssrwIndices],color='green',linewidth=0.5,alpha=0.7,label='SSRW')
+    # line of equality
     ax.plot(x,x,color='red')
-    os.makedirs(os.path.join(savePath,"integrals"),exist_ok=True)
-    fig.savefig(os.path.join(savePath,"integrals","9.png"))
+    ax.legend()
+    # os.makedirs(os.path.join(savePath,"integrals"),exist_ok=True)
+    fig.savefig(os.path.join(savePath,"collapsedMean30kSystemsWithSSRW.png"))
 
 
 def plotAllMeans(topDir, savePath):
@@ -329,31 +331,31 @@ def plotAllMeans(topDir, savePath):
     lineFig0, lineAx0 = plt.subplots(3, 1, figsize=(8, 15))
     for i in range(n):  # sqrt
         gaussianCircleBehavior = radiiArray[:,i]**2 / times
-        meanLineBehavior = np.log(erfc(radiiArray[:,i]/(np.sqrt(times))) / 2)
+        meanLineBehavior = np.log(erfc(radiiArray[:,i]/(np.sqrt(times-1))) / 2)
         # lineAx0[0].loglog(gaussianCircleBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i])
         lineAx0[0].loglog(-meanLineBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i])
     # lineAx0[0].set_xlabel(r"$r^2/t$")
-    lineAx0[0].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t}))}$")
+    lineAx0[0].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t-1}))}$")
     # lineAx0[0].set_ylabel(r"$-\langle \ln{(P_{line})} \rangle$")
     lineAx0[0].set_title(r"past line $vt^{1/2}$, v=1e2 (blue) to 2 (yellow)")
     lineAx0[0].plot(x,x,color='red')
     for i in range(50, 100):  # t/sqrt(ln(t))
         gaussianCircleBehavior = radiiArray[:,i]**2 / times
-        meanLineBehavior = np.log(erfc(radiiArray[:,i]/np.sqrt(times)))
+        meanLineBehavior = np.log(erfc(radiiArray[:,i]/np.sqrt(times-1)))
         # lineAx0[1].loglog(gaussianCircleBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i - 50])
         lineAx0[1].loglog(-meanLineBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i - 50])
     # lineAx0[1].set_xlabel(r"$r^2/t$")
-    lineAx0[0].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t}))}$")
+    lineAx0[1].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t-1}))}$")
     lineAx0[1].set_ylabel(r"$-\langle \ln{(P_{line})} \rangle$")
     lineAx0[1].set_title(r"past line $vt/\sqrt{\ln{t}}$, v=1e-2 (blue) to 2 (yellow)")
     lineAx0[1].plot(x,x,color='red')
     for i in range(100, 150):  # t
         gaussianCircleBehavior = radiiArray[:,i]**2 / times
-        meanLineBehavior = np.log(erfc(radiiArray[:,i]/np.sqrt(times)))
+        meanLineBehavior = np.log(erfc(radiiArray[:,i]/np.sqrt(times-1)))
         # lineAx0[2].loglog(gaussianCircleBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i - 100])
         lineAx0[2].loglog(-meanLineBehavior, - statsLine[0, :, i], '.', ms=1, color=colors[i - 100])
     # lineAx0[2].set_xlabel(r"$r^2/t$")
-    lineAx0[0].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t}))}$")
+    lineAx0[2].set_xlabel(r"$-\ln{(\frac{1}{2}\mathrm{erfc}(r/\sqrt{t-1}))}$")
     lineAx0[2].set_ylabel(r"$- \langle \ln{(P_{line})}\rangle$")
     lineAx0[2].set_title(r"past line $vt$, v=1e-2 (blue) to 2 (yellow)")
     lineAx0[2].plot(x,x,color='red')
@@ -447,5 +449,5 @@ if __name__ == "__main__":
     # plotDifferentScalings(topDir, savePath, lambdaExt, rMin=2)
     # plotAllScaledVars(topDir, savePath)
     collapseMean(topDir, savePath,rMin=2)
-    # plotAllMeans(topDir, savePath)
+    plotAllMeans(topDir, savePath)
     # plotFinalVarsAndSkews(topDir, savePath)
