@@ -11,7 +11,8 @@ import sys
 import shutil
 
 
-
+# the below function was edited such that we could perfectly recreate
+# systems 
 @njit
 def updateOccupancy(occupancy, time, L):
     """
