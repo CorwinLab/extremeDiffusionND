@@ -11,10 +11,9 @@ import sys
 import shutil
 
 
-# the below function was edited such that we could perfectly recreate
-# systems 
+# systems
 @njit
-def updateOccupancy(occupancy, time, L):
+def updateOccupancy(occupancy, time, func):
     """
 	memory efficient version of executeMoves from evolve2DLattice
 	:param occupancy: np array of size L
@@ -57,16 +56,8 @@ def updateOccupancy(occupancy, time, L):
         for j in range(startIdx, endIdx):  # across
             # the following conditions means you're on the checkerboard of occupied sites
             if (i + j + time) % 2 == 1:
-                x = i - origin
-                y = j - origin
-                #print('x, y, t;', x, y, time)
-                #print('i, j: ',i, j)
-                seed = (x * (2 * (3*L) + 1) ** 2 + y * (2 * (3*L) + 1) + time)
-                #print("seed: ", seed)
-                np.random.seed(seed)
-                #func = getRandomDistribution(distName, seed, params)
-                #biases = func()
-                biases = np.random.dirichlet(params)
+                biases = func()
+                # biases = np.random.dirichlet(params)
                 # print("biases: ", biases)
 
                 occupancy[i, j - 1] += occupancy[i, j] * biases[0]  # left
@@ -80,7 +71,7 @@ def updateOccupancy(occupancy, time, L):
     return occupancy
 
 
-def evolve2DDirichlet(occupancy, maxT, L, startT=1):
+def evolve2DDirichlet(occupancy, maxT, func, startT=1):
     """ generator object, memory efficient version of evolve2DLattice
 	note that there's no absorbingBoundary because of the way i and j are indexed
 	in updateOccupancy
@@ -90,7 +81,7 @@ def evolve2DDirichlet(occupancy, maxT, L, startT=1):
 	:param startT: optional int default 1, the time at which you want to start evolution
 	"""
     for t in range(startT, maxT):
-        occupancy = updateOccupancy(occupancy, t, L)
+        occupancy = updateOccupancy(occupancy, t, func)
         yield t, occupancy
 
 
@@ -185,7 +176,7 @@ def getListOfTimes(maxT, startT=1, num=500):
     return np.unique(np.geomspace(startT, maxT, num=num).astype(int))
 
 
-def evolveAndMeasurePDF(ts, startT, tMax, occupancy, saveFileName, tempFileName):
+def evolveAndMeasurePDF(ts, startT, tMax, occupancy, func, saveFileName, tempFileName):
     """
 	evolves occupancy lattice and makes probability lattice, through the generator loop
     writes & saves files, no returns
@@ -197,7 +188,7 @@ def evolveAndMeasurePDF(ts, startT, tMax, occupancy, saveFileName, tempFileName)
 	alphas: np array, floats; array of alpha1=alpha2=alpha3=alpha4 for dirichlet distribution
 	saveFile: h5 object; this is the file we are going to be saving data to
 	"""
-    for t, occ in evolve2DDirichlet(occupancy, tMax, tMax, startT):
+    for t, occ in evolve2DDirichlet(occupancy, tMax, func, startT):
         if t in ts:
             # Copy the num.h5 file to tempnum.h5
             print(f"creating temp file {tempFileName} at t = {t}")
@@ -247,8 +238,7 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
 	"""
 
     # setup random distribution
-    np.random.seed(42)
-    # func = getRandomDistribution(distName, params)
+    func = getRandomDistribution(distName, params)
     ts = np.array(ts)
     velocities = np.array(velocities)
     tMax = max(ts) + 1  # the +1 is there for a range issue
@@ -281,14 +271,14 @@ def runSystem(L, ts, velocities, distName, params, directory, systID):
         occ = saveFile['currentOccupancy'][:]
 
     # actually run and save data, passing in occ and time and stuff
-    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, saveFileName, tempFileName)
+    evolveAndMeasurePDF(ts, mostRecentTime, tMax, occ, func, saveFileName, tempFileName)
 
     # Once finished, create a final file which does not contain the occupancy
     # print("Copying working to final (and deleting occ from final")
     print("Copying working to final, and saving occ from final (for debugging)")
     shutil.copy(saveFileName, finalFileName)
-    # with h5py.File(finalFileName, 'r+') as finalFile:
-    #     del finalFile['currentOccupancy']
+    with h5py.File(finalFileName, 'r+') as finalFile:
+        del finalFile['currentOccupancy']
     print('deleting working')
     os.remove(saveFileName)
 
