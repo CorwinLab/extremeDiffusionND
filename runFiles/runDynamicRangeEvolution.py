@@ -12,8 +12,9 @@ if __name__ == "__main__":
     L = int(sys.argv[1])
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
-    sysID = int(sys.argv[4])
-    saveInterval = float(sys.argv[5])  # in hours
+    occDirectory = sys.argv[4]
+    sysID = int(sys.argv[5])
+    saveInterval = float(sys.argv[6])  # in hours
     print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.concatenate(
@@ -25,9 +26,10 @@ if __name__ == "__main__":
             'velocities': velocities,
             'tMax': tMax,
             'topDir': topDirectory,
+            'occDir': occDirectory,
             'sysID': sysID,
             'saveInterval': saveInterval}
-    os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
+    # os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
     print(f"vars: {variables}", flush=True)

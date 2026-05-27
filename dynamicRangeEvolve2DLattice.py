@@ -315,7 +315,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     return
 
 
-def runSystemCircle(L, velocities, tMax, topDir, sysID, saveInterval):
+def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
     """
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
     """
@@ -332,9 +332,9 @@ def runSystemCircle(L, velocities, tMax, topDir, sysID, saveInterval):
     finalCumLogProbFileName = os.path.join(topDir, "Final"+f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}")
     # occupancy & time files go into the scratch directory
-    occTopDir = topDir.replace("projects", "scratch")
-    os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
-    logOccFileName = os.path.join(occTopDir,f"Occupancy{sysID}.npy")
+    # occTopDir = topDir.replace("projects", "scratch")
+    # os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
+    logOccFileName = os.path.join(occDir,f"Occupancy{sysID}.npy")
     logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
     print(f"logOccFileName: {logOccFileName}")
 
@@ -362,10 +362,7 @@ def runSystemCircle(L, velocities, tMax, topDir, sysID, saveInterval):
         return  # end of runSystem process
 
 
-    # this includes the regimes
-
-
-def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
+def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
     """
     process
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
@@ -392,13 +389,13 @@ def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
 
     # occupancy & time files go into the scratch directory
     # # /scratch/jamming/fransces/data/.../L$L/LINE/...
-    occTopDir = topDir.replace("projects", "scratch")
-    os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
+    # occTopDir = topDir.replace("projects", "scratch")
+    # os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     # # /scratch/jamming/fransces/data/.../L$L/LINE/LineOccupancy0.npy
     # for debugging
     # occTopDir = topDir
 
-    logOccFileName = os.path.join(occTopDir,f"LineOccupancy{sysID}.npy")
+    logOccFileName = os.path.join(occDir,f"LineOccupancy{sysID}.npy")
     # /scratch/jamming/fransces/data/.../L$L/LINE/LineTime0.npy
     logOccTimeFileName = logOccFileName.replace("LineOccupancy", "LineTime")
     print(f"logOccFileName: {logOccFileName}", flush=True)
