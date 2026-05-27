@@ -3,29 +3,33 @@ import numpy as np
 import sys
 import os
 from datetime import date
+import time
 
 if __name__ == "__main__":
+    # jitter
+    time.sleep(np.random.uniform(0,30))
     # specify these in the bash script
     L = int(sys.argv[1])
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
-    sysID = int(sys.argv[4])
-    # saveInterval = float(sys.argv[5])  # in hours
-    saveInterval = float(1/60)  # 1 minute for testing
+    occDirectory = sys.argv[4]
+    sysID = int(sys.argv[5])
+    saveInterval = float(sys.argv[6])  # in hours
     print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.geomspace(1e-2, 3)  # 50 of these???
 
     # .../$TMAX/LINE/0.npy for past a line or .../L$L/LINE/Final0.npy
-    newTopDir = os.path.join(topDirectory, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/    os.makedirs(newTopDir, exist_ok=True)
-    os.makedirs(newTopDir, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
+    # newTopDir = os.path.join(topDirectory, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/    os.makedirs(newTopDir, exist_ok=True)
+    # os.makedirs(newTopDir, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     variables = {'L': L,
             'velocities': velocities,
             'tMax': tMax,
-            'topDir': newTopDir,
+            'topDir': topDirectory,
+            'occDir': occDirectory,
             'sysID': sysID,
             'saveInterval': saveInterval}
-    vars_file = os.path.join(newTopDir, "variables.json")
+    vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
     print(f"vars: {variables}", flush=True)
     today = date.today()
