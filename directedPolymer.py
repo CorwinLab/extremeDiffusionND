@@ -3,11 +3,14 @@ import scipy.stats # import skew
 import scipy.special # import logsumexp
 from numba import njit, objmode
 import matplotlib.pyplot as plt
+#from scipy.stats import skew
+from numba import njit, objmode
+#from matplotlib import pyplot as plt
 import sys
-import glob
-import time
+#import glob
+#import time
 
-from parfor import parfor
+# from parfor import parfor
 
 
 # Terminology:
@@ -426,8 +429,9 @@ if __name__ == "__main__":
     outFileName = sys.argv[inputIndex]; inputIndex += 1
     betaString = sys.argv[inputIndex]; inputIndex += 1 # Example string, "np.ones(tMax)", 
     
-    measurementTimes = np.geomspace(1,tMax, (2 * np.log10(tMax)).astype(int) + 1).astype(int)
+    measurementTimes = np.geomspace(1,tMax, np.round(2 * np.log10(tMax)).astype(int) + 1).astype(int)
     # make tMax one more so that our measurements end at the input value, rather than input value-1
+    print(measurementTimes)
     tMax += 1
     beta = eval(betaString)
     # beta0List = np.geomspace(.1,10,9)
@@ -445,6 +449,7 @@ if __name__ == "__main__":
                         # measurementTimes = np.delete(measurementTimes, 0)
                         file.write(f'{t}, {beta0}, {p2Plane}, {p2Line}, {p2Point} \n')
                         # print(t, time.time()-s, p2Plane, p2Line, p2Point)
+                file.flush()
 
 
     # print(logScaling)
