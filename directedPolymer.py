@@ -1,10 +1,14 @@
 import numpy as np
-from scipy.stats import skew
+import scipy.stats # import skew
+import scipy.special # import logsumexp
 from numba import njit, objmode
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 import sys
 import glob
 import time
+
+from parfor import parfor
+
 
 # Terminology:
 # "jumpLibrary" are the movements that the polymer can take from one site to the next
@@ -263,18 +267,27 @@ def transferMatrix2D(tMax, betaList): #, measurementTimes):
     dataSize = (tMax, tMax)
     logZ = np.full(dataSize, -np.inf).flatten()
     newLogZ = logZ.copy()
-    logZ[0] = 0
 
     # The 4 neighbors coordinates in x and y so that we can work w/ flattened coords
     neighborX = np.array([0,0,-1,-1])
     neighborY = np.array([0,-1,0,-1])
+
+    # Treat the t=0 case separately so we don't have to deal with the missing previous values, etc
+    logZ[0] = np.random.randn()*betaList[0]
+    yield logZ, 0
+
     for t in range(1,tMax):
-        weights = np.random.randn(t,t)
-        for x in range(0,t):
+        weights = np.random.randn(t+1,t+1)
+        # print(f'weights={weights}')
+        for x in range(0,t+1):
+            # print(f'x={x}')
             indexListX = np.mod(x + neighborX, dataSize[0]) * dataSize[1]
-            for y in range(0,t):
+            for y in range(0,t+1):
+                # print(f'y={y}')
                 indexListY = indexListX + np.mod(y + neighborY, dataSize[1])
+                # print(f'indexListY={indexListY}')
                 newLogZ[x * dataSize[1] + y] = -weights[x,y] * betaList[t] + logSumExp(logZ[indexListY])
+                # print(x * dataSize[1] + y, logSumExp(logZ[indexListY]))
         # replace the current values with the new values
         logZ, newLogZ = newLogZ, logZ
         yield logZ, t
@@ -290,10 +303,119 @@ def measurePartitionFunction(logZ, t, tMax):
     return pointToPlane, pointToLine, pointToPoint
 
 def readLogZFiles(globString):
-    all = []
-    for f in glob.glob(globString):
-        all.append(np.loadtxt(f))
-    return np.array(np.vstack(all))
+    files = glob.glob(globString)
+    maxT = [f.split('/')[1].split(',')[0].split('=')[1] for f in files]
+    maxT = np.array(maxT).astype(int)
+    betaList = [f.split(',')[1].split('=')[1][:-4] for f in files]
+    betaList = np.array(betaList).astype(float)
+    s = np.argsort(betaList)
+    betaList = betaList[s]
+    maxT = maxT[s]
+    # Run through each
+    # meanLog, varLog, skewLog = [], [], []
+    meanF, varF, skewF = [], [], []
+    logMeanZ, logVarZ, logSkewZ = [], [], []
+    for index, f in enumerate(np.array(files)[s]):
+        print(f)
+        a = np.loadtxt(f, delimiter=',')
+
+        # The data stored in the files is ln(Z).  To turn this into a free energy we use
+        # F = - ln(Z) / beta.
+        meanF.append(- np.mean(a,0) / betaList[index])
+        varF.append(np.var(a,0) / betaList[index]**2)
+        skewF.append(scipy.stats.skew(a))
+
+        # The data stored in the files is ln(Z).  To turn this into ln<Z> we use
+        # ln<Z> = ln( sum(exp(ln(Z)))/N )  = ln(sum(exp(Z))) - ln(N)
+        logMoment1 = scipy.special.logsumexp(a, 0) - np.log(a.shape[0])
+        logMoment2 = scipy.special.logsumexp(2*a, 0) - np.log(a.shape[0])
+        logMoment3 = scipy.special.logsumexp(3*a, 0) - np.log(a.shape[0])
+        logMeanZ.append(logMoment1)
+        logVarZ.append(scipy.special.logsumexp(np.vstack([logMoment2, 2*logMoment1]), 0, b = [[1]*a.shape[1],[-1]*a.shape[1]]))
+        # logSkewZ.append()
+        
+    return maxT, betaList, np.array(meanF), np.array(varF), np.array(skewF), np.array(logMeanZ), np.array(logVarZ) #np.array(meanLog), np.array(varLog), np.array(skewLog)
+# Scaling of mean: (mean/(tMax-2)/np.log(4) - 1 ) / beta
+# Scaling of var: var / beta**2
+
+def plotMeanF(maxT, betaList, meanF):
+    times = np.unique(maxT)
+    for t in times:
+        print(t)
+        indexArr = (maxT == t)
+        plt.loglog(betaList[indexArr], -(meanF[indexArr,-1]/np.log(4)/(t-2)), '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$-\langle F\rangle /(t_{max} -2)/ \ln(4))$')
+    plt.ylim([.5,20])
+    plt.legend()
+    plt.show()
+
+def plotVarF(maxT, betaList, varF):
+    times = np.unique(maxT)
+    for t in times:
+        indexArr = (maxT == t)
+        plt.semilogx(betaList[indexArr], varF[indexArr,-1]/(2*(1+np.log(t-2)/np.pi)), '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$Var(F)/(2+2*\ln(t_{max} -2)/\pi)$')
+    plt.legend()
+    plt.show()
+
+def plotSkewF(maxT, betaList, skewF):
+    times = np.unique(maxT)
+    for t in times:
+        indexArr = (maxT == t)
+        plt.semilogx(betaList[indexArr], skewF[indexArr,-1], '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$Skew(F)$')
+    plt.legend()
+    plt.show()
+
+
+def singleEvolution(tMax, beta0, beta):
+    pointToPlane = []
+    # elapsedTime = []
+    for logZ, t in transferMatrix2D(tMax, beta0*beta):
+        # if t == 0:
+        #     s = time.time()
+        pointToPlane.append(logSumExp(logZ.reshape(tMax, tMax)[:t+1,:t+1].flatten()))
+        # pointToPlane.append(logSumExp(logZ))
+        # elapsedTime.append(time.time()-s)
+    return np.array(pointToPlane)#, np.array(elapsedTime)
+
+def varianceCheck(nSystems, N, beta0):
+    allLogZ = []
+    for sys in range(nSystems):
+        allLogZ.append(singleEvolution(N, beta0, np.ones(N)))
+        if np.mod(sys, 100) == 0:
+            print(sys)
+    
+    F = -np.array(allLogZ)/beta0
+    return F
+
+def computeVariance(sys, N, beta0):
+    F = -singleEvolution(N, beta0, np.ones(N))/beta0
+    return F
+
+def computeVariancePrediction(N):
+    secondMoment = 0
+    for n in range(N+1):
+        secondMoment += scipy.special.binom(2*n, n)**2 * 4**(-2*n)
+    return secondMoment
+
+# def processLogZFiles(globString):
+#     # Read through all of the data files and sort each entry into the appropriate file
+#     # Each file should contain the information for a given (time, beta0) pair
+#     # If there are 5 times and 9 beta0s then there should be 45 output files
+#     # This can be done with awk, using
+#     # awk -F", " '{file = "t=" $1 ",beta0=" sprintf("%.14f",$2) ".dat"; print $3 FS $4 FS $5 >> file}' *.dat
+    
+#     all = []
+#     for f in glob.glob(globString):
+        
+#         data = readLogZFiles(globString, tList, beta0List, nMeasurements=3)
+#     # We want to reshape the data into a dictionary
+#     # [time, beta0, measurementId, element]
+#     # if tMax=1000, there will be 5 times, 9 beta0s, 3 measurementIds, N elements
 
 if __name__ == "__main__":
 
@@ -304,12 +426,13 @@ if __name__ == "__main__":
     outFileName = sys.argv[inputIndex]; inputIndex += 1
     betaString = sys.argv[inputIndex]; inputIndex += 1 # Example string, "np.ones(tMax)", 
     
-    measurementTimes = np.geomspace(1,tMax, 2 * np.log10(tMax).astype(int) + 1).astype(int)
+    measurementTimes = np.geomspace(1,tMax, (2 * np.log10(tMax)).astype(int) + 1).astype(int)
     # make tMax one more so that our measurements end at the input value, rather than input value-1
     tMax += 1
     beta = eval(betaString)
-    beta0List = np.geomspace(.1,10,9)
-    s = time.time()
+    # beta0List = np.geomspace(.1,10,9)
+    beta0List = np.geomspace(.01,100,17)
+    # s = time.time()
     with open(outFileName, 'a') as file:        
         for _ in range(numSystems):
             for beta0 in beta0List:
