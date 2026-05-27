@@ -222,11 +222,6 @@ def measureProbabilityPastLine(logOccupancy, measListSq, time):
                 distSq = (j - L)**2 # x-axis distance  # if J = L then it will never be
                 # greater tha 0.01 or 0.03 or whatever..
                 for index, rSq in enumerate(measListSq):
-                    # # I need to include the j=L line for all distances less than 1?
-                    if (rSq < 1):  # if the measurement distance is effectively at the origin
-                        if (distSq >= rSq) or (j==L):
-                            cumLogProbList[index] = sumLogList(np.array([logOccupancy[i,j],cumLogProbList[index]]))
-                    # print(f"dist sq, rsq", distSq, rSq)
                     if distSq >= rSq:  # at or past line
                         # the "or j == L" part should be ok because of the i j indexing
                         # we use logOccupancy[i,j] instead of sumRepeats here because there's no octant symmetry
@@ -272,7 +267,10 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
         raise ValueError("t < 1 included in list of times.")
     for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT):  # time evolve using the generator
         if t in times:  # if at a measurement time
-            # print(t)
+            # # the below is for debugging
+            # print(f"t = {t}")
+            # print(f"sum occ = {sumLogList(occ[np.isfinite(occ)])}")
+
             tIndex = np.where(times == t)[0][0]
             # grab radii that correspond to that time, should be a 1d slice
             radiiAtTimeT = rSqArray[tIndex, :]
@@ -288,7 +286,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
                 if pointCumLogProbList is not None:  # use passing in pointCumLogProb as a flag
                     sortedPointMeasurements = measureProbabilityPastClosestApproach(logOcc, radiiAtTimeT[sortIndices],t)
                     pointCumLogProbList.append(sortedPointMeasurements[reverseIndices])
-        if (wallTime() - startWallTime >= (saveInterval * 3600)):  # save every interval (hrs)
+        if (wallTime() - startWallTime >= (saveInterval * 3600) or (t == max(times))):  # save every interval (hrs)
             startWallTime = wallTime()  # reset timer once checked
             saveLogOccupancyAndTime(logOccFileName, logOccTimeFileName, logOcc, t)  # save occupancy
             saveCumLogProb(cumLogProbFileName, np.array(cumLogProbList))  # save probability file
@@ -303,12 +301,13 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     if pointCumLogProbList is not None: # repeat logic for cumLogProb, but use it being None
         saveCumLogProb(finalPointCumLogProbFileName, np.array(pointCumLogProbList))
     print("finished evolving! saved final cumulative probability list")
-    if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
-        os.remove(logOccFileName)
-        os.remove(logOccTimeFileName)
+    # commented out for now
+    # if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
+    #     os.remove(logOccFileName)
+    #     os.remove(logOccTimeFileName)
     if os.path.exists(cumLogProbFileName) and os.path.exists(finalCumLogProbFileName):
         os.remove(cumLogProbFileName)
-    print("deleted final occupancy and intermediate cumLogProb file")
+    print("deleted intermediate cumLogProb file")
     if pointCumLogProbList is not None:
         if os.path.exists(pointCumLogProbFileName) and os.path.exists(finalPointCumLogProbFileName):
             os.remove(pointCumLogProbFileName)
@@ -364,6 +363,8 @@ def runSystemCircle(L, velocities, tMax, topDir, sysID, saveInterval):
 
 
     # this includes the regimes
+
+
 def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
     """
     process
@@ -390,10 +391,13 @@ def runSystemLine(L, velocities, tMax, topDir, sysID, saveInterval):
     finalPointCumLogProbFileName = os.path.join(topDir, "Final"+f"Point{sysID}.npy")
 
     # occupancy & time files go into the scratch directory
-    # /scratch/jamming/fransces/data/.../L$L/LINE/...
+    # # /scratch/jamming/fransces/data/.../L$L/LINE/...
     occTopDir = topDir.replace("projects", "scratch")
     os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
-    # /scratch/jamming/fransces/data/.../L$L/LINE/LineOccupancy0.npy
+    # # /scratch/jamming/fransces/data/.../L$L/LINE/LineOccupancy0.npy
+    # for debugging
+    # occTopDir = topDir
+
     logOccFileName = os.path.join(occTopDir,f"LineOccupancy{sysID}.npy")
     # /scratch/jamming/fransces/data/.../L$L/LINE/LineTime0.npy
     logOccTimeFileName = logOccFileName.replace("LineOccupancy", "LineTime")

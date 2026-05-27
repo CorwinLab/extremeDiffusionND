@@ -3,15 +3,17 @@ import numpy as np
 import sys
 import os
 from datetime import date
+import time
 
 if __name__ == "__main__":
+    # startup jitter to spread out the load on talapas
+    time.sleep(np.random.uniform(0,30))
     # specify these in the bash script
     L = int(sys.argv[1])
     tMax = int(sys.argv[2])
     topDirectory = sys.argv[3]
     sysID = int(sys.argv[4])
-    # saveInterval = float(sys.argv[5])  # in hours
-    saveInterval = float(1/60)  # 1 minute
+    saveInterval = float(sys.argv[5])  # in hours
     print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.concatenate(
