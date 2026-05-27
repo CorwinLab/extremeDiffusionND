@@ -296,13 +296,16 @@ def transferMatrix2D(tMax, betaList): #, measurementTimes):
         yield logZ, t
 
 @njit
-def measurePartitionFunction(logZ, t, tMax):
+def measurePartitionFunction(logZ, tMax):
     pointToPlane = logSumExp(logZ)
-    # Pick the halfway line
-    half = t//2
-    pointToLine = logSumExp(logZ[half * tMax : half * tMax + t])
-    # Pick the center point
-    pointToPoint = logZ[half * tMax + half]
+    # For point to line let's report the x=0 line
+    pointToLine = logSumExp(logZ[:tMax])
+    # half = t//2
+    # pointToLine = logSumExp(logZ[half * tMax : half * tMax + t])
+    
+    # pointToPoint = logZ[half * tMax + half]
+    # Pick the origin point
+    pointToPoint = logZ[0]
     return pointToPlane, pointToLine, pointToPoint
 
 def readLogZFiles(globString):
@@ -445,7 +448,7 @@ if __name__ == "__main__":
                     # Make measurements that are log-spaced
                     if measurementTimes[measureIndex] == t:
                         measureIndex += 1
-                        p2Plane, p2Line, p2Point = measurePartitionFunction(logZ, t, tMax)
+                        p2Plane, p2Line, p2Point = measurePartitionFunction(logZ, tMax)
                         # measurementTimes = np.delete(measurementTimes, 0)
                         file.write(f'{t}, {beta0}, {p2Plane}, {p2Line}, {p2Point} \n')
                         # print(t, time.time()-s, p2Plane, p2Line, p2Point)
