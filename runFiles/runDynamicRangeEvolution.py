@@ -26,6 +26,7 @@ if __name__ == "__main__":
             'velocities': velocities,
             'tMax': tMax,
             'topDir': topDirectory,
+            'occDir': occDirectory,
             'sysID': sysID,
             'saveInterval': saveInterval}
     # os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
