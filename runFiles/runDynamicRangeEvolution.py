@@ -23,12 +23,12 @@ if __name__ == "__main__":
          np.linspace(0.991, 1, 10)))
 
     variables = {'L': L,
-            'velocities': velocities,
-            'tMax': tMax,
-            'topDir': topDirectory,
-            'occDir': occDirectory,
-            'sysID': sysID,
-            'saveInterval': saveInterval}
+                 'velocities': velocities,
+                 'tMax': tMax,
+                 'topDir': topDirectory,
+                 'occDir': occDirectory,
+                 'sysID': sysID,
+                 'saveInterval': saveInterval}
     # os.makedirs(topDirectory, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")

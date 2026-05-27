@@ -73,7 +73,7 @@ def updateLogOccupancy(logP, time):
                 # # SSRW
                 # logBiases = np.log(np.array([1/4]*4))
                 # generate in the loop
-                logBiases = np.log(np.random.dirichlet([1]*4))
+                logBiases = np.log(np.random.dirichlet([1] * 4))
                 # if we pre-generate all biases
                 # logBiases = logBiasesAll[
                 #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
@@ -137,18 +137,18 @@ def measureProbabilityPastClosestApproach(logOccupancy, measListSq, time):
     """
     cumLogProbList = np.full_like(measListSq, -np.inf)
     L = logOccupancy.shape[0] // 2
-    if time < (L-1):
-        end = L+time
+    if time < (L - 1):
+        end = L + time
     else:
         end = logOccupancy.shape[0]
     # iterate over the x-axis and take measurements past diff. points. going from smallest to largest dist. away from origin
     # the x axis is occ[L, :]
     for j in range(L, end):  # x axis is L,: so we only iterate over the second index
         if np.isfinite(logOccupancy[L, j]):
-            distSq = (j - L)**2  # compute dist. from x-origin i = L so L - L = 0
+            distSq = (j - L) ** 2  # compute dist. from x-origin i = L so L - L = 0
             for index, rSq in enumerate(measListSq):
                 if distSq >= rSq:
-                    cumLogProbList[index] = sumLogList(np.array([logOccupancy[L,j],cumLogProbList[index]]))
+                    cumLogProbList[index] = sumLogList(np.array([logOccupancy[L, j], cumLogProbList[index]]))
     return cumLogProbList
 
 
@@ -207,7 +207,7 @@ def measureProbabilityPastLine(logOccupancy, measListSq, time):
     """
     cumLogProbList = np.full_like(measListSq, -np.inf)
     L = logOccupancy.shape[0] // 2
-    if time < (L -1):
+    if time < (L - 1):
         start = L - time
         end = L + time + 1
     else:
@@ -219,13 +219,13 @@ def measureProbabilityPastLine(logOccupancy, measListSq, time):
             # print(i,j)
             if np.isfinite(logOccupancy[i, j]):
                 # print("is occupied in measurement func.")
-                distSq = (j - L)**2 # x-axis distance  # if J = L then it will never be
+                distSq = (j - L) ** 2  # x-axis distance  # if J = L then it will never be
                 # greater tha 0.01 or 0.03 or whatever..
                 for index, rSq in enumerate(measListSq):
                     if distSq >= rSq:  # at or past line
                         # the "or j == L" part should be ok because of the i j indexing
                         # we use logOccupancy[i,j] instead of sumRepeats here because there's no octant symmetry
-                        cumLogProbList[index] = sumLogList(np.array([logOccupancy[i,j], cumLogProbList[index]]))
+                        cumLogProbList[index] = sumLogList(np.array([logOccupancy[i, j], cumLogProbList[index]]))
     return cumLogProbList
 
 
@@ -254,7 +254,8 @@ def saveCumLogProb(cumLogProbFileName, cumLogProb):
 
 def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName,
                      cumLogProbList, logOcc, rSqArray, times, saveInterval, startT=1,
-                     measurement='circle', pointCumLogProbList=None, pointCumLogProbFileName=None, finalPointCumLogProbFileName=None):
+                     measurement='circle', pointCumLogProbList=None, pointCumLogProbFileName=None,
+                     finalPointCumLogProbFileName=None):
     """
     process; given array of logOccupancy (occupancy stored as logOcc vals) and list of times t and list of measurement radii rSqList
     return cumulative logProb array of shape (num of times, num of radii)
@@ -275,16 +276,18 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
             # grab radii that correspond to that time, should be a 1d slice
             radiiAtTimeT = rSqArray[tIndex, :]
             # to deal with regimes if we want them
-            sortIndices = np.argsort(radiiAtTimeT)  # it's convenient to have the radii sorted when we make the measurement
+            sortIndices = np.argsort(
+                radiiAtTimeT)  # it's convenient to have the radii sorted when we make the measurement
             reverseIndices = np.argsort(sortIndices)  # but we want to save them in the original order they were in
             if measurement == 'circle':  # circle measurements.
-                sortedCircleMeasurements = measureProbabilityPastCircle(logOcc, radiiAtTimeT[sortIndices],t)
+                sortedCircleMeasurements = measureProbabilityPastCircle(logOcc, radiiAtTimeT[sortIndices], t)
                 cumLogProbList.append(sortedCircleMeasurements[reverseIndices])
             elif measurement == 'line':  # line and (maybe) point meas.
                 sortedLineMeasurements = measureProbabilityPastLine(logOcc, radiiAtTimeT[sortIndices], t)
                 cumLogProbList.append(sortedLineMeasurements[reverseIndices])
                 if pointCumLogProbList is not None:  # use passing in pointCumLogProb as a flag
-                    sortedPointMeasurements = measureProbabilityPastClosestApproach(logOcc, radiiAtTimeT[sortIndices],t)
+                    sortedPointMeasurements = measureProbabilityPastClosestApproach(logOcc, radiiAtTimeT[sortIndices],
+                                                                                    t)
                     pointCumLogProbList.append(sortedPointMeasurements[reverseIndices])
         if (wallTime() - startWallTime >= (saveInterval * 3600) or (t == max(times))):  # save every interval (hrs)
             startWallTime = wallTime()  # reset timer once checked
@@ -298,7 +301,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     # shape: (num of times, num of radii)
     # Save the measurement and delete the occupancy after evolution
     saveCumLogProb(finalCumLogProbFileName, np.array(cumLogProbList))
-    if pointCumLogProbList is not None: # repeat logic for cumLogProb, but use it being None
+    if pointCumLogProbList is not None:  # repeat logic for cumLogProb, but use it being None
         saveCumLogProb(finalPointCumLogProbFileName, np.array(pointCumLogProbList))
     print("finished evolving! saved final cumulative probability list")
     # commented out for now
@@ -329,27 +332,46 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
 
     # assumes topDir is /projects/jamming/fransces/data/...etc.../
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
-    finalCumLogProbFileName = os.path.join(topDir, "Final"+f"{sysID}.npy")
+    finalCumLogProbFileName = os.path.join(topDir, "Final" + f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}")
     # occupancy & time files go into the scratch directory
     # occTopDir = topDir.replace("projects", "scratch")
     # os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
-    logOccFileName = os.path.join(occDir,f"Occupancy{sysID}.npy")
+    logOccFileName = os.path.join(occDir, f"Occupancy{sysID}.npy")
     logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
     print(f"logOccFileName: {logOccFileName}")
-
+    #       Check status of task_id + offset system
+    #       if task_id + offset is not finished
+    #               If status is corrupted
+    #                       Delete system and scratch files
+    #               run task_id + offset
     # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
     if os.path.exists(finalCumLogProbFileName):  # if cumLogProb file exists and is final
         print("finalCumLogProbFileName exists, evoultion already complete. exiting", flush=True)
         return
     else:  # otherwise evolve
-        if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(cumLogProbFileName):  # continue evolution
-            # if logOcc File exists
-            print("existing logOcc", flush=True)
-            currentTime, logOcc = loadLogOccupancyAndTime(logOccFileName, logOccTimeFileName)
-            print(f"loaded from {currentTime}", flush=True)
-            cumLogProbList = list(np.load(cumLogProbFileName))
+        if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(
+                cumLogProbFileName):  # continue evolution
             # Reload state of random number generator ? if we want reproducible random numbers
+            try:
+                # try to reload exisiting unfinished systems
+                currentTime, logOcc = loadLogOccupancyAndTime(logOccFileName, logOccTimeFileName)
+                print(f"loaded from {currentTime}", flush=True)
+                cumLogProbList = list(np.load(cumLogProbFileName))
+            except (EOFError, ValueError):
+                # if something's wrong with either of these things, delete and restart
+                print("something wrong with the occupancy and time file or the cumLogProb file")
+                os.remove(logOccFileName)
+                os.remove(logOccTimeFileName)
+                os.remove(cumLogProbFileName)
+                print("files deleted")
+                # now re-initialize so that it starts from 0 again
+                cumLogProbList = []
+                pointCumLogProbList = []
+                logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
+                logOcc[L, L] = np.log(1)  # 0
+                currentTime = times[0]
+                print("system restarted")
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []
@@ -357,8 +379,9 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
             logOcc[L, L] = np.log(1)  # 0
             currentTime = times[0]
         # run evolution and saving
-        evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName, cumLogProbList, logOcc, radiiSqArray, times,
-                     saveInterval=saveInterval, startT=currentTime, measurement=measurement)
+        evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName,
+                         cumLogProbList, logOcc, radiiSqArray, times,
+                         saveInterval=saveInterval, startT=currentTime, measurement=measurement)
         return  # end of runSystem process
 
 
@@ -374,18 +397,18 @@ def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
     measurement = 'line'
     # prep measuremnt distances for each regime
     sqrtRadii = (velocities * np.expand_dims(np.sqrt(times), 1)) ** 2
-    criticalRadii = (velocities * np.expand_dims(times/np.sqrt(np.log(times)), 1))**2
+    criticalRadii = (velocities * np.expand_dims(times / np.sqrt(np.log(times)), 1)) ** 2
     linearRadii = (velocities * np.expand_dims(times, 1)) ** 2
     # this should be a # oft by 3*# ofvelocities 2d array
     radiiSqArray = np.hstack((sqrtRadii, criticalRadii, linearRadii))
 
     # assumes topDir is /projects/jamming/fransces/data/...etc.../Line/
     cumLogProbFileName = os.path.join(topDir, f"{sysID}.npy")
-    finalCumLogProbFileName = os.path.join(topDir, "Final"+f"{sysID}.npy")
+    finalCumLogProbFileName = os.path.join(topDir, "Final" + f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}", flush=True)
     # .../L$L/LINE/Point0.npy or .../L$L/LINE/FinalPoint0.npy
     pointCumLogProbFileName = cumLogProbFileName.replace(f"{sysID}.npy", f"Point{sysID}.npy")
-    finalPointCumLogProbFileName = os.path.join(topDir, "Final"+f"Point{sysID}.npy")
+    finalPointCumLogProbFileName = os.path.join(topDir, "Final" + f"Point{sysID}.npy")
 
     # occupancy & time files go into the scratch directory
     # # /scratch/jamming/fransces/data/.../L$L/LINE/...
@@ -395,25 +418,50 @@ def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
     # for debugging
     # occTopDir = topDir
 
-    logOccFileName = os.path.join(occDir,f"LineOccupancy{sysID}.npy")
+    logOccFileName = os.path.join(occDir, f"LineOccupancy{sysID}.npy")
     # /scratch/jamming/fransces/data/.../L$L/LINE/LineTime0.npy
     logOccTimeFileName = logOccFileName.replace("LineOccupancy", "LineTime")
     print(f"logOccFileName: {logOccFileName}", flush=True)
 
+    #       Check status of task_id + offset system
+    #       if task_id + offset is not finished
+    #               If status is corrupted
+    #                       Delete system and scratch files
+    #               run task_id + offset
+
     if os.path.exists(finalCumLogProbFileName) and os.path.exists(finalPointCumLogProbFileName):
         # if cumLogProb file exists and is final, if pointCumLogProb exists and is final
-        print("finalCumLogProbFileName and finalPointCumLogProbFileName exist, evoultion already complete. exiting",flush=True)
+        print("finalCumLogProbFileName and finalPointCumLogProbFileName exist, evoultion already complete. exiting",
+              flush=True)
         return
     else:  # otherwise evolve
         # this should fail if any of these are corrupt
-        if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(cumLogProbFileName) and os.path.exists(pointCumLogProbFileName):
+        if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName) and os.path.exists(
+                cumLogProbFileName) and os.path.exists(pointCumLogProbFileName):
             # continue evolving if logOcc and both cumLogProbFileName and pointCumLogProbFileName exist
-            print("existing logOcc and measurement files",flush=True)
-            currentTime, logOcc = loadLogOccupancyAndTime(logOccFileName, logOccTimeFileName)
-            print(f"loaded from {currentTime}",flush=True)
-            cumLogProbList = list(np.load(cumLogProbFileName))
-            pointCumLogProbList = list(np.load(pointCumLogProbFileName))
+            print("existing logOcc and measurement files", flush=True)
             # Reload state of random number generator ? if we want reproducible random numbers
+            try:
+                # try to reload exisiting unfinished systems
+                currentTime, logOcc = loadLogOccupancyAndTime(logOccFileName, logOccTimeFileName)
+                print(f"loaded from {currentTime}", flush=True)
+                cumLogProbList = list(np.load(cumLogProbFileName))
+                pointCumLogProbList = list(np.load(pointCumLogProbFileName))
+            except (EOFError, ValueError):
+                # if something's wrong with either of these things, delete and restart
+                print("something wrong with the occupancy and time file or the cumLogProb file")
+                os.remove(logOccFileName)
+                os.remove(logOccTimeFileName)
+                os.remove(cumLogProbFileName)
+                os.remove(pointCumLogProbList)
+                print("files deleted")
+                # now re-initialize so that it starts from 0 again
+                cumLogProbList = []
+                pointCumLogProbList = []
+                logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
+                logOcc[L, L] = np.log(1)  # 0
+                currentTime = times[0]
+                print("system restarted")
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []
@@ -423,8 +471,10 @@ def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
             currentTime = times[0]
         # run evolution and saving
         evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName,
-                         cumLogProbList, logOcc, radiiSqArray, times,saveInterval=saveInterval, startT=currentTime, measurement=measurement,
-                         pointCumLogProbList=pointCumLogProbList, pointCumLogProbFileName=pointCumLogProbFileName,finalPointCumLogProbFileName=finalPointCumLogProbFileName)
+                         cumLogProbList, logOcc, radiiSqArray, times, saveInterval=saveInterval, startT=currentTime,
+                         measurement=measurement,
+                         pointCumLogProbList=pointCumLogProbList, pointCumLogProbFileName=pointCumLogProbFileName,
+                         finalPointCumLogProbFileName=finalPointCumLogProbFileName)
         return  # end of runSystem process
 
 

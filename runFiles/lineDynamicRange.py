@@ -23,12 +23,12 @@ if __name__ == "__main__":
     # newTopDir = os.path.join(topDirectory, "Line")  # /projects/jamming/fransces/data/.../L$L/Line/    os.makedirs(newTopDir, exist_ok=True)
     # os.makedirs(newTopDir, exist_ok=True)  # without this, gets mad that directory might not fully exist yet
     variables = {'L': L,
-            'velocities': velocities,
-            'tMax': tMax,
-            'topDir': topDirectory,
-            'occDir': occDirectory,
-            'sysID': sysID,
-            'saveInterval': saveInterval}
+                 'velocities': velocities,
+                 'tMax': tMax,
+                 'topDir': topDirectory,
+                 'occDir': occDirectory,
+                 'sysID': sysID,
+                 'saveInterval': saveInterval}
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
     print(f"vars: {variables}", flush=True)
