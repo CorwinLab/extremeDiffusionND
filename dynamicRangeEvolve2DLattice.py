@@ -305,9 +305,9 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
         saveCumLogProb(finalPointCumLogProbFileName, np.array(pointCumLogProbList))
     print("finished evolving! saved final cumulative probability list")
     # commented out for now
-    # if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
-    #     os.remove(logOccFileName)
-    #     os.remove(logOccTimeFileName)
+    if os.path.exists(logOccFileName) and os.path.exists(logOccTimeFileName):
+        os.remove(logOccFileName)
+        os.remove(logOccTimeFileName)
     if os.path.exists(cumLogProbFileName) and os.path.exists(finalCumLogProbFileName):
         os.remove(cumLogProbFileName)
     print("deleted intermediate cumLogProb file")
@@ -360,18 +360,18 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
                 cumLogProbList = list(np.load(cumLogProbFileName))
             except (EOFError, ValueError):
                 # if something's wrong with either of these things, delete and restart
-                print("something wrong with the occupancy and time file or the cumLogProb file")
+                print("something wrong with the occupancy and time file or the cumLogProb file", flush=True)
                 os.remove(logOccFileName)
                 os.remove(logOccTimeFileName)
                 os.remove(cumLogProbFileName)
-                print("files deleted")
+                print("files deleted", flush=True)
                 # now re-initialize so that it starts from 0 again
                 cumLogProbList = []
                 pointCumLogProbList = []
                 logOcc = np.full((2 * L + 1, 2 * L + 1), -np.inf)
                 logOcc[L, L] = np.log(1)  # 0
                 currentTime = times[0]
-                print("system restarted")
+                print("system restarted", flush=True)
         else:  # start from scratch and initialize from t=0
             # seed = L * largest ** 2 + tMax * largest + sysID  # for reproducible random numbers
             cumLogProbList = []
