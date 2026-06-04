@@ -15,7 +15,6 @@ if __name__ == "__main__":
     occDirectory = sys.argv[4]
     sysID = int(sys.argv[5])
     saveInterval = float(sys.argv[6])  # in hours
-    print(f"sysID: {sysID}", flush=True)
     # velocities we're interested in are
     velocities = np.geomspace(1e-2, 3)  # 50 of these???
 
@@ -31,16 +30,17 @@ if __name__ == "__main__":
                  'saveInterval': saveInterval}
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
-    print(f"vars: {variables}", flush=True)
+    # print(f"vars: {variables}", flush=True)
     today = date.today()
     text_date = today.strftime("%b-%d-%Y")
 
     # Only save the variables file if on the first system
     if sysID == 0:
-        print(f"systID is {sysID}")
+        # print(f"systID is {sysID}")
         variables.update({"Date": text_date})
-        print(f"vars: {variables}", flush=True)
+        # print(f"vars: {variables}", flush=True)
         saveVars(variables, vars_file)
         variables.pop("Date")
+    print(f"vars: {variables}", flush=True)
 
     runSystemLine(**variables)
