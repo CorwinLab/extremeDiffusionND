@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from numba import njit, objmode
 #from matplotlib import pyplot as plt
 import sys
-#import glob
+import glob
 #import time
 
 # from parfor import parfor
@@ -263,6 +263,8 @@ def logSumExp(x):
 
     # return a + np.log(np.sum(np.exp(x-a)))
 
+# TODO: rewrite this to work in arbitrary dimensions as there's some indication that
+# there may only be a true phase transition for d > 2
 @njit
 def transferMatrix2D(tMax, betaList): #, measurementTimes):
     # betaList has to be of length tMax
@@ -349,20 +351,39 @@ def plotMeanF(maxT, betaList, meanF):
     for t in times:
         print(t)
         indexArr = (maxT == t)
-        plt.loglog(betaList[indexArr], -(meanF[indexArr,-1]/np.log(4)/(t-2)), '-o', label=f'tMax = {t}', mfc='none')
+        plt.loglog(betaList[indexArr], -betaList[indexArr] * (meanF[indexArr,0]/np.log(4)/t), '-o', label=f'tMax = {t}', mfc='none')
     plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$-\langle F\rangle /(t_{max} -2)/ \ln(4))$')
-    plt.ylim([.5,20])
+    plt.ylabel(r'$-\beta \langle F\rangle /(N \ln(4))$')
+    # plt.ylim([.5,20])
+    plt.legend()
+    plt.show()
+
+def plotMeanEntropy(maxT, betaList, meanF, entry = 0):
+    tempList = 1/betaList
+    times = np.unique(maxT)
+    for t in times:
+        print(t)
+        indexArr = (maxT == t)
+        temp = tempList[indexArr]
+        scaledF = meanF[indexArr,entry]/np.log(4)/t
+        deltaTemp = np.diff(temp)
+        entropy = -np.diff(scaledF)/deltaTemp
+        plt.semilogx(1/(temp[:-1] + deltaTemp/2), entropy, '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$S$')
+    # plt.ylim([.5,20])
     plt.legend()
     plt.show()
 
 def plotVarF(maxT, betaList, varF):
     times = np.unique(maxT)
-    for t in times:
+    variancePrediction = np.array([computeVariancePrediction(N) for N in times])
+    print(variancePrediction)
+    for i, t in enumerate(times):
         indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], varF[indexArr,-1]/(2*(1+np.log(t-2)/np.pi)), '-o', label=f'tMax = {t}', mfc='none')
+        plt.semilogx(betaList[indexArr], (varF[indexArr,0]/variancePrediction[i]), '-o', label=f'tMax = {t}', mfc='none')
     plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$Var(F)/(2+2*\ln(t_{max} -2)/\pi)$')
+    plt.ylabel(r'$Var(F)/$(small $\beta$ prediction from text)')
     plt.legend()
     plt.show()
 
@@ -370,7 +391,7 @@ def plotSkewF(maxT, betaList, skewF):
     times = np.unique(maxT)
     for t in times:
         indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], skewF[indexArr,-1], '-o', label=f'tMax = {t}', mfc='none')
+        plt.semilogx(betaList[indexArr], skewF[indexArr,0], '-o', label=f'tMax = {t}', mfc='none')
     plt.xlabel(r'$\beta$')
     plt.ylabel(r'$Skew(F)$')
     plt.legend()
@@ -405,7 +426,10 @@ def computeVariance(sys, N, beta0):
 def computeVariancePrediction(N):
     secondMoment = 0
     for n in range(N+1):
-        secondMoment += scipy.special.binom(2*n, n)**2 * 4**(-2*n)
+        sumTerm = (scipy.special.binom(2*n, n) * 4**(-n))**2
+        if not np.isfinite(sumTerm):
+            sumTerm = 1/(n*np.pi)
+        secondMoment += sumTerm
     return secondMoment
 
 # def processLogZFiles(globString):
@@ -438,7 +462,8 @@ if __name__ == "__main__":
     tMax += 1
     beta = eval(betaString)
     # beta0List = np.geomspace(.1,10,9)
-    beta0List = np.geomspace(.01,100,17)
+    # beta0List = np.geomspace(.01,100,17)
+    beta0List = np.geomspace(.1*10**(33/64),10**(31/64), 10)
     # s = time.time()
     with open(outFileName, 'a') as file:        
         for _ in range(numSystems):
