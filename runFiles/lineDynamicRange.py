@@ -28,7 +28,8 @@ if __name__ == "__main__":
                  'topDir': topDirectory,
                  'occDir': occDirectory,
                  'sysID': sysID,
-                 'saveInterval': saveInterval}
+                 'saveInterval': saveInterval,
+                 'alpha': alpha}
     vars_file = os.path.join(topDirectory, "variables.json")
     print(f"vars_file is {vars_file}")
     # print(f"vars: {variables}", flush=True)
