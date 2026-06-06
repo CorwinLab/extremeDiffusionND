@@ -43,7 +43,7 @@ def moveProbabilityFromSite(logP, i, j, logBiases):
 
 
 @njit
-def updateLogOccupancy(logP, time):
+def updateLogOccupancy(logP, time,alpha=1):
     """
     update occupancy (stored as logP) from time t-1 to time t using precision scheme from DPRM
     logP: np array (2L+1,2L+1) filled with -infs(unoccupied) and log(p) values
@@ -73,7 +73,7 @@ def updateLogOccupancy(logP, time):
                 # # SSRW
                 # logBiases = np.log(np.array([1/4]*4))
                 # generate in the loop
-                logBiases = np.log(np.random.dirichlet([1] * 4))
+                logBiases = np.log(np.random.dirichlet([alpha] * 4))
                 # if we pre-generate all biases
                 # logBiases = logBiasesAll[
                 #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
@@ -82,10 +82,10 @@ def updateLogOccupancy(logP, time):
     return logP
 
 
-def logOccupancyGenerator(logOccupancy, maxT, startT=1):
+def logOccupancyGenerator(logOccupancy, maxT, startT=1,alpha=1):
     """ generator for updateLogOccupancy to evolve from time startT to time maxT"""
     for t in range(startT, maxT):
-        logOccupancy = updateLogOccupancy(logOccupancy, t)
+        logOccupancy = updateLogOccupancy(logOccupancy, t,alpha=alpha)
         yield t, logOccupancy
 
 
@@ -255,7 +255,7 @@ def saveCumLogProb(cumLogProbFileName, cumLogProb):
 def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName,
                      cumLogProbList, logOcc, rSqArray, times, saveInterval, startT=1,
                      measurement='circle', pointCumLogProbList=None, pointCumLogProbFileName=None,
-                     finalPointCumLogProbFileName=None):
+                     finalPointCumLogProbFileName=None,alpha=1):
     """
     process; given array of logOccupancy (occupancy stored as logOcc vals) and list of times t and list of measurement radii rSqList
     return cumulative logProb array of shape (num of times, num of radii)
@@ -266,7 +266,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     startWallTime = wallTime()
     if np.any(times < 1):  # never encounter t < 1.
         raise ValueError("t < 1 included in list of times.")
-    for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT):  # time evolve using the generator
+    for t, occ in logOccupancyGenerator(logOcc, max(times) + 1, startT=startT,alpha=alpha):  # time evolve using the generator
         if t in times:  # if at a measurement time
             # # the below is for debugging
             # print(f"t = {t}")
@@ -385,7 +385,7 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
         return  # end of runSystem process
 
 
-def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
+def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval,alpha=1):
     """
     process
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
@@ -474,7 +474,7 @@ def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
                          cumLogProbList, logOcc, radiiSqArray, times, saveInterval=saveInterval, startT=currentTime,
                          measurement=measurement,
                          pointCumLogProbList=pointCumLogProbList, pointCumLogProbFileName=pointCumLogProbFileName,
-                         finalPointCumLogProbFileName=finalPointCumLogProbFileName)
+                         finalPointCumLogProbFileName=finalPointCumLogProbFileName,alpha=alpha)
         return  # end of runSystem process
 
 
