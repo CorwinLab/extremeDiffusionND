@@ -15,6 +15,7 @@ if __name__ == "__main__":
     occDirectory = sys.argv[4]
     sysID = int(sys.argv[5])
     saveInterval = float(sys.argv[6])  # in hours
+    alpha = float(sys.argv[7])
     # velocities we're interested in are
     velocities = np.geomspace(1e-2, 3)  # 50 of these???
 

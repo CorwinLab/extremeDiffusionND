@@ -318,7 +318,7 @@ def evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, fin
     return
 
 
-def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
+def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval,alpha=1):
     """
     initialize occupancy, radii, and times. run evolution of 2D RWRE and save every 3 hrs
     """
@@ -381,7 +381,7 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval):
         # run evolution and saving
         evolveAndMeasure(logOccFileName, logOccTimeFileName, cumLogProbFileName, finalCumLogProbFileName,
                          cumLogProbList, logOcc, radiiSqArray, times,
-                         saveInterval=saveInterval, startT=currentTime, measurement=measurement)
+                         saveInterval=saveInterval, startT=currentTime, measurement=measurement,alpha=alpha)
         return  # end of runSystem process
 
 
