@@ -1,16 +1,353 @@
 import numpy as np
 import scipy.stats # import skew
 import scipy.special # import logsumexp
-from numba import njit, objmode
+from numba import njit, vectorize, int64, objmode
 import matplotlib.pyplot as plt
 #from scipy.stats import skew
-from numba import njit, objmode
 #from matplotlib import pyplot as plt
 import sys
 import glob
 #import time
 
 # from parfor import parfor
+
+@njit
+def logSumExp(x):
+    a = np.max(x)
+    # We're wasting our time if we include entries that are more than np.log(np.finfo(float).eps) = -36.04365338911715 below the max
+    cutoff = -37
+    expSum = 0
+    for val in x:
+        # if val-a > cutoff and val != a: # This would eliminate the computation of np.log(np.exp(0)), but it seems to make no difference in the long term.
+        if val-a > cutoff:
+            expSum += np.exp(val-a)
+    return a + np.log(expSum)
+
+    # return a + np.log(np.sum(np.exp(x-a)))
+
+@njit
+def previousNeighborVectors(dim):
+    unitVectors = -np.eye(dim).astype(int64)
+    # There will be 2^dim neighbor vectors
+    vectorList = np.zeros((2**dim, dim)).astype(int64)
+    for i in range(2**dim):
+        for pos in range(dim):
+            # Turn i into a binary mask and use that to add up the terms of the unitvectors
+            if (i >> pos) & 1:                
+                vectorList[i,:] += unitVectors[pos]
+    return vectorList
+
+
+# TODO: rewrite this to work in arbitrary dimensions as there's some indication that
+# there may only be a true phase transition for d > 2
+
+# Take in a single index and return a list of indices into the multidimensional array
+@njit
+def unravelIndex(index, shape):
+    dim = len(shape)
+    indices = np.empty(dim, dtype=np.int64)
+    for d in range(dim):
+        indices[dim-1-d] = index % shape[dim-1-d]
+        index //= shape[dim-1-d]
+    return indices
+
+# Take in a list of indices into the multidimensional array and return a single index
+# Requires that both indices and shape be numpy arrays
+@njit
+def ravelIndex(indices, shape):
+    dim = len(shape)
+    index = 0
+    for d in range(dim):
+        index += indices[d]*np.prod(shape[d:-1])
+        # print(index)
+    return index
+
+@njit
+def transferMatrixND(dim, tMax, betaList): #, measurementTimes):
+    # betaList has to be of length tMax
+    assert betaList.shape[0] == tMax, "betaList must be length tMax"
+    dataShape = np.array([tMax]*dim)
+    # Create a flattened version of the logZ data
+    logZ = np.full(tMax**dim, -np.inf)
+    newLogZ = logZ.copy()
+
+    # Create a list of all the previous neighbor directions
+    prevNeighbors = previousNeighborVectors(dim)
+
+    # Treat the t=0 case separately so we don't have to deal with the missing previous values, etc
+    logZ[0] = np.random.randn()*betaList[0]
+    yield logZ, 0
+
+    for t in range(1,tMax):
+        # Weights will fill in every location up to t+1 in every dimension
+        weights = np.random.randn((t+1)**dim)
+        # We need to iterate through every location for which x < t+1, y < t+1, z < t+1, etc.  There will be a total of (t+1)*dim locations
+        localShape = np.array([t+1]*dim)
+        for site in range(0, (t+1)**dim):
+            # Convert the 1d site index into multidimensional indices
+            indices = unravelIndex(site, localShape)
+            # print(f'indices ={indices}, {indices.shape}')
+            # Loop through all previous neighbors
+            nIndex = np.empty(2**dim).astype(int64)
+            for i, nVec in enumerate(prevNeighbors):
+                # Find the index of the previous neighbor
+                nIndex[i] = ravelIndex(np.mod(indices + nVec, dataShape), dataShape)
+            # Convert the indices associated w/ site into a 1d index for dataShape
+            globalSite = ravelIndex(indices, dataShape)
+            # Set the weight for the site
+            # newLogZ[globalSite] = logSumExp(logZ[nIndex])
+            newLogZ[globalSite] = -weights[site] * betaList[t] + logSumExp(logZ[nIndex])
+
+        logZ, newLogZ = newLogZ, logZ
+        yield logZ, t
+
+
+@njit
+def transferMatrix2D(tMax, betaList): #, measurementTimes):
+    # betaList has to be of length tMax
+    assert betaList.shape[0] == tMax, "betaList must be length tMax"
+    dataSize = (tMax, tMax)
+    logZ = np.full(dataSize, -np.inf).flatten()
+    newLogZ = logZ.copy()
+
+    # The 4 neighbors coordinates in x and y so that we can work w/ flattened coords
+    neighborX = np.array([0,0,-1,-1])
+    neighborY = np.array([0,-1,0,-1])
+
+    # Treat the t=0 case separately so we don't have to deal with the missing previous values, etc
+    logZ[0] = np.random.randn()*betaList[0]
+    yield logZ, 0
+
+    for t in range(1,tMax):
+        weights = np.random.randn(t+1,t+1)
+        # print(f'weights={weights}')
+        for x in range(0,t+1):
+            # print(f'x={x}')
+            indexListX = np.mod(x + neighborX, dataSize[0]) * dataSize[1]
+            for y in range(0,t+1):
+                # print(f'y={y}')
+                indexListY = indexListX + np.mod(y + neighborY, dataSize[1])
+                # print(f'indexListY={indexListY}')
+                newLogZ[x * dataSize[1] + y] = -weights[x,y] * betaList[t] + logSumExp(logZ[indexListY])
+                # print(x * dataSize[1] + y, logSumExp(logZ[indexListY]))
+        # replace the current values with the new values
+        logZ, newLogZ = newLogZ, logZ
+        yield logZ, t
+
+@njit
+def measurePartitionFunction(logZ, tMax, dim=2):
+    # Return measurements of the origin, line through origin, plane through origin, etc
+    measurement = np.empty(dim+1)
+    for d in range(dim+1):
+        measurement[d] = logSumExp(logZ[:tMax**d])
+    return measurement
+
+    # pointToPlane = logSumExp(logZ)
+    # # For point to line let's report the x=0 line
+    # pointToLine = logSumExp(logZ[:tMax])
+    # # half = t//2
+    # # pointToLine = logSumExp(logZ[half * tMax : half * tMax + t])
+    
+    # # pointToPoint = logZ[half * tMax + half]
+    # # Pick the origin point
+    # pointToPoint = logZ[0]
+    # return pointToPlane, pointToLine, pointToPoint
+
+def readLogZFiles(globString):
+    files = glob.glob(globString)
+    maxT = [f.split('/')[1].split(',')[0].split('=')[1] for f in files]
+    maxT = np.array(maxT).astype(int)
+    betaList = [f.split(',')[1].split('=')[1][:-4] for f in files]
+    betaList = np.array(betaList).astype(float)
+    s = np.argsort(betaList)
+    betaList = betaList[s]
+    maxT = maxT[s]
+    # Run through each
+    # meanLog, varLog, skewLog = [], [], []
+    meanF, varF, skewF = [], [], []
+    logMeanZ, logVarZ, logSkewZ = [], [], []
+    for index, f in enumerate(np.array(files)[s]):
+        print(f)
+        a = np.loadtxt(f, delimiter=',')
+
+        # The data stored in the files is ln(Z).  To turn this into a free energy we use
+        # F = - ln(Z) / beta.
+        meanF.append(- np.mean(a,0) / betaList[index])
+        varF.append(np.var(a,0) / betaList[index]**2)
+        skewF.append(scipy.stats.skew(a))
+
+        # The data stored in the files is ln(Z).  To turn this into ln<Z> we use
+        # ln<Z> = ln( sum(exp(ln(Z)))/N )  = ln(sum(exp(Z))) - ln(N)
+        logMoment1 = scipy.special.logsumexp(a, 0) - np.log(a.shape[0])
+        logMoment2 = scipy.special.logsumexp(2*a, 0) - np.log(a.shape[0])
+        logMoment3 = scipy.special.logsumexp(3*a, 0) - np.log(a.shape[0])
+        logMeanZ.append(logMoment1)
+        logVarZ.append(scipy.special.logsumexp(np.vstack([logMoment2, 2*logMoment1]), 0, b = [[1]*a.shape[1],[-1]*a.shape[1]]))
+        # logSkewZ.append()
+        
+    return maxT, betaList, np.array(meanF), np.array(varF), np.array(skewF), np.array(logMeanZ), np.array(logVarZ) #np.array(meanLog), np.array(varLog), np.array(skewLog)
+# Scaling of mean: (mean/(tMax-2)/np.log(4) - 1 ) / beta
+# Scaling of var: var / beta**2
+
+def plotMeanF(maxT, betaList, meanF):
+    times = np.unique(maxT)
+    for t in times:
+        print(t)
+        indexArr = (maxT == t)
+        plt.loglog(betaList[indexArr], -betaList[indexArr] * (meanF[indexArr,0]/np.log(4)/t) -1 , '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$-\beta \langle F\rangle /(N \ln(4)) - 1$')
+    # plt.ylim([.5,20])
+    plt.legend()
+    plt.show()
+
+def plotMeanEntropy(maxT, betaList, meanF, entry = 0):
+    tempList = 1/betaList
+    times = np.unique(maxT)
+    for t in times:
+        print(t)
+        indexArr = (maxT == t)
+        temp = tempList[indexArr]
+        scaledF = meanF[indexArr,entry]/np.log(4)/t
+        deltaTemp = np.diff(temp)
+        entropy = -np.diff(scaledF)/deltaTemp
+        plt.semilogx(1/(temp[:-1] + deltaTemp/2), entropy, '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$S$')
+    # plt.ylim([.5,20])
+    plt.legend()
+    plt.show()
+
+def plotVarF(maxT, betaList, varF):
+    times = np.unique(maxT)
+    variancePrediction = np.array([computeVariancePrediction(N) for N in times])
+    print(variancePrediction)
+    for i, t in enumerate(times):
+        indexArr = (maxT == t)
+        plt.semilogx(betaList[indexArr], (varF[indexArr,0]/variancePrediction[i]), '-o', label=f'tMax = {t}', mfc='none')
+        # plt.semilogx(betaList[indexArr], (varF[indexArr,0] - variancePrediction[i])/(varF[indexArr,0] - variancePrediction[i])[-1], '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$Var(F)/$(small $\beta$ prediction from text)')
+    plt.legend()
+    plt.show()
+
+def plotSkewF(maxT, betaList, skewF):
+    times = np.unique(maxT)
+    for t in times:
+        indexArr = (maxT == t)
+        plt.semilogx(betaList[indexArr], skewF[indexArr,0], '-o', label=f'tMax = {t}', mfc='none')
+    plt.xlabel(r'$\beta$')
+    plt.ylabel(r'$Skew(F)$')
+    plt.legend()
+    plt.show()
+
+
+def singleEvolution(tMax, beta0, beta, dim=2, new=True):    
+    pointToPlane = []
+    # elapsedTime = []
+    if new or dim >2:
+        it = transferMatrixND(dim, tMax, beta0*beta)
+    else:
+        it = transferMatrix2D(tMax, beta0*beta)
+    for logZ, t in it:
+        # if t == 0:
+        #     s = time.time()
+        # pointToPlane.append(logSumExp(logZ.reshape(tMax, tMax)[:t+1,:t+1].flatten()))
+        pass
+        # pointToPlane.append(logSumExp(logZ))
+        # elapsedTime.append(time.time()-s)
+    return np.array(pointToPlane), logZ#, np.array(elapsedTime)
+
+def varianceCheck(nSystems, N, beta0):
+    allLogZ = []
+    for sys in range(nSystems):
+        allLogZ.append(singleEvolution(N, beta0, np.ones(N)))
+        if np.mod(sys, 100) == 0:
+            print(sys)
+    
+    F = -np.array(allLogZ)/beta0
+    return F
+
+def computeVariance(sys, N, beta0):
+    F = -singleEvolution(N, beta0, np.ones(N))/beta0
+    return F
+
+def computeVariancePrediction(N):
+    secondMoment = 0
+    for n in range(N+1):
+        sumTerm = (scipy.special.binom(2*n, n) * 4**(-n))**2
+        if not np.isfinite(sumTerm):
+            sumTerm = 1/(n*np.pi)
+        secondMoment += sumTerm
+    return secondMoment
+
+# def processLogZFiles(globString):
+#     # Read through all of the data files and sort each entry into the appropriate file
+#     # Each file should contain the information for a given (time, beta0) pair
+#     # If there are 5 times and 9 beta0s then there should be 45 output files
+#     # This can be done with awk, using
+#     # awk -F", " '{file = "t=" $1 ",beta0=" sprintf("%.14f",$2) ".dat"; print $3 FS $4 FS $5 >> file}' *.dat
+    
+#     all = []
+#     for f in glob.glob(globString):
+        
+#         data = readLogZFiles(globString, tList, beta0List, nMeasurements=3)
+#     # We want to reshape the data into a dictionary
+#     # [time, beta0, measurementId, element]
+#     # if tMax=1000, there will be 5 times, 9 beta0s, 3 measurementIds, N elements
+
+if __name__ == "__main__":
+
+    # Call as `python3 directedPolymer.py dim tMax numSystems outFile betaString`
+    inputIndex = 1
+    dim = int(sys.argv[inputIndex]); inputIndex += 1
+    tMax = int(sys.argv[inputIndex]); inputIndex += 1
+    numSystems = int(sys.argv[inputIndex]); inputIndex += 1
+    outFileName = sys.argv[inputIndex]; inputIndex += 1
+    betaString = sys.argv[inputIndex]; inputIndex += 1 # Example string, "np.ones(tMax)", 
+    
+    measurementTimes = np.geomspace(1,tMax, np.round(2 * np.log10(tMax)).astype(int) + 1).astype(int)
+    # make tMax one more so that our measurements end at the input value, rather than input value-1
+    # print(measurementTimes)
+    tMax += 1
+    beta = eval(betaString)
+    # beta0List = np.geomspace(.1,10,9)
+    beta0List = np.geomspace(.01,100,17)
+    # beta0List = np.geomspace(.1*10**(33/64),10**(31/64), 10)
+    # s = time.time()
+    with open(outFileName, 'a') as file:        
+        for _ in range(numSystems):
+            for beta0 in beta0List:
+                measureIndex = 0
+                for logZ, t in transferMatrixND(dim, tMax, beta0*beta):
+                    # Make measurements that are log-spaced
+                    if measurementTimes[measureIndex] == t:
+                        measureIndex += 1
+                        measurements = measurePartitionFunction(logZ, tMax, dim)
+                        # measurementTimes = np.delete(measurementTimes, 0)
+                        file.write(f'{t}, {beta0}, {', '.join(map(str, measurements))} \n')
+                        # print(t, time.time()-s, p2Plane, p2Line, p2Point)
+                file.flush()
+
+
+    # print(logScaling)
+    # temp0 = np.geomspace(tempMin, tempMax, numTemp)
+    # if logScaling:
+    #     tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
+    # elif sqrtScaling:
+    #     tempList = np.multiply.outer(temp0, np.sqrt(np.arange(1,tMax+1)))
+    # else:
+    #     tempList = np.multiply.outer(temp0, np.ones(tMax) )
+        
+    # for sysId in range(numSystems):
+    #     logZ = transferMatrix2D(tMax, tempList)
+    #     # Format things so that they save as a row, rather than a column
+    #     pointToPlane = np.array([logSumPartitionFunction(logZ[:,:,i]) for i in range(numTemp)]).reshape(-1,1).T
+    #     with open(outFile, 'a') as file:
+    #         np.savetxt(file, pointToPlane)
+    #     print(sysId)
+    # # for i in range(numTemp):
+    # #     print(f'Temp={tempList[i]}, logZ = {logSumPartitionFunction(logZ[:,:,i])}')
 
 
 # Terminology:
@@ -247,254 +584,3 @@ import glob
 #     #     for j in [-1,0]:
 #     #         predecessorZ += np.exp(logZ[x+i, y+j])
 #     # return np.log(predecessorZ)
-
-
-@njit
-def logSumExp(x):
-    a = np.max(x)
-    # We're wasting our time if we include entries that are more than np.log(np.finfo(float).eps) = -36.04365338911715 below the max
-    cutoff = -37
-    expSum = 0
-    for val in x:
-        # if val-a > cutoff and val != a: # This would eliminate the computation of np.log(np.exp(0)), but it seems to make no difference in the long term.
-        if val-a > cutoff:
-            expSum += np.exp(val-a)
-    return a + np.log(expSum)
-
-    # return a + np.log(np.sum(np.exp(x-a)))
-
-# TODO: rewrite this to work in arbitrary dimensions as there's some indication that
-# there may only be a true phase transition for d > 2
-@njit
-def transferMatrix2D(tMax, betaList): #, measurementTimes):
-    # betaList has to be of length tMax
-    assert betaList.shape[0] == tMax, "betaList must be length tMax"
-    dataSize = (tMax, tMax)
-    logZ = np.full(dataSize, -np.inf).flatten()
-    newLogZ = logZ.copy()
-
-    # The 4 neighbors coordinates in x and y so that we can work w/ flattened coords
-    neighborX = np.array([0,0,-1,-1])
-    neighborY = np.array([0,-1,0,-1])
-
-    # Treat the t=0 case separately so we don't have to deal with the missing previous values, etc
-    logZ[0] = np.random.randn()*betaList[0]
-    yield logZ, 0
-
-    for t in range(1,tMax):
-        weights = np.random.randn(t+1,t+1)
-        # print(f'weights={weights}')
-        for x in range(0,t+1):
-            # print(f'x={x}')
-            indexListX = np.mod(x + neighborX, dataSize[0]) * dataSize[1]
-            for y in range(0,t+1):
-                # print(f'y={y}')
-                indexListY = indexListX + np.mod(y + neighborY, dataSize[1])
-                # print(f'indexListY={indexListY}')
-                newLogZ[x * dataSize[1] + y] = -weights[x,y] * betaList[t] + logSumExp(logZ[indexListY])
-                # print(x * dataSize[1] + y, logSumExp(logZ[indexListY]))
-        # replace the current values with the new values
-        logZ, newLogZ = newLogZ, logZ
-        yield logZ, t
-
-@njit
-def measurePartitionFunction(logZ, tMax):
-    pointToPlane = logSumExp(logZ)
-    # For point to line let's report the x=0 line
-    pointToLine = logSumExp(logZ[:tMax])
-    # half = t//2
-    # pointToLine = logSumExp(logZ[half * tMax : half * tMax + t])
-    
-    # pointToPoint = logZ[half * tMax + half]
-    # Pick the origin point
-    pointToPoint = logZ[0]
-    return pointToPlane, pointToLine, pointToPoint
-
-def readLogZFiles(globString):
-    files = glob.glob(globString)
-    maxT = [f.split('/')[1].split(',')[0].split('=')[1] for f in files]
-    maxT = np.array(maxT).astype(int)
-    betaList = [f.split(',')[1].split('=')[1][:-4] for f in files]
-    betaList = np.array(betaList).astype(float)
-    s = np.argsort(betaList)
-    betaList = betaList[s]
-    maxT = maxT[s]
-    # Run through each
-    # meanLog, varLog, skewLog = [], [], []
-    meanF, varF, skewF = [], [], []
-    logMeanZ, logVarZ, logSkewZ = [], [], []
-    for index, f in enumerate(np.array(files)[s]):
-        print(f)
-        a = np.loadtxt(f, delimiter=',')
-
-        # The data stored in the files is ln(Z).  To turn this into a free energy we use
-        # F = - ln(Z) / beta.
-        meanF.append(- np.mean(a,0) / betaList[index])
-        varF.append(np.var(a,0) / betaList[index]**2)
-        skewF.append(scipy.stats.skew(a))
-
-        # The data stored in the files is ln(Z).  To turn this into ln<Z> we use
-        # ln<Z> = ln( sum(exp(ln(Z)))/N )  = ln(sum(exp(Z))) - ln(N)
-        logMoment1 = scipy.special.logsumexp(a, 0) - np.log(a.shape[0])
-        logMoment2 = scipy.special.logsumexp(2*a, 0) - np.log(a.shape[0])
-        logMoment3 = scipy.special.logsumexp(3*a, 0) - np.log(a.shape[0])
-        logMeanZ.append(logMoment1)
-        logVarZ.append(scipy.special.logsumexp(np.vstack([logMoment2, 2*logMoment1]), 0, b = [[1]*a.shape[1],[-1]*a.shape[1]]))
-        # logSkewZ.append()
-        
-    return maxT, betaList, np.array(meanF), np.array(varF), np.array(skewF), np.array(logMeanZ), np.array(logVarZ) #np.array(meanLog), np.array(varLog), np.array(skewLog)
-# Scaling of mean: (mean/(tMax-2)/np.log(4) - 1 ) / beta
-# Scaling of var: var / beta**2
-
-def plotMeanF(maxT, betaList, meanF):
-    times = np.unique(maxT)
-    for t in times:
-        print(t)
-        indexArr = (maxT == t)
-        plt.loglog(betaList[indexArr], -betaList[indexArr] * (meanF[indexArr,0]/np.log(4)/t), '-o', label=f'tMax = {t}', mfc='none')
-    plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$-\beta \langle F\rangle /(N \ln(4))$')
-    # plt.ylim([.5,20])
-    plt.legend()
-    plt.show()
-
-def plotMeanEntropy(maxT, betaList, meanF, entry = 0):
-    tempList = 1/betaList
-    times = np.unique(maxT)
-    for t in times:
-        print(t)
-        indexArr = (maxT == t)
-        temp = tempList[indexArr]
-        scaledF = meanF[indexArr,entry]/np.log(4)/t
-        deltaTemp = np.diff(temp)
-        entropy = -np.diff(scaledF)/deltaTemp
-        plt.semilogx(1/(temp[:-1] + deltaTemp/2), entropy, '-o', label=f'tMax = {t}', mfc='none')
-    plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$S$')
-    # plt.ylim([.5,20])
-    plt.legend()
-    plt.show()
-
-def plotVarF(maxT, betaList, varF):
-    times = np.unique(maxT)
-    variancePrediction = np.array([computeVariancePrediction(N) for N in times])
-    print(variancePrediction)
-    for i, t in enumerate(times):
-        indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], (varF[indexArr,0]/variancePrediction[i]), '-o', label=f'tMax = {t}', mfc='none')
-    plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$Var(F)/$(small $\beta$ prediction from text)')
-    plt.legend()
-    plt.show()
-
-def plotSkewF(maxT, betaList, skewF):
-    times = np.unique(maxT)
-    for t in times:
-        indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], skewF[indexArr,0], '-o', label=f'tMax = {t}', mfc='none')
-    plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$Skew(F)$')
-    plt.legend()
-    plt.show()
-
-
-def singleEvolution(tMax, beta0, beta):
-    pointToPlane = []
-    # elapsedTime = []
-    for logZ, t in transferMatrix2D(tMax, beta0*beta):
-        # if t == 0:
-        #     s = time.time()
-        pointToPlane.append(logSumExp(logZ.reshape(tMax, tMax)[:t+1,:t+1].flatten()))
-        # pointToPlane.append(logSumExp(logZ))
-        # elapsedTime.append(time.time()-s)
-    return np.array(pointToPlane)#, np.array(elapsedTime)
-
-def varianceCheck(nSystems, N, beta0):
-    allLogZ = []
-    for sys in range(nSystems):
-        allLogZ.append(singleEvolution(N, beta0, np.ones(N)))
-        if np.mod(sys, 100) == 0:
-            print(sys)
-    
-    F = -np.array(allLogZ)/beta0
-    return F
-
-def computeVariance(sys, N, beta0):
-    F = -singleEvolution(N, beta0, np.ones(N))/beta0
-    return F
-
-def computeVariancePrediction(N):
-    secondMoment = 0
-    for n in range(N+1):
-        sumTerm = (scipy.special.binom(2*n, n) * 4**(-n))**2
-        if not np.isfinite(sumTerm):
-            sumTerm = 1/(n*np.pi)
-        secondMoment += sumTerm
-    return secondMoment
-
-# def processLogZFiles(globString):
-#     # Read through all of the data files and sort each entry into the appropriate file
-#     # Each file should contain the information for a given (time, beta0) pair
-#     # If there are 5 times and 9 beta0s then there should be 45 output files
-#     # This can be done with awk, using
-#     # awk -F", " '{file = "t=" $1 ",beta0=" sprintf("%.14f",$2) ".dat"; print $3 FS $4 FS $5 >> file}' *.dat
-    
-#     all = []
-#     for f in glob.glob(globString):
-        
-#         data = readLogZFiles(globString, tList, beta0List, nMeasurements=3)
-#     # We want to reshape the data into a dictionary
-#     # [time, beta0, measurementId, element]
-#     # if tMax=1000, there will be 5 times, 9 beta0s, 3 measurementIds, N elements
-
-if __name__ == "__main__":
-
-    # Call as `python3 directedPolymer.py tMax numSystems outFile betaString`
-    inputIndex = 1
-    tMax = int(sys.argv[inputIndex]); inputIndex += 1
-    numSystems = int(sys.argv[inputIndex]); inputIndex += 1
-    outFileName = sys.argv[inputIndex]; inputIndex += 1
-    betaString = sys.argv[inputIndex]; inputIndex += 1 # Example string, "np.ones(tMax)", 
-    
-    measurementTimes = np.geomspace(1,tMax, np.round(2 * np.log10(tMax)).astype(int) + 1).astype(int)
-    # make tMax one more so that our measurements end at the input value, rather than input value-1
-    print(measurementTimes)
-    tMax += 1
-    beta = eval(betaString)
-    # beta0List = np.geomspace(.1,10,9)
-    # beta0List = np.geomspace(.01,100,17)
-    beta0List = np.geomspace(.1*10**(33/64),10**(31/64), 10)
-    # s = time.time()
-    with open(outFileName, 'a') as file:        
-        for _ in range(numSystems):
-            for beta0 in beta0List:
-                measureIndex = 0
-                for logZ, t in transferMatrix2D(tMax, beta0*beta):
-                    # Make measurements that are log-spaced
-                    if measurementTimes[measureIndex] == t:
-                        measureIndex += 1
-                        p2Plane, p2Line, p2Point = measurePartitionFunction(logZ, tMax)
-                        # measurementTimes = np.delete(measurementTimes, 0)
-                        file.write(f'{t}, {beta0}, {p2Plane}, {p2Line}, {p2Point} \n')
-                        # print(t, time.time()-s, p2Plane, p2Line, p2Point)
-                file.flush()
-
-
-    # print(logScaling)
-    # temp0 = np.geomspace(tempMin, tempMax, numTemp)
-    # if logScaling:
-    #     tempList = np.multiply.outer(temp0, np.sqrt( np.log( np.e * np.arange(1,tMax+1) ) ) )
-    # elif sqrtScaling:
-    #     tempList = np.multiply.outer(temp0, np.sqrt(np.arange(1,tMax+1)))
-    # else:
-    #     tempList = np.multiply.outer(temp0, np.ones(tMax) )
-        
-    # for sysId in range(numSystems):
-    #     logZ = transferMatrix2D(tMax, tempList)
-    #     # Format things so that they save as a row, rather than a column
-    #     pointToPlane = np.array([logSumPartitionFunction(logZ[:,:,i]) for i in range(numTemp)]).reshape(-1,1).T
-    #     with open(outFile, 'a') as file:
-    #         np.savetxt(file, pointToPlane)
-    #     print(sysId)
-    # # for i in range(numTemp):
-    # #     print(f'Temp={tempList[i]}, logZ = {logSumPartitionFunction(logZ[:,:,i])}')
