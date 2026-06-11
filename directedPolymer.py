@@ -328,7 +328,7 @@ if __name__ == "__main__":
                         measureIndex += 1
                         measurements = measurePartitionFunction(logZ, tMax, dim)
                         # measurementTimes = np.delete(measurementTimes, 0)
-                        file.write(f'{t}, {beta0}, {', '.join(map(str, measurements))} \n')
+                        file.write(f"{t}, {beta0}, {', '.join(map(str, measurements))} \n")
                         # print(t, time.time()-s, p2Plane, p2Line, p2Point)
                 file.flush()
 
