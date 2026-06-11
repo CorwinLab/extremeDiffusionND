@@ -155,7 +155,7 @@ def measurePartitionFunction(logZ, tMax, dim=2):
 
 def readLogZFiles(globString):
     files = glob.glob(globString)
-    maxT = [f.split('/')[1].split(',')[0].split('=')[1] for f in files]
+    maxT = [f.split('/')[-1].split(',')[0].split('=')[1] for f in files]
     maxT = np.array(maxT).astype(int)
     betaList = [f.split(',')[1].split('=')[1][:-4] for f in files]
     betaList = np.array(betaList).astype(float)
@@ -189,14 +189,14 @@ def readLogZFiles(globString):
 # Scaling of mean: (mean/(tMax-2)/np.log(4) - 1 ) / beta
 # Scaling of var: var / beta**2
 
-def plotMeanF(maxT, betaList, meanF):
+def plotMeanF(maxT, betaList, meanF, dim=2):
     times = np.unique(maxT)
     for t in times:
         print(t)
         indexArr = (maxT == t)
-        plt.loglog(betaList[indexArr], -betaList[indexArr] * (meanF[indexArr,0]/np.log(4)/t) -1 , '-o', label=f'tMax = {t}', mfc='none')
+        plt.loglog(betaList[indexArr], -betaList[indexArr] * (meanF[indexArr]/np.log(2**dim)/t) -1 , '-o', label=f'tMax = {t}', mfc='none')
     plt.xlabel(r'$\beta$')
-    plt.ylabel(r'$-\beta \langle F\rangle /(N \ln(4)) - 1$')
+    plt.ylabel(r'$-\beta \langle F\rangle /(N \ln(2^d)) - 1$')
     # plt.ylim([.5,20])
     plt.legend()
     plt.show()
@@ -218,24 +218,26 @@ def plotMeanEntropy(maxT, betaList, meanF, entry = 0):
     plt.legend()
     plt.show()
 
-def plotVarF(maxT, betaList, varF):
+def plotVarF(maxT, betaList, varF, dim, linewidth=1):
     times = np.unique(maxT)
-    variancePrediction = np.array([computeVariancePrediction(N) for N in times])
+    variancePrediction = np.array([computeVariancePrediction(N, dim) for N in times])
     print(variancePrediction)
     for i, t in enumerate(times):
         indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], (varF[indexArr,0]/variancePrediction[i]), '-o', label=f'tMax = {t}', mfc='none')
+        plt.semilogx(betaList[indexArr], (varF[indexArr]/variancePrediction[i]), '-o', linewidth=linewidth, label=f'tMax = {t}', mfc='none')
         # plt.semilogx(betaList[indexArr], (varF[indexArr,0] - variancePrediction[i])/(varF[indexArr,0] - variancePrediction[i])[-1], '-o', label=f'tMax = {t}', mfc='none')
+    plt.gca().set_prop_cycle(None)
     plt.xlabel(r'$\beta$')
     plt.ylabel(r'$Var(F)/$(small $\beta$ prediction from text)')
     plt.legend()
     plt.show()
 
-def plotSkewF(maxT, betaList, skewF):
+def plotSkewF(maxT, betaList, skewF, linewidth=1):
     times = np.unique(maxT)
     for t in times:
         indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], skewF[indexArr,0], '-o', label=f'tMax = {t}', mfc='none')
+        plt.semilogx(betaList[indexArr], skewF[indexArr], '-o', linewidth=linewidth, label=f'tMax = {t}', mfc='none')
+    plt.gca().set_prop_cycle(None)
     plt.xlabel(r'$\beta$')
     plt.ylabel(r'$Skew(F)$')
     plt.legend()
@@ -272,12 +274,13 @@ def computeVariance(sys, N, beta0):
     F = -singleEvolution(N, beta0, np.ones(N))/beta0
     return F
 
-def computeVariancePrediction(N):
+def computeVariancePrediction(N, dim):
     secondMoment = 0
     for n in range(N+1):
-        sumTerm = (scipy.special.binom(2*n, n) * 4**(-n))**2
+        sumTerm = (scipy.special.binom(2*n, n) * 2**(-2*n))**dim
         if not np.isfinite(sumTerm):
-            sumTerm = 1/(n*np.pi)
+            # sumTerm = 1/(n*np.pi)
+            sumTerm = (np.pi * n)**(-dim/2)
         secondMoment += sumTerm
     return secondMoment
 
