@@ -105,13 +105,13 @@ def get2PointVectors(probs):
                         [[-1, 0], [1, 0]], [[-1, 0], [-1, 0]], [[-1, 0], [0, 1]], [[-1, 0], [0, -1]],
                         [[0, +1], [1, 0]], [[0, +1], [-1, 0]], [[0, +1], [0, 1]], [[0, +1], [0, -1]],
                         [[0, -1], [1, 0]], [[0, -1], [-1, 0]], [[0, -1], [0, 1]], [[0, -1], [0, -1]]])
-    # need the squeeze to get the output to be (2,2)
     move = options[np.random.choice(np.arange(16), p=probs)]
     return move
 
 
 def phi(walk_x,walk_y, v, t):
-    return np.linalg.norm([(walk_x - v*t)/np.sqrt(1-2*v**2), walk_y])
+    """ implement the smoothing funtion as phi(\vec{R(t)}-vt\hat{x}/sqrt(1-v^2) )"""
+    return np.linalg.norm([(walk_x - v*t)/np.sqrt(1-v**2), walk_y/np.sqrt(1-v**2)])
 
 
 def version2(v, alpha, tMax, d=2):
@@ -125,6 +125,10 @@ def version2(v, alpha, tMax, d=2):
     # initialize at t=0 with walks at 0,0, eqn 16 evaluated at t=0 and r1[0] = r2[0] = vec(0)
     walks = np.zeros((tMax, d, 2))  # time by dimension by # walks
     probs = correlated2PointMotion(v, alpha)
+
+    eqn15 = np.zeros(tMax)
+    eqn15[0] = (np.exp(gAnalytic(np.arctanh(2*v),alpha)*0) *
+                (phi(walks[0,0,0],walks[0,1,0],v,0)*phi(walks[0,0,1],walks[0,1,1],v,0)))
     for t in range(1, tMax):
         initialMove = get2PointVectors(probs)
         moveWalk1 = initialMove[0]
@@ -142,14 +146,78 @@ def version2(v, alpha, tMax, d=2):
             localTime[t] = localTime[t - 1] + 1
         else:
             localTime[t] = localTime[t-1]
-        # print('local time: ',localTime)
-    return walks, localTime
+        # update eqn 16
+        eqn15[t] = (np.exp(gAnalytic(np.arctanh(2 * v), alpha) * localTime[t-1]) *
+                    (phi(walks[t, 0, 0], walks[t, 0, 1], v, t) * phi(walks[t,0,1],walks[t,1,1],v,t)))
+    return np.array(walks), np.array(localTime), np.array(eqn15)
 
 
 def manyVersion2(n, tMax, v=0.08, alpha=1, d=2):
     """ return the avg. of eqn 16 wrt jacob's shitty tilted measure"""
     localTimes = []
+    eqn15s = []
     for i in range(n):
-        paths, localTime = version2(v=v, alpha=alpha, tMax=tMax, d=d)
+        _, localTime, eqn15 = version2(v=v, alpha=alpha, tMax=tMax, d=d)
         localTimes.append(localTime)
-    return localTimes
+        eqn15s.append(eqn15)
+    return np.array(localTimes), np.array(eqn15s)
+
+# # TO DO: FIX THIS BECAUSE THE STRUCture ISNt RIgHt
+# def iterateOverVs(n, tMax, alpha=1, d=2):
+#     vs = np.geomspace(1e-3,2,21)
+#     localTimes = np.zeros((tMax,vs.shape[0]))
+#     eqn15s = np.zeros((tMax,vs.shape[0]))
+#     for idx, v in enumerate(vs):
+#         print(f"working on v = {v}")
+#         lT, eqn15 = manyVersion2(n, tMax, v=v, alpha=alpha, d=d)
+#         localTimes[:,idx] = lT
+#         eqn15s[:,idx] = eqn15
+#     return localTimes, eqn15s, vs
+
+
+def rVec(xMag,yMag):
+    """ helper function to compute kappa(r) """
+    xhat = np.array([1,0])
+    yhat = np.array([0,1])
+    return xMag*xhat + yMag*yhat
+
+
+def computeTermInsideKappa(rVec, n1, n2, v):
+    """ helper function to compute kappa(r)"""
+    xhat = np.array([1,0])
+    exponentialTerm = np.exp(2*np.arctanh(v)*np.dot(xhat, n1+n2))
+    logTerm = np.log((1 + np.linalg.norm(rVec+n1+n2))/(1+np.linalg.norm(rVec)))
+    return exponentialTerm*logTerm
+
+
+def kappa(r, v):
+    """compute kappa(r) for a given r and a given v"""
+    kappa = 0
+    nhats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
+    for n1 in nhats:
+        for n2 in nhats:
+            kappa += computeTermInsideKappa(r, n1, n2, v)
+    return (((1-v**2)**2)/16)*kappa
+
+
+def computeAllKappa(v, size=100):
+    """ compute kappa(r) over a range of r vectors (centered around (0,0),
+    and out to size size)
+    for a given v"""
+    x, y = np.arange(-size,size+1), np.arange(-size,size+1)
+    xx, yy = np.meshgrid(x, y)
+    r = np.array([xx.flatten(),yy.flatten()]).T
+    return np.array([kappa(rvalue,v) for rvalue in r]).reshape(2*size+1,2*size+1)
+
+def findKappaLimit(v, sizes=None):
+    """ for a give v find the limit of the sum of kappas
+    as the range of all space gets large"""
+    if sizes is None:
+        sizes = [100, 250, 500, 1000, 1500, 2000, 5000]
+    kappaSums = []
+    for size in sizes:
+        print(f'size: {size}')
+        kappaSum = np.sum(computeAllKappa(v, size))
+        kappaSums.append(kappaSum)
+    return np.array((sizes, kappaSums))
+
