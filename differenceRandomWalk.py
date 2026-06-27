@@ -8,6 +8,8 @@ from datetime import date
 import sys
 import shutil
 import math
+from scipy.signal import convolve2d
+
 
 # This module is intended to evolve the PMF of the difference random walk
 # defined as \vec{V(t)} = \vec{R1(t)} - \vec{R2(t)}
@@ -46,6 +48,8 @@ def calcXiExpectation(n1, n2, alpha):
 
 def calcTransitionProb(r1, r2, alpha, v):
     """ this should return a proability for the change from r1 to r2; implemented eqn. 22"""
+    r1 = np.asarray(r1) if isinstance(r1, list) else r1
+    r2 = np.asarray(r2) if isinstance(r2, list) else r2
     diff = r2 - r1
     nHats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
     xHat = nHats[0]
@@ -64,6 +68,35 @@ def calcTransitionProb(r1, r2, alpha, v):
     prob /= normalization(r1, alpha, v)  # this gives alpha^2
     return prob
 
+def calcTransitionMatrix(alpha, v, origin=True):
+    transition = np.zeros((3,3))
+    if origin:
+        r1 = np.array([0,0])
+    else:
+        r1 = np.array([1,1])
+    for i in range(3):
+        for j in range(3):
+            transition[i,j] = calcTransitionProb(r1, r1 + np.array([i-1,j-1]), alpha, v)
+    return transition
+            
+
+def evolvePofV(tMax, alpha, v):
+    pmfs = []
+    atOrigin = calcTransitionMatrix(alpha, v, origin=True)
+    notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
+    # Initial condition is two walks at the same site, so PMF=1 at the origin
+    PofV = np.array([[1]])
+    pmfs.append(PofV.copy())
+    for t in range(tMax):
+        originValue = PofV[t,t]
+        # We can use scipys convolve to get the results everywhere but at the origin
+        PofV = convolve2d(PofV, notAtOrigin, mode='full', boundary='fill', fillvalue=0)
+        # After the convolution we will have a new matrix that is 2 elements larger in each dimension
+        # So, the location of the new origin will be at t+1, t+1
+        # And then we have to subtract off the wrong convolution and add in the right one at the origin
+        PofV[t:t+3,t:t+3] += originValue * (atOrigin - notAtOrigin)
+        pmfs.append(PofV.copy())
+    return pmfs
 
 def calcDelta(V):
     """ calculates delta(t) = ln(1 + ||V(t)||)"""
@@ -134,7 +167,7 @@ def kappaOfRFixed(rArraySites, kappaArray,size):
 # by creating a grid and then averaging over all sites with distance r, we're actually
 # missing some spots because a square lattice won't have every site that has distance r for the
 # corners of the square. 
-def find_two_squars(target):
+def find_two_squares(target):
     """ this algorithm finds all coordinates in an octant that would fall on a circle"""
     pairs = []
     # left pointer starts at 0, right pointer starts at the sqrt of the target
