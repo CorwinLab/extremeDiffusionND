@@ -9,7 +9,8 @@ import sys
 import shutil
 import math
 from scipy.signal import convolve2d
-
+import matplotlib.pyplot as plt
+from directedPolymer import logSumExp
 
 # This module is intended to evolve the PMF of the difference random walk
 # defined as \vec{V(t)} = \vec{R1(t)} - \vec{R2(t)}
@@ -20,6 +21,193 @@ from scipy.signal import convolve2d
 
 # don't worry about numba or logsumExp or storing things as logP yet
 # assumes dirichlet,
+
+def makeDirectionList(nDim=2):
+    return np.vstack([np.eye(2, dtype=int), -np.eye(2,dtype=int)])
+
+def calcXiExpectation(n1, n2, alpha, correlated=False):
+    """ calculates E_nu[xi(n1)xi(n2)] assumming xi's are Dirichlet distributed with parameter alpha"""
+    alpha0 = 4*alpha
+    if correlated:
+        if (n1 == n2).all():
+            # This should actually be alpha_i * (alpha_i + 1) / (alpha0 * (alpha0 + 1))
+            return alpha * (alpha + 1) / (alpha0 * (alpha0 + 1))
+        else:
+            # This should actually be alpha_i * alpha_j / (alpha0 * (alpha0 + 1))
+            return alpha**2 / (alpha0 * (alpha0 + 1))
+    else:
+        return alpha**2 / alpha0**2
+
+def twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=False):
+    # These are the transition probabilites for a pair of walkers. Since each walker can only move one step
+    # in the cardinal directions we will return
+    # list of directions1, list of directions2, transition probability
+
+    # First, generate the list of directions
+    directions = makeDirectionList(nDim=2)
+
+    #compute the denominator
+    denominator = 0
+    for m1 in directions:
+        for m2 in directions:
+            denominator += calcXiExpectation(m1, m2, alpha, correlated=correlated) * np.exp( 2 * np.arctanh(v) * np.dot( (m1 + m2), tiltDirection))
+
+    # TODO: Remove, debugging
+    # denominator = 1
+    # print(denominator)
+
+    d1List = []
+    d2List = []
+    probabilityList = []
+    for n1 in directions:
+        for n2 in directions:
+            d1List.append(n1)
+            d2List.append(n2)
+            prefactor = calcXiExpectation(n1, n2, alpha, correlated=correlated) / denominator
+            expTerm = np.exp( 2 * np.arctanh(v) * np.dot( (n1 + n2), tiltDirection))
+            probabilityList.append(prefactor * expTerm)
+
+    return np.array(d1List), np.array(d2List), np.array(probabilityList)
+
+def computeVTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=False, maxStep=2):
+    width = maxStep*2 + 1
+    transition = np.zeros((width, width))
+
+    d1, d2, p = twoWalkerTransitionProbabilities(alpha, v, tiltDirection=tiltDirection, correlated=correlated)    
+    deltaV = d1 - d2
+    for i in range(len(p)):
+        # print(deltaV[i], p[i])
+        transition[deltaV[i,0] + maxStep, deltaV[i,1] + maxStep] += p[i]
+    return transition
+
+# def evolvePofVConvolve(tMax, alpha, v, maxStep=2):
+#     pmfs = []
+#     # atOrigin = calcTransitionMatrix(alpha, v, origin=True)
+#     atOrigin = computeVTransitionProbabilities(alpha, v, correlated=True)
+#     # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
+#     notAtOrigin = computeVTransitionProbabilities(alpha, v, correlated=False)
+#     # Initial condition is two walks at the same site, so PMF=1 at the origin
+#     PofV = np.array([[1]])
+#     pmfs.append(PofV.copy())
+#     for t in range(tMax):
+#         # TODO: wrong next line
+#         originValue = PofV[t,t]
+#         # We can use scipys convolve to get the results everywhere but at the origin
+#         PofV = convolve2d(PofV, notAtOrigin, mode='full', boundary='fill', fillvalue=0)
+#         # After the convolution we will have a new matrix that is 2 elements larger in each dimension
+#         # So, the location of the new origin will be at 2t+1, 2t+1
+#         # And then we have to subtract off the wrong convolution and add in the right one at the origin
+#         # TODO: wrong next line
+#         newOrigin=2*t + 2 # At t=0 this value needs to be 2, at t=1 it needs to be 4, etc.
+#         PofV[newOrigin-maxStep:newOrigin+maxStep+1, newOrigin-maxStep:newOrigin+maxStep+1] += originValue * (atOrigin - notAtOrigin)
+#         pmfs.append(PofV.copy())
+#     return pmfs
+
+def evolvePofVGold(tMax, alpha, v, maxStep=2):
+    pmfs = []
+    # atOrigin = calcTransitionMatrix(alpha, v, origin=True)
+    atOrigin = computeVTransitionProbabilities(alpha, v, correlated=True)
+    # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
+    notAtOrigin = computeVTransitionProbabilities(alpha, v, correlated=False)
+    # Initial condition is two walks at the same site, so PMF=1 at the origin
+    PofV = np.array([[1]])
+    pmfs.append(PofV.copy())
+    # We could get an 8-fold speedup by exploiting the 8-fold symmetry of the plane and using reflecting boundary conditions
+    for t in range(tMax):
+        newPofV = np.zeros(np.array(PofV.shape) + 2*maxStep)
+        for i in range(PofV.shape[0]):
+            for j in range(PofV.shape[1]):
+                # By hand apply the transition matrices
+                if i == 2*t and j == 2*t:
+                    newPofV[i:i+2*maxStep+1, j:j+2*maxStep+1] += PofV[i,j]*atOrigin
+                else:
+                    newPofV[i:i+2*maxStep+1, j:j+2*maxStep+1] += PofV[i,j]*notAtOrigin
+        # We can use scipys convolve to get the results everywhere but at the origin
+        PofV = newPofV
+        pmfs.append(PofV.copy())
+    return pmfs
+
+def evolvePofVLSEGold(tMax, alpha, v, maxStep=2):
+    logpmfs = []
+    # atOrigin = calcTransitionMatrix(alpha, v, origin=True)
+    atOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=True))
+    # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
+    notAtOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=False))
+    # Initial condition is two walks at the same site, so PMF=1 at the origin and logPMF=0
+    PofV = np.array([[np.log(1)]])
+    logpmfs.append(PofV.copy())
+    # We could get an 8-fold speedup by exploiting the 8-fold symmetry of the plane and using reflecting boundary conditions
+    for t in range(tMax):
+        newPofV = np.full(np.array(PofV.shape) + 2*maxStep, -np.inf)
+        for i in range(PofV.shape[0]):
+            for j in range(PofV.shape[1]):
+                # By hand apply the transition matrices
+                for m in range(2*maxStep+1):
+                    for n in range(2*maxStep+1):
+                        transferValue = atOrigin[m, n] if (i == 2*t and j == 2*t) else notAtOrigin[m,n]
+                        newPofV[i+m, j+n] = logSumExp(np.array([newPofV[i+m, j+n], PofV[i,j] + transferValue ]))
+        # We can use scipys convolve to get the results everywhere but at the origin
+        PofV = newPofV
+        logpmfs.append(PofV.copy())
+    return logpmfs
+
+@njit
+def calcNextPMF(t, PofV, atOrigin, notAtOrigin, maxStep=2):
+    newSize = PofV.shape[0] + 2*maxStep
+    newPofV = np.full((newSize, newSize), -np.inf)
+    # newPofV[:] = -np.inf
+    # newPofV = np.zeros(np.array(PofV.shape) + 2*maxStep).fill(-np.inf)
+    # TODO: There's another 8x speedup by only looking at half of a quadrant
+    for i in range(PofV.shape[0]):
+        for j in range(PofV.shape[1]):
+            # By hand apply the transition matrices, but only if the element is not equal to -np.inf
+            if np.isfinite(PofV[i,j]):
+                for m in range(2*maxStep+1):
+                    for n in range(2*maxStep+1):
+                        transferValue = atOrigin[m, n] if (i == 2*t and j == 2*t) else notAtOrigin[m,n]
+                        if np.isfinite(transferValue):
+                            newPofV[i+m, j+n] = logSumExp(np.array([newPofV[i+m, j+n], PofV[i,j] + transferValue ]))
+    # We can use scipys convolve to get the results everywhere but at the origin
+    return newPofV
+
+def evolvePofVNumba(tMax, alpha, v, maxStep=2):
+    # atOrigin = calcTransitionMatrix(alpha, v, origin=True)
+    atOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=True))
+    # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
+    notAtOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=False))
+    # Initial condition is two walks at the same site, so PMF=1 at the origin and logPMF=0
+    PofV = np.array([[np.log(1)]])
+    logpmfs = [PofV.copy()]
+    for t in range(tMax):
+        PofV = calcNextPMF(t, PofV, atOrigin, notAtOrigin, maxStep=maxStep)
+        logpmfs.append(PofV.copy())
+    return logpmfs
+
+def finiteImshow(im):
+    a = im.copy()
+    alpha = np.isfinite(a)
+    a[~alpha] = np.min(alpha)
+    plt.imshow(a, alpha=alpha.astype(float))
+
+
+def naiveSingleParticleTransition(v, tiltDirection = np.array([1,0])):
+    directions = makeDirectionList(nDim=2)
+    probability = []
+    for n in directions:
+        probability.append((1-v**2)/4 * np.exp(2 * np.arctanh(v) * np.dot(n, tiltDirection)))
+    pOut = np.zeros((3,3))
+    for i in range(len(probability)):
+        pOut[directions[i,0]+1, directions[i,1]+1] += probability[i]
+    return pOut
+
+
+def makeSingleParticleTransition(d1,d2, p):
+    p1 = np.zeros((3,3))
+    p2 = np.zeros((3,3))
+    for i in range(16):
+        p1[d1[i,0]+1, d1[i,1]+1] += p[i]
+        p2[d2[i,0]+1, d2[i,1]+1] += p[i]
+    return p1, p2
 
 
 def normalization(r1, alpha, v):
@@ -36,14 +224,6 @@ def normalization(r1, alpha, v):
         return normalization
     else:  # note: this is inverted because when we call this function we use /=
         return 16 / ((1 - v**2)**2 )
-
-
-def calcXiExpectation(n1, n2, alpha):
-    """ calculates E_nu[xi(n1)xi(n2)] assumming xi's are Dirichlet distributed with parameter alpha"""
-    if (n1 == n2).all():
-        return alpha * (alpha + 1) / (4 * alpha * (4 * alpha + 1))
-    else:
-        return alpha ** 2 / (4 * alpha * (4 * alpha + 1))
 
 
 def calcTransitionProb(r1, r2, alpha, v):
@@ -68,36 +248,18 @@ def calcTransitionProb(r1, r2, alpha, v):
     prob /= normalization(r1, alpha, v)  # this gives alpha^2
     return prob
 
-def calcTransitionMatrix(alpha, v, origin=True):
-    transition = np.zeros((3,3))
+def calcTransitionMatrix(alpha, v, origin=True, maxStep=2):
+    width = maxStep*2 + 1
+    transition = np.zeros((width, width))
     if origin:
         r1 = np.array([0,0])
     else:
         r1 = np.array([1,1])
-    for i in range(3):
-        for j in range(3):
-            transition[i,j] = calcTransitionProb(r1, r1 + np.array([i-1,j-1]), alpha, v)
+    for i in range(width):
+        for j in range(width):
+            transition[i,j] = calcTransitionProb(r1, r1 + np.array([i-maxStep,j-maxStep]), alpha, v)
     return transition
             
-
-def evolvePofV(tMax, alpha, v):
-    pmfs = []
-    atOrigin = calcTransitionMatrix(alpha, v, origin=True)
-    notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
-    # Initial condition is two walks at the same site, so PMF=1 at the origin
-    PofV = np.array([[1]])
-    pmfs.append(PofV.copy())
-    for t in range(tMax):
-        originValue = PofV[t,t]
-        # We can use scipys convolve to get the results everywhere but at the origin
-        PofV = convolve2d(PofV, notAtOrigin, mode='full', boundary='fill', fillvalue=0)
-        # After the convolution we will have a new matrix that is 2 elements larger in each dimension
-        # So, the location of the new origin will be at t+1, t+1
-        # And then we have to subtract off the wrong convolution and add in the right one at the origin
-        PofV[t:t+3,t:t+3] += originValue * (atOrigin - notAtOrigin)
-        pmfs.append(PofV.copy())
-    return pmfs
-
 def calcDelta(V):
     """ calculates delta(t) = ln(1 + ||V(t)||)"""
     return np.log(1 + np.linalg.norm(V))
@@ -184,3 +346,24 @@ def find_two_squares(target):
         else:
             right -= 1
     return pairs
+
+def comparePMFs(pmf1, alpha1, pmf2, alpha2, fileName='temp/kappa/'):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,4))
+
+    for i in range(len(pmf1)):
+        ax1.imshow(pmf1[i])        
+        ax1.set_axis_off()
+        ax1.set_title(f'alpha={alpha1}')
+        ax2.imshow(pmf2[i])
+        ax2.set_axis_off()
+        ax2.set_title(f'alpha={alpha2}')
+        # plt.tight_layout()
+        plt.savefig(f'{fileName}{i:05d}.png', bbox_inches='tight')
+
+def comparePMFsJoined(pmf1, alpha1, pmf2, alpha2, fileName='temp/kappa/'):
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,4))
+
+    for i in range(len(pmf1)):
+        plt.imshow(np.hstack([pmf1[i],pmf2[i]]))
+        # plt.tight_layout()
+        plt.savefig(f'{fileName}{i:05d}.png', bbox_inches='tight')
