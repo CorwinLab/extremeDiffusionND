@@ -201,14 +201,14 @@ def plotMeanF(maxT, betaList, meanF, dim=2):
     plt.legend()
     plt.show()
 
-def plotMeanEntropy(maxT, betaList, meanF, entry = 0):
+def plotMeanEntropy(maxT, betaList, meanF, dim = 2):
     tempList = 1/betaList
     times = np.unique(maxT)
     for t in times:
         print(t)
         indexArr = (maxT == t)
         temp = tempList[indexArr]
-        scaledF = meanF[indexArr,entry]/np.log(4)/t
+        scaledF = meanF[indexArr]/(dim*np.log(2))/t
         deltaTemp = np.diff(temp)
         entropy = -np.diff(scaledF)/deltaTemp
         plt.semilogx(1/(temp[:-1] + deltaTemp/2), entropy, '-o', label=f'tMax = {t}', mfc='none')
@@ -224,8 +224,10 @@ def plotVarF(maxT, betaList, varF, dim, linewidth=1):
     print(variancePrediction)
     for i, t in enumerate(times):
         indexArr = (maxT == t)
-        plt.semilogx(betaList[indexArr], (varF[indexArr]/variancePrediction[i]), '-o', linewidth=linewidth, label=f'tMax = {t}', mfc='none')
-        # plt.semilogx(betaList[indexArr], (varF[indexArr,0] - variancePrediction[i])/(varF[indexArr,0] - variancePrediction[i])[-1], '-o', label=f'tMax = {t}', mfc='none')
+        # plt.semilogx(betaList[indexArr], (varF[indexArr]/variancePrediction[i]), '-o', linewidth=linewidth, label=f'tMax = {t}', mfc='none')
+        # plt.loglog(betaList[indexArr], (varF[indexArr]/variancePrediction[i]) - 1, '-o', linewidth=linewidth, label=f'tMax = {t}', mfc='none')
+        plt.semilogx(betaList[indexArr], (varF[indexArr] - variancePrediction[i])/(varF[indexArr] - variancePrediction[i])[-1], '-o', label=f'tMax = {t}', mfc='none')
+        # plt.semilogx(betaList[indexArr], (varF[indexArr] - variancePrediction[i]/(1 + betaList[indexArr]**2/4))/(varF[indexArr] - variancePrediction[i]/(1 + betaList[indexArr]**2/4))[-1], '-o', label=f'tMax = {t}', mfc='none')
     plt.gca().set_prop_cycle(None)
     plt.xlabel(r'$\beta$')
     plt.ylabel(r'$Var(F)/$(small $\beta$ prediction from text)')
@@ -243,22 +245,23 @@ def plotSkewF(maxT, betaList, skewF, linewidth=1):
     plt.legend()
     plt.show()
 
-
+import time
 def singleEvolution(tMax, beta0, beta, dim=2, new=True):    
     pointToPlane = []
-    # elapsedTime = []
+    elapsedTime = []
     if new or dim >2:
         it = transferMatrixND(dim, tMax, beta0*beta)
     else:
         it = transferMatrix2D(tMax, beta0*beta)
     for logZ, t in it:
-        # if t == 0:
-        #     s = time.time()
+        if t == 0:
+            s = time.time()
         # pointToPlane.append(logSumExp(logZ.reshape(tMax, tMax)[:t+1,:t+1].flatten()))
         pass
         # pointToPlane.append(logSumExp(logZ))
-        # elapsedTime.append(time.time()-s)
-    return np.array(pointToPlane), logZ#, np.array(elapsedTime)
+        elapsedTime.append(time.time()-s)
+        print(t, elapsedTime[-1])
+    return logZ, np.array(elapsedTime)
 
 def varianceCheck(nSystems, N, beta0):
     allLogZ = []
