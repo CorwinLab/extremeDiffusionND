@@ -23,7 +23,7 @@ from directedPolymer import logSumExp
 # assumes dirichlet,
 
 def makeDirectionList(nDim=2):
-    return np.vstack([np.eye(2, dtype=int), -np.eye(2,dtype=int)])
+    return np.vstack([np.eye(nDim, dtype=int), -np.eye(nDim,dtype=int)])
 
 def calcXiExpectation(n1, n2, alpha, correlated=False):
     """ calculates E_nu[xi(n1)xi(n2)] assumming xi's are Dirichlet distributed with parameter alpha"""
@@ -52,10 +52,6 @@ def twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), 
         for m2 in directions:
             denominator += calcXiExpectation(m1, m2, alpha, correlated=correlated) * np.exp( 2 * np.arctanh(v) * np.dot( (m1 + m2), tiltDirection))
 
-    # TODO: Remove, debugging
-    # denominator = 1
-    # print(denominator)
-
     d1List = []
     d2List = []
     probabilityList = []
@@ -70,6 +66,7 @@ def twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), 
     return np.array(d1List), np.array(d2List), np.array(probabilityList)
 
 def computeVTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=False, maxStep=2):
+    # Return the transition matrix that tells us the probability of moving from a site V to V+[i,j]
     width = maxStep*2 + 1
     transition = np.zeros((width, width))
 
@@ -152,21 +149,21 @@ def evolvePofVLSEGold(tMax, alpha, v, maxStep=2):
     return logpmfs
 
 @njit
-def calcNextPMF(t, PofV, atOrigin, notAtOrigin, maxStep=2):
-    newSize = PofV.shape[0] + 2*maxStep
-    newPofV = np.full((newSize, newSize), -np.inf)
+def calcNextPMF(t, logPofV, atOrigin, notAtOrigin, maxStep=2):
+    newSize = logPofV.shape[0] + 2*maxStep
+    newPofV = np.full((newSize, newSize), -np.inf) # Fill with np.log(0)
     # newPofV[:] = -np.inf
     # newPofV = np.zeros(np.array(PofV.shape) + 2*maxStep).fill(-np.inf)
     # TODO: There's another 8x speedup by only looking at half of a quadrant
-    for i in range(PofV.shape[0]):
-        for j in range(PofV.shape[1]):
+    for i in range(logPofV.shape[0]):
+        for j in range(logPofV.shape[1]):
             # By hand apply the transition matrices, but only if the element is not equal to -np.inf
-            if np.isfinite(PofV[i,j]):
+            if np.isfinite(logPofV[i,j]):
                 for m in range(2*maxStep+1):
                     for n in range(2*maxStep+1):
-                        transferValue = atOrigin[m, n] if (i == 2*t and j == 2*t) else notAtOrigin[m,n]
+                        transferValue = atOrigin[m, n] if (i == maxStep*t and j == maxStep*t) else notAtOrigin[m,n]
                         if np.isfinite(transferValue):
-                            newPofV[i+m, j+n] = logSumExp(np.array([newPofV[i+m, j+n], PofV[i,j] + transferValue ]))
+                            newPofV[i+m, j+n] = logSumExp(np.array([newPofV[i+m, j+n], logPofV[i,j] + transferValue ]))
     # We can use scipys convolve to get the results everywhere but at the origin
     return newPofV
 
@@ -176,12 +173,32 @@ def evolvePofVNumba(tMax, alpha, v, maxStep=2):
     # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
     notAtOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=False))
     # Initial condition is two walks at the same site, so PMF=1 at the origin and logPMF=0
-    PofV = np.array([[np.log(1)]])
-    logpmfs = [PofV.copy()]
+    logPofV = np.array([[np.log(1)]])
+    logpmfs = [logPofV.copy()]
     for t in range(tMax):
-        PofV = calcNextPMF(t, PofV, atOrigin, notAtOrigin, maxStep=maxStep)
-        logpmfs.append(PofV.copy())
+        logPofV = calcNextPMF(t, logPofV, atOrigin, notAtOrigin, maxStep=maxStep)
+        logpmfs.append(logPofV.copy())
     return logpmfs
+
+def computeInvariantMeasure(PMF):
+    # compute the distance squared to each point
+    size = PMF.shape[0]//2
+    x, y = np.meshgrid(range(-size,size+1), range(-size, size+1))
+    dsq = (x**2 + y**2).flatten()
+    # Sort the pmf values and dsq by distance
+    s = np.argsort(dsq)
+    sortPMF = PMF.flatten()[s]
+    dsq = dsq[s]
+    # Find the location of the unique values, which can be used for summing
+    dsqVal, index = np.unique(dsq, return_index=True)
+    # Append the length of dsqVale so that we can use this for indexing
+    index = np.hstack([index, dsq.shape[0]])
+    logInvariantMeasure = np.array([logSumExp(sortPMF[index[i]:index[i+1]]) for i in range(dsqVal.shape[0])])
+    # Normalize invariant measure so that the 0th element is 1
+    logInvariantMeasure -= logInvariantMeasure[0]
+    # Remove the points that are -np.inf
+    good = np.isfinite(logInvariantMeasure)
+    return np.sqrt(dsqVal[good]), logInvariantMeasure[good]
 
 def finiteImshow(im):
     a = im.copy()
@@ -189,6 +206,15 @@ def finiteImshow(im):
     a[~alpha] = np.min(alpha)
     plt.imshow(a, alpha=alpha.astype(float))
 
+def computeMoment(logPMF, moment):
+    size = logPMF.shape[0]//2
+    x,y = np.meshgrid(range(-size, size+1), range(-size, size+1))
+    dsq = x**2 + y**2
+    del x, y
+    return np.sum(dsq**(moment/2)*np.exp(logPMF))
+
+def computeVarMagV(logPMF):
+    return computeMoment(logPMF,2) - computeMoment(logPMF, 1)**2
 
 def naiveSingleParticleTransition(v, tiltDirection = np.array([1,0])):
     directions = makeDirectionList(nDim=2)
@@ -208,6 +234,9 @@ def makeSingleParticleTransition(d1,d2, p):
         p1[d1[i,0]+1, d1[i,1]+1] += p[i]
         p2[d2[i,0]+1, d2[i,1]+1] += p[i]
     return p1, p2
+
+
+# ------------------------------------------- Everything below here may be based on wrong assumptions
 
 
 def normalization(r1, alpha, v):
