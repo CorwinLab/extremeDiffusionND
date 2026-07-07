@@ -61,6 +61,7 @@ def twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), 
             d2List.append(n2)
             prefactor = calcXiExpectation(n1, n2, alpha, correlated=correlated) / denominator
             expTerm = np.exp( 2 * np.arctanh(v) * np.dot( (n1 + n2), tiltDirection))
+            print(n1, n2, prefactor, expTerm)
             probabilityList.append(prefactor * expTerm)
 
     return np.array(d1List), np.array(d2List), np.array(probabilityList)
@@ -168,37 +169,63 @@ def calcNextPMF(t, logPofV, atOrigin, notAtOrigin, maxStep=2):
     return newPofV
 
 def evolvePofVNumba(tMax, alpha, v, maxStep=2):
-    # atOrigin = calcTransitionMatrix(alpha, v, origin=True)
     atOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=True))
-    # notAtOrigin = calcTransitionMatrix(alpha, v, origin=False)
     notAtOrigin = np.log(computeVTransitionProbabilities(alpha, v, correlated=False))
     # Initial condition is two walks at the same site, so PMF=1 at the origin and logPMF=0
     logPofV = np.array([[np.log(1)]])
     logpmfs = [logPofV.copy()]
+    s = wallTime()
     for t in range(tMax):
         logPofV = calcNextPMF(t, logPofV, atOrigin, notAtOrigin, maxStep=maxStep)
         logpmfs.append(logPofV.copy())
+        print(t, wallTime()-s)
     return logpmfs
 
-def computeInvariantMeasure(PMF):
-    # compute the distance squared to each point
-    size = PMF.shape[0]//2
+def computeDegeneracy(size, checkerboard=False):
     x, y = np.meshgrid(range(-size,size+1), range(-size, size+1))
     dsq = (x**2 + y**2).flatten()
+    # NOTE: This is a slightly dangerous thing to do as it assumes that we're using a checkerboard
+    if checkerboard:
+        # We only want the entries for which x+y is even
+        good = (np.mod(x + y,2) == 0).flatten()
+        dsq = dsq[good]
     # Sort the pmf values and dsq by distance
     s = np.argsort(dsq)
-    sortPMF = PMF.flatten()[s]
     dsq = dsq[s]
     # Find the location of the unique values, which can be used for summing
     dsqVal, index = np.unique(dsq, return_index=True)
     # Append the length of dsqVale so that we can use this for indexing
     index = np.hstack([index, dsq.shape[0]])
+    degen = np.diff(index)
+    return dsqVal, index, degen, s
+
+def computeInvariantMeasure(PMF):
+    # compute the distance squared to each point, the indexing, the degeneracy, and the sorting
+    dsqVal, index, degen, s = computeDegeneracy(PMF.shape[0]//2, checkerboard=False)
+    sortPMF = PMF.flatten()[s]
     logInvariantMeasure = np.array([logSumExp(sortPMF[index[i]:index[i+1]]) for i in range(dsqVal.shape[0])])
     # Normalize invariant measure so that the 0th element is 1
     logInvariantMeasure -= logInvariantMeasure[0]
     # Remove the points that are -np.inf
     good = np.isfinite(logInvariantMeasure)
-    return np.sqrt(dsqVal[good]), logInvariantMeasure[good]
+    return np.sqrt(dsqVal[good]), logInvariantMeasure[good], degen[good]
+
+def analyticInvariantMeasure(alpha, v, dMax, maxStep=2):
+    # First, compute the transition matrices
+    atOrigin = computeVTransitionProbabilities(alpha, v, correlated=True)
+    notAtOrigin = computeVTransitionProbabilities(alpha, v, correlated=False)
+    # Now compute the ratio between the probability at the origin and the probability at any other site
+    ratio = (1 - notAtOrigin[maxStep, maxStep]) / (1 - atOrigin[maxStep, maxStep])
+    # Now compute the degeneracy at allowed lattice sites.  Recall that an allowed lattice point is one for which i+j is even since we're on the checkerboard
+    # compute the distance squared to each point, the indexing, the degeneracy, and the sorting
+    dsqVal, index, degen, s = computeDegeneracy(int(dMax), checkerboard=True)
+    # We only want to include distances that are less than or equal to dMax
+    good = (dsqVal <= int(dMax)**2)
+    logInvariantMeasure = -np.log(ratio) + np.log(degen[good])
+    logInvariantMeasure[0] = 0
+
+    return np.sqrt(dsqVal[good]), logInvariantMeasure, ratio
+
 
 def finiteImshow(im):
     a = im.copy()
