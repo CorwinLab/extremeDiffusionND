@@ -190,7 +190,7 @@ def computeDegeneracy(size, checkerboard=False):
         # We only want the entries for which x+y is even
         good = (np.mod(x + y,2) == 0).flatten()
         dsq = dsq[good]
-    # Sort the pmf values and dsq by distance
+    # Sort dsq by distance
     s = np.argsort(dsq)
     dsq = dsq[s]
     # Find the location of the unique values, which can be used for summing
