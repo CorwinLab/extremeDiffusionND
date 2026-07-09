@@ -59,10 +59,11 @@ def twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), 
         for n2 in directions:
             d1List.append(n1)
             d2List.append(n2)
-            prefactor = calcXiExpectation(n1, n2, alpha, correlated=correlated) / denominator
+
+            prefactor = calcXiExpectation(n1, n2, alpha, correlated=correlated)
             expTerm = np.exp( 2 * np.arctanh(v) * np.dot( (n1 + n2), tiltDirection))
-            print(n1, n2, prefactor, expTerm)
-            probabilityList.append(prefactor * expTerm)
+            probabilityList.append(prefactor * expTerm / denominator)
+            # print(n1, n2, prefactor, expTerm, denominator)
 
     return np.array(d1List), np.array(d2List), np.array(probabilityList)
 
@@ -210,21 +211,24 @@ def computeInvariantMeasure(PMF):
     good = np.isfinite(logInvariantMeasure)
     return np.sqrt(dsqVal[good]), logInvariantMeasure[good], degen[good]
 
-def analyticInvariantMeasure(alpha, v, dMax, maxStep=2):
-    # First, compute the transition matrices
-    atOrigin = computeVTransitionProbabilities(alpha, v, correlated=True)
-    notAtOrigin = computeVTransitionProbabilities(alpha, v, correlated=False)
-    # Now compute the ratio between the probability at the origin and the probability at any other site
-    ratio = (1 - notAtOrigin[maxStep, maxStep]) / (1 - atOrigin[maxStep, maxStep])
+def analyticInvariantMeasure(alpha, v, dMax, maxStep=2, numeric=False):
+    if numeric:
+        # First, compute the transition matrices
+        atOrigin = computeVTransitionProbabilities(alpha, v, correlated=True)
+        notAtOrigin = computeVTransitionProbabilities(alpha, v, correlated=False)
+        # Now compute the ratio between the probability at the origin and the probability at any other site
+        mu = (1 - atOrigin[maxStep, maxStep]) / (1 - notAtOrigin[maxStep, maxStep])
+    else:
+        mu = (4 * alpha) / (4 * alpha + (1 + v**2)**2)
     # Now compute the degeneracy at allowed lattice sites.  Recall that an allowed lattice point is one for which i+j is even since we're on the checkerboard
     # compute the distance squared to each point, the indexing, the degeneracy, and the sorting
     dsqVal, index, degen, s = computeDegeneracy(int(dMax), checkerboard=True)
     # We only want to include distances that are less than or equal to dMax
     good = (dsqVal <= int(dMax)**2)
-    logInvariantMeasure = -np.log(ratio) + np.log(degen[good])
+    logInvariantMeasure = np.log(mu) + np.log(degen[good])
     logInvariantMeasure[0] = 0
 
-    return np.sqrt(dsqVal[good]), logInvariantMeasure, ratio
+    return np.sqrt(dsqVal[good]), logInvariantMeasure, mu
 
 
 def finiteImshow(im):
