@@ -184,25 +184,41 @@ def evolvePofVNumba(tMax, alpha, v, maxStep=2):
 
 def computeDegeneracy(size, checkerboard=False):
     x, y = np.meshgrid(range(-size,size+1), range(-size, size+1))
-    dsq = (x**2 + y**2).flatten()
+    x = x.flatten()
+    y = y.flatten()
+    dsq = (x**2 + y**2)
     # NOTE: This is a slightly dangerous thing to do as it assumes that we're using a checkerboard
     if checkerboard:
         # We only want the entries for which x+y is even
-        good = (np.mod(x + y,2) == 0).flatten()
+        good = (np.mod(x + y,2) == 0)
         dsq = dsq[good]
+        x = x[good]
+        y = y[good]
     # Sort dsq by distance
     s = np.argsort(dsq)
     dsq = dsq[s]
+    x = x[s]
+    y = y[s]
     # Find the location of the unique values, which can be used for summing
     dsqVal, index = np.unique(dsq, return_index=True)
-    # Append the length of dsqVale so that we can use this for indexing
-    index = np.hstack([index, dsq.shape[0]])
+    # We can only trust the degeneracy for distances up to size
+    good = (dsqVal <= size**2)
+    dsqVal = dsqVal[good]
+    # We need to keep one more element of index so that we can actually finish the counting
+    good[np.sum(good)] = True
+    index = index[good]
+
     degen = np.diff(index)
-    return dsqVal, index, degen, s
+    siteList = []
+    for i in range(len(dsqVal)):
+        elements = slice(index[i], index[i+1])
+        siteList.append(np.array([x[elements], y[elements]]).T)
+
+    return dsqVal, index, degen, s, siteList
 
 def computeInvariantMeasure(PMF):
     # compute the distance squared to each point, the indexing, the degeneracy, and the sorting
-    dsqVal, index, degen, s = computeDegeneracy(PMF.shape[0]//2, checkerboard=False)
+    dsqVal, index, degen, s, _ = computeDegeneracy(PMF.shape[0]//2, checkerboard=False)
     sortPMF = PMF.flatten()[s]
     logInvariantMeasure = np.array([logSumExp(sortPMF[index[i]:index[i+1]]) for i in range(dsqVal.shape[0])])
     # Normalize invariant measure so that the 0th element is 1
@@ -222,13 +238,12 @@ def analyticInvariantMeasure(alpha, v, dMax, maxStep=2, numeric=False):
         mu = (4 * alpha) / (4 * alpha + (1 + v**2)**2)
     # Now compute the degeneracy at allowed lattice sites.  Recall that an allowed lattice point is one for which i+j is even since we're on the checkerboard
     # compute the distance squared to each point, the indexing, the degeneracy, and the sorting
-    dsqVal, index, degen, s = computeDegeneracy(int(dMax), checkerboard=True)
+    dsqVal, index, degen, s, _ = computeDegeneracy(int(dMax), checkerboard=True)
     # We only want to include distances that are less than or equal to dMax
-    good = (dsqVal <= int(dMax)**2)
-    logInvariantMeasure = np.log(mu) + np.log(degen[good])
+    logInvariantMeasure = np.log(mu) + np.log(degen)
     logInvariantMeasure[0] = 0
 
-    return np.sqrt(dsqVal[good]), logInvariantMeasure, mu
+    return np.sqrt(dsqVal), logInvariantMeasure, mu
 
 
 def finiteImshow(im):
@@ -332,29 +347,49 @@ def find_two_squares(targetDistSq):
             right -= 1
     return pairs
 
-
-def computeKappaOfL(lSq, v, alpha):
-    """ compute kappa(l) given l^2. to do this we need to find all sites with distance^2 = l^2 and then
-    divide by the number of sites"""
-    kappa = 0
-    sites_with_distSq_L = find_two_squares(lSq)
-    if len(sites_with_distSq_L) == 0:
-        return np.nan
-    else:
-        for site in sites_with_distSq_L:
-            kappa += computeLVecExpectation(site, v, alpha)
-        kappa /= len(sites_with_distSq_L)
-        return kappa
-
-
-def getKappaList(lSqMax, v, alpha):
-    # initialize with the l=0 case, of which there's only one site, [0,0]. This is the only case where we need to set correlated=True
-    lSqList = [0]
-    kappaList = [computeLVecExpectation(np.array([0,0]), v, alpha,correlated=True)]
-    for i in range(1, lSqMax + 1):
-        lSqList.append(i)
-        kappaList.append(computeKappaOfL(i, v, alpha))
+# def computeKappaOfLNonzero(lSq, v, alpha):
+#     """ compute kappa(l) given l^2. to do this we need to find all sites with distance^2 = l^2 and then
+#     divide by the number of sites
+#
+#     currently this works by doing one distance^2 at a time."""
+#     kappa = 0
+#     sites_with_distSq_L = find_two_squares(lSq)
+#     if len(sites_with_distSq_L) == 0:
+#         return np.nan
+#     else:
+#         for site in sites_with_distSq_L:
+#             kappa += computeLVecExpectation(site, v, alpha)
+#         kappa /= len(sites_with_distSq_L)
+#         return kappa
+#
+#
+# def getKappaList(lSqMax, v, alpha):
+#     # initialize with the l=0 case, of which there's only one site, [0,0]. This is the only case where we need to set correlated=True
+#     lSqList = [0]
+#     kappaList = [computeLVecExpectation(np.array([0,0]), v, alpha,correlated=True)]
+#     for i in range(1, lSqMax + 1):
+#         lSqList.append(i)
+#         kappaList.append(computeKappaOfLNonzero(i, v, alpha))
     return np.array(lSqList), np.array(kappaList)
+
+
+# the following function combines the above 2 functions but uses computeDegeneracies instead of find_two_squares
+def computeAllKappa(lSqMax, v, alpha,checkerboard):
+    """ compute kappa(l) up to some maximum l^2 value (equiv, max distance l), given v (measurement velocity)
+    and alpha (stickiness of Dirichlet distribution).
+    The checkerboard flag is if we want to be smart about calculating it"""
+    lMax = np.sqrt(lSqMax).astype(int)
+    # value of lSq, its degenerecy, and the list of sites that have that distance
+    dsqVals, _, degeneracies, _, siteLists = computeDegeneracy(lMax, checkerboard=checkerboard)
+    kappaList = np.zeros_like(dsqVals,dtype=float)
+    for idx, dSqVal in enumerate(dsqVals):
+        kappa = 0
+        correlated = True if dSqVal == 0 else False
+        for site in siteLists[idx]:
+            kappa += computeLVecExpectation(site, v, alpha,correlated=correlated)
+        kappa /= degeneracies[idx]
+        kappaList[idx] = kappa
+    return dsqVals, kappaList
 
 
 # ------------------------------------------- Everything below here may be based on wrong assumptions
