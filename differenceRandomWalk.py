@@ -267,145 +267,236 @@ def makeSingleParticleTransition(d1,d2, p):
     return p1, p2
 
 
-# ------------------------------------------- Everything below here may be based on wrong assumptions
+# the below eqns are to calculate kappa(l).
 
-
-def normalization(r1, alpha, v):
-    """ returns alpha^2 (eqn. 23) if r1 = 0 or the 1-v shit if not"""
-    if (r1 == [0,0]).all():
-        nHats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
-        xHat = nHats[0]
-        # sum n1 + n2 = r2 - r1 for n1 and n2 in set of nhats
-        normalization = 0
-        for n1 in nHats:
-            for n2 in nHats:
-                prefactor = calcXiExpectation(n1, n2, alpha)
-                normalization += prefactor * np.exp(2 * np.arctanh(v) * np.dot(xHat, (n1 + n2)))
-        return normalization
-    else:  # note: this is inverted because when we call this function we use /=
-        return 16 / ((1 - v**2)**2 )
-
-
-def calcTransitionProb(r1, r2, alpha, v):
-    """ this should return a proability for the change from r1 to r2; implemented eqn. 22"""
-    r1 = np.asarray(r1) if isinstance(r1, list) else r1
-    r2 = np.asarray(r2) if isinstance(r2, list) else r2
-    diff = r2 - r1
-    nHats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
-    xHat = nHats[0]
-    # sum n1 + n2 = r2 - r1 for n1 and n2 in set of nhats
-    prob = 0
-    for n1 in nHats:
-        for n2 in nHats:
-            if ((n1 + n2) == diff).all():
-                # print(f"Allowed values {n1, n2}")
-                # For now, only consider the case where r1 == [0,0]
-                if (r1 == [0,0]).all():  # if the 2 walks are at the same site
-                    prefactor = calcXiExpectation(n1, n2, alpha)
-                else:  # if the 2 walks are separated
-                    prefactor = 1
-                prob += prefactor * np.exp(2 * np.arctanh(v) * np.dot(xHat, (n1 + n2)))
-    prob /= normalization(r1, alpha, v)  # this gives alpha^2
-    return prob
-
-def calcTransitionMatrix(alpha, v, origin=True, maxStep=2):
-    width = maxStep*2 + 1
-    transition = np.zeros((width, width))
-    if origin:
-        r1 = np.array([0,0])
-    else:
-        r1 = np.array([1,1])
-    for i in range(width):
-        for j in range(width):
-            transition[i,j] = calcTransitionProb(r1, r1 + np.array([i-maxStep,j-maxStep]), alpha, v)
-    return transition
-            
-def calcDelta(V):
-    """ calculates delta(t) = ln(1 + ||V(t)||)"""
-    return np.log(1 + np.linalg.norm(V))
-
-
-def calcDeltaDifference(V1, V2):
-    """ calculates the difference between two deltas"""
-    return np.log((1 + np.linalg.norm(V2)) / (1 + np.linalg.norm(V1)))
-
-
-def calcKappaVVec(V, alpha, v, maxStep=2):
-    """ returns kappa for a speciic value of vec V = vec r"""
-    # Create the possible neighboring sites of vec V
-    x, y = np.meshgrid(np.arange(-maxStep, maxStep+1), np.arange(-maxStep, maxStep+1))
-    pos = V + np.vstack([x.flatten(), y.flatten()]).T
-    # develop
-    kappa = 0
-    # do the expectation over the allowed values of the delta difference
-    for site in pos:
-        kappa += calcDeltaDifference(V, site) * calcTransitionProb(V, site, alpha, v)
-    return kappa
-
-
-def createKappaGrid(alpha, v, size=10):
+# eqn 53 (or eqn 54), kappa for ||l|| != 0
+def computeLVecExpectation(lVec, v, alpha=1,correlated=False):
+    """ calclulates eqn 53, given a vector l. (over the combinations of n1 and n2)
+    lVec: 2d vector array
+    v: float between 0 and 1
+    alpha: float between 0 and infinity
     """
-    cretes a grid where the x and y directions correspond to the x and y components of r
-    then the value at each site is the value of kappa(\vec{r})
-    note: this will be slow if size is large
-    """
-    # get values of x and y
-    x, y = np.meshgrid(np.arange(-size,size+1), np.arange(-size, size+1))
-    # turn them into sets of coordinates which populate the grid
-    rArraySites = np.vstack([x.flatten(), y.flatten()]).T
-    # initialize
-    kappaArray = np.zeros_like(x,dtype=float)  #x is integers so we need to cast it to float
-    for site in rArraySites:
-        kappaArray[site[0]+size,site[1]+size] = calcKappaVVec(site, alpha, v)
-    return rArraySites, kappaArray
+    # return the probabilities for the 16 combos of n1 and n2. always uncorrelated for this
+    # note the twoWalkerTransitionProbabilities implicity has the (1-v^2)^2 / 16 term in it
+    n1s, n2s, probs = twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=correlated)
+    sumOverSites = 0
+    for i in range(len(n1s)):
+        logTerm = np.log((1 + np.linalg.norm(lVec + n1s[i] - n2s[i])) / (1 + np.linalg.norm(lVec)))
+        sumOverSites += logTerm * probs[i]
+    return sumOverSites
 
 
-# def kappaOfR(rArraySites, kappaArray):
-#     """ turn grid of kappa(vec r) into kappa(r) """
-#     data = []
-#     for site in rArraySites:
-#         data.append([np.linalg.norm(site), kappaArray[site[0],site[1]]])
-#     data = np.array(data)
-#     avgs = []
-#     # now go through and find places where all rs are equal and calc the avg kappa
-#     for r in data[:,0]:
-#         avgs.append(np.mean(data[data[:,0] == r,1]))
-#     return data[:,0], np.array(avgs)
-
-def kappaOfRFixed(rArraySites, kappaArray,size):
-    """ trn grid of kappa(vec r) into kappa(r)"""
-    data = []
-    for site in rArraySites:
-        data.append([np.linalg.norm(site), kappaArray[site[0]+size,site[1]+size]])
-    data = np.array(data)
-    avgs = []
-    uniqueR = np.unique(data[:,0])
-    for r in uniqueR:
-        indices = (data[:,0] == r)
-        avgs.append(np.mean(data[indices,1]))
-    return data, uniqueR, avgs
-
-# the following functions are to maybe deal with the weirdness at the corners
-# by creating a grid and then averaging over all sites with distance r, we're actually
-# missing some spots because a square lattice won't have every site that has distance r for the
-# corners of the square. 
-def find_two_squares(target):
-    """ this algorithm finds all coordinates in an octant that would fall on a circle"""
+def find_two_squares(targetDistSq):
+    """ Finds all sites on lattice that have a norm-squared of targetDistSq, i.e.
+    find all \vec{x} such that ||x||^2 = targetDistSq
+    inputs:
+        targetDistSq: integer (because distSq of points on a lattice will always be integers)"""
     pairs = []
-    # left pointer starts at 0, right pointer starts at the sqrt of the target
+    # Left pointer starts at 0, right pointer starts at the square root of target
     left = 0
-    right = int(math.sqrt(target))
+    right = int(np.sqrt(targetDistSq))
     while left <= right:
-        current_sum = left**2 + right ** 2
-        if current_sum == target:
-            pairs.append(left, right)
+        current_sum = left ** 2 + right ** 2
+        if current_sum == targetDistSq:
+            # deal with octant symmetry?
+            if left == 0 and right == 0:  # origin
+                # print("origin")
+                pairs.append((left, right))
+            elif left == right: # along a diagonal
+                # print("diagonal")
+                pairs.append((left, right))
+                pairs.append((left, -right))
+                pairs.append((-left, right))
+                pairs.append((-left, -right))
+            elif left == 0:  # cardinal
+                # print("cardinal")
+                pairs.append((right, 0))
+                pairs.append((-right, 0))
+                pairs.append((0, right))
+                pairs.append((0, -right))
+            else:  # off-diagonal and off-0
+                # print("general")
+                pairs.append((left, right))
+                pairs.append((left, -right))
+                pairs.append((-left, -right))
+                pairs.append((-left, right))
+                pairs.append((right, left))
+                pairs.append((-right, left))
+                pairs.append((-right, -left))
+                pairs.append((right, -left))
             left += 1
             right -= 1
-        elif current_sum < target:
+        elif current_sum < targetDistSq:
             left += 1
         else:
             right -= 1
     return pairs
+
+
+def computeKappaOfL(lSq, v, alpha):
+    """ compute kappa(l) given l^2. to do this we need to find all sites with distance^2 = l^2 and then
+    divide by the number of sites"""
+    kappa = 0
+    sites_with_distSq_L = find_two_squares(lSq)
+    if len(sites_with_distSq_L) == 0:
+        return np.nan
+    else:
+        for site in sites_with_distSq_L:
+            kappa += computeLVecExpectation(site, v, alpha)
+        kappa /= len(sites_with_distSq_L)
+        return kappa
+
+
+def getKappaList(lSqMax, v, alpha):
+    # initialize with the l=0 case, of which there's only one site, [0,0]. This is the only case where we need to set correlated=True
+    lSqList = [0]
+    kappaList = [computeLVecExpectation(np.array([0,0]), v, alpha,correlated=True)]
+    for i in range(1, lSqMax + 1):
+        lSqList.append(i)
+        kappaList.append(computeKappaOfL(i, v, alpha))
+    return np.array(lSqList), np.array(kappaList)
+
+
+# ------------------------------------------- Everything below here may be based on wrong assumptions
+
+
+# def normalization(r1, alpha, v):
+#     """ returns alpha^2 (eqn. 23) if r1 = 0 or the 1-v shit if not"""
+#     if (r1 == [0,0]).all():
+#         nHats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
+#         xHat = nHats[0]
+#         # sum n1 + n2 = r2 - r1 for n1 and n2 in set of nhats
+#         normalization = 0
+#         for n1 in nHats:
+#             for n2 in nHats:
+#                 prefactor = calcXiExpectation(n1, n2, alpha)
+#                 normalization += prefactor * np.exp(2 * np.arctanh(v) * np.dot(xHat, (n1 + n2)))
+#         return normalization
+#     else:  # note: this is inverted because when we call this function we use /=
+#         return 16 / ((1 - v**2)**2 )
+#
+#
+# def calcTransitionProb(r1, r2, alpha, v):
+#     """ this should return a proability for the change from r1 to r2; implemented eqn. 22"""
+#     r1 = np.asarray(r1) if isinstance(r1, list) else r1
+#     r2 = np.asarray(r2) if isinstance(r2, list) else r2
+#     diff = r2 - r1
+#     nHats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
+#     xHat = nHats[0]
+#     # sum n1 + n2 = r2 - r1 for n1 and n2 in set of nhats
+#     prob = 0
+#     for n1 in nHats:
+#         for n2 in nHats:
+#             if ((n1 + n2) == diff).all():
+#                 # print(f"Allowed values {n1, n2}")
+#                 # For now, only consider the case where r1 == [0,0]
+#                 if (r1 == [0,0]).all():  # if the 2 walks are at the same site
+#                     prefactor = calcXiExpectation(n1, n2, alpha)
+#                 else:  # if the 2 walks are separated
+#                     prefactor = 1
+#                 prob += prefactor * np.exp(2 * np.arctanh(v) * np.dot(xHat, (n1 + n2)))
+#     prob /= normalization(r1, alpha, v)  # this gives alpha^2
+#     return prob
+#
+# def calcTransitionMatrix(alpha, v, origin=True, maxStep=2):
+#     width = maxStep*2 + 1
+#     transition = np.zeros((width, width))
+#     if origin:
+#         r1 = np.array([0,0])
+#     else:
+#         r1 = np.array([1,1])
+#     for i in range(width):
+#         for j in range(width):
+#             transition[i,j] = calcTransitionProb(r1, r1 + np.array([i-maxStep,j-maxStep]), alpha, v)
+#     return transition
+
+# The following commented out functions are old and not quite right.
+# def calcDelta(V):
+#     """ calculates delta(t) = ln(1 + ||V(t)||)"""
+#     return np.log(1 + np.linalg.norm(V))
+#
+#
+# def calcDeltaDifference(V1, V2):
+#     """ calculates the difference between two deltas"""
+#     return np.log((1 + np.linalg.norm(V2)) / (1 + np.linalg.norm(V1)))
+#
+#
+# def calcKappaVVec(V, alpha, v, maxStep=2):
+#     """ returns kappa for a speciic value of vec V = vec r"""
+#     # Create the possible neighboring sites of vec V
+#     x, y = np.meshgrid(np.arange(-maxStep, maxStep+1), np.arange(-maxStep, maxStep+1))
+#     pos = V + np.vstack([x.flatten(), y.flatten()]).T
+#     # develop
+#     kappa = 0
+#     # do the expectation over the allowed values of the delta difference
+#     for site in pos:
+#         kappa += calcDeltaDifference(V, site) * calcTransitionProb(V, site, alpha, v)
+#     return kappa
+#
+#
+# def createKappaGrid(alpha, v, size=10):
+#     """
+#     cretes a grid where the x and y directions correspond to the x and y components of r
+#     then the value at each site is the value of kappa(\vec{r})
+#     note: this will be slow if size is large
+#     """
+#     # get values of x and y
+#     x, y = np.meshgrid(np.arange(-size,size+1), np.arange(-size, size+1))
+#     # turn them into sets of coordinates which populate the grid
+#     rArraySites = np.vstack([x.flatten(), y.flatten()]).T
+#     # initialize
+#     kappaArray = np.zeros_like(x,dtype=float)  #x is integers so we need to cast it to float
+#     for site in rArraySites:
+#         kappaArray[site[0]+size,site[1]+size] = calcKappaVVec(site, alpha, v)
+#     return rArraySites, kappaArray
+#
+#
+# # def kappaOfR(rArraySites, kappaArray):
+# #     """ turn grid of kappa(vec r) into kappa(r) """
+# #     data = []
+# #     for site in rArraySites:
+# #         data.append([np.linalg.norm(site), kappaArray[site[0],site[1]]])
+# #     data = np.array(data)
+# #     avgs = []
+# #     # now go through and find places where all rs are equal and calc the avg kappa
+# #     for r in data[:,0]:
+# #         avgs.append(np.mean(data[data[:,0] == r,1]))
+# #     return data[:,0], np.array(avgs)
+#
+# def kappaOfRFixed(rArraySites, kappaArray,size):
+#     """ trn grid of kappa(vec r) into kappa(r)"""
+#     data = []
+#     for site in rArraySites:
+#         data.append([np.linalg.norm(site), kappaArray[site[0]+size,site[1]+size]])
+#     data = np.array(data)
+#     avgs = []
+#     uniqueR = np.unique(data[:,0])
+#     for r in uniqueR:
+#         indices = (data[:,0] == r)
+#         avgs.append(np.mean(data[indices,1]))
+#     return data, uniqueR, avgs
+#
+# # the following functions are to maybe deal with the weirdness at the corners
+# # by creating a grid and then averaging over all sites with distance r, we're actually
+# # missing some spots because a square lattice won't have every site that has distance r for the
+# # corners of the square.
+# def find_two_squares(target):
+#     """ this algorithm finds all coordinates in an octant that would fall on a circle"""
+#     pairs = []
+#     # left pointer starts at 0, right pointer starts at the sqrt of the target
+#     left = 0
+#     right = int(math.sqrt(target))
+#     while left <= right:
+#         current_sum = left**2 + right ** 2
+#         if current_sum == target:
+#             pairs.append(left, right)
+#             left += 1
+#             right -= 1
+#         elif current_sum < target:
+#             left += 1
+#         else:
+#             right -= 1
+#     return pairs
 
 def comparePMFs(pmf1, alpha1, pmf2, alpha2, fileName='temp/kappa/'):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,4))
