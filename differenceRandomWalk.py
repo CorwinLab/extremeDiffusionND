@@ -11,6 +11,7 @@ import math
 from scipy.signal import convolve2d
 import matplotlib.pyplot as plt
 from directedPolymer import logSumExp
+from scipy.optimize import curve_fit
 
 # This module is intended to evolve the PMF of the difference random walk
 # defined as \vec{V(t)} = \vec{R1(t)} - \vec{R2(t)}
@@ -245,6 +246,96 @@ def analyticInvariantMeasure(alpha, v, dMax, maxStep=2, numeric=False):
 
     return np.sqrt(dsqVal), logInvariantMeasure, mu
 
+# the below eqns are to calculate kappa(l).
+
+# eqn 53 (or eqn 54), kappa for ||l|| != 0
+def computeLVecExpectation(lVec, v, alpha,correlated=False):
+    """ calculates eqn 53, given a vector l. (over the combinations of n1 and n2)
+    lVec: 2d vector array
+    v: float between 0 and 1
+    alpha: float between 0 and infinity
+    """
+    # return the probabilities for the 16 combos of n1 and n2. always uncorrelated for this
+    # note the twoWalkerTransitionProbabilities implicity has the (1-v^2)^2 / 16 term in it
+    n1s, n2s, probs = twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=correlated)
+    sumOverSites = 0
+    for i in range(len(n1s)):
+        logTerm = np.log((1 + np.linalg.norm(lVec + n1s[i] - n2s[i])) / (1 + np.linalg.norm(lVec)))
+        sumOverSites += logTerm * probs[i]
+    return sumOverSites
+
+
+# the following function combines the above 2 functions but uses computeDegeneracies instead of find_two_squares
+def computeAllKappa(alpha, v, dMax, checkerboard=True):
+    """ compute kappa(l) up to some maximum l^2 value (equiv, max distance l), given v (measurement velocity)
+    and alpha (stickiness of Dirichlet distribution).
+    The checkerboard flag is if we want to be smart about calculating it"""
+    dMax = int(dMax)
+    # value of lSq, its degenerecy, and the list of sites that have that distance
+    dsqVals, _, degeneracies, _, siteLists = computeDegeneracy(dMax, checkerboard=checkerboard)
+    kappaList = np.zeros_like(dsqVals,dtype=float)
+    for idx, dSqVal in enumerate(dsqVals):
+        kappa = 0
+        correlated = True if dSqVal == 0 else False
+        for site in siteLists[idx]:
+            kappa += computeLVecExpectation(site, v, alpha,correlated=correlated)
+        kappa /= degeneracies[idx]
+        kappaList[idx] = kappa
+    return np.sqrt(dsqVals), kappaList
+
+@njit
+def computeKappaTerm(latticeVector, n1s, n2s, probs):
+    kappaTerm = 0
+    vNorm = np.sqrt(np.sum(latticeVector**2))
+    for n1, n2, prob in zip(n1s, n2s, probs):
+        vPrimeNorm = np.sqrt(np.sum((latticeVector + n1 - n2)**2))
+        kappaTerm += np.log((1 + vPrimeNorm) / (1 + vNorm)) * prob
+        # kappaTerm += np.log((1 + np.linalg.norm(latticeVector + n1 - n2)) / (1 + np.linalg.norm(latticeVector))) * prob
+    return kappaTerm
+
+def computeKappaMuProduct(alpha, v, dMax):
+    s = wallTime()
+    muRatio = (4 * alpha) / (4 * alpha + (1 + v**2)**2)
+
+    dSqVals, _, _, _, siteList = computeDegeneracy(dMax, checkerboard=True)
+    # print(f'computeDegeneracy={wallTime()-s}')
+    s = wallTime()
+    kappaMuProductList = np.zeros_like(dSqVals,dtype=float)
+    n1s, n2s, probsCorrelated = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
+    _,   _,   probsUncorrelated = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
+    for i, dSqVal in enumerate(dSqVals):
+        for site in siteList[i]:
+            if dSqVal == 0:                
+                kappaMuProductList[i] += computeKappaTerm(site, n1s, n2s, probsCorrelated)
+            else:
+                kappaMuProductList[i] += computeKappaTerm(site, n1s, n2s, probsUncorrelated) * muRatio
+    # print(f'computeLVecExpectation={wallTime()-s}')
+    return np.sqrt(dSqVals), kappaMuProductList
+
+def computeG(alpha, v):
+    numerator = 4 * (4 * alpha  + (v**2 + 1)**2)
+    denominator = (4 * alpha + 1) * (v**2 + 1)**2
+    return np.log(numerator / denominator)
+
+def fitBetaSq(kappaMu, g):
+    def powerLaw(x, a, alpha, b):
+        return a * x**alpha + b
+    x = np.arange(1, len(kappaMu)+1)
+    cumSum = np.cumsum(kappaMu)
+    # Scale the starting point to 1
+    cumSum = cumSum[-1] - cumSum
+    cumSum /= cumSum[0]
+    popt, pcov = curve_fit(powerLaw, x, cumSum, p0=[1, -.55, 0])
+    # The "True" value of the kappaMu sum needs to be increased by a factor of 1 - b, where b is the offset
+    trueKappaMuSum = np.sum(kappaMu) - popt[2]*kappaMu[0]
+
+    return g/trueKappaMuSum #, g / np.sum(kappaMu)
+
+def computeBeta(alpha, v, dMax=100):
+    _, kappaMuProduct = computeKappaMuProduct(alpha, v, dMax)
+    g = computeG(alpha,v)
+    betaSq = fitBetaSq(kappaMuProduct, g)
+    return np.sqrt(betaSq)
 
 def finiteImshow(im):
     a = im.copy()
@@ -272,7 +363,6 @@ def naiveSingleParticleTransition(v, tiltDirection = np.array([1,0])):
         pOut[directions[i,0]+1, directions[i,1]+1] += probability[i]
     return pOut
 
-
 def makeSingleParticleTransition(d1,d2, p):
     p1 = np.zeros((3,3))
     p2 = np.zeros((3,3))
@@ -280,26 +370,6 @@ def makeSingleParticleTransition(d1,d2, p):
         p1[d1[i,0]+1, d1[i,1]+1] += p[i]
         p2[d2[i,0]+1, d2[i,1]+1] += p[i]
     return p1, p2
-
-
-# the below eqns are to calculate kappa(l).
-
-# eqn 53 (or eqn 54), kappa for ||l|| != 0
-def computeLVecExpectation(lVec, v, alpha=1,correlated=False):
-    """ calclulates eqn 53, given a vector l. (over the combinations of n1 and n2)
-    lVec: 2d vector array
-    v: float between 0 and 1
-    alpha: float between 0 and infinity
-    """
-    # return the probabilities for the 16 combos of n1 and n2. always uncorrelated for this
-    # note the twoWalkerTransitionProbabilities implicity has the (1-v^2)^2 / 16 term in it
-    n1s, n2s, probs = twoWalkerTransitionProbabilities(alpha, v, tiltDirection = np.array([1,0]), correlated=correlated)
-    sumOverSites = 0
-    for i in range(len(n1s)):
-        logTerm = np.log((1 + np.linalg.norm(lVec + n1s[i] - n2s[i])) / (1 + np.linalg.norm(lVec)))
-        sumOverSites += logTerm * probs[i]
-    return sumOverSites
-
 
 def find_two_squares(targetDistSq):
     """ Finds all sites on lattice that have a norm-squared of targetDistSq, i.e.
@@ -372,24 +442,6 @@ def find_two_squares(targetDistSq):
 #         kappaList.append(computeKappaOfLNonzero(i, v, alpha))
     return np.array(lSqList), np.array(kappaList)
 
-
-# the following function combines the above 2 functions but uses computeDegeneracies instead of find_two_squares
-def computeAllKappa(lSqMax, v, alpha,checkerboard):
-    """ compute kappa(l) up to some maximum l^2 value (equiv, max distance l), given v (measurement velocity)
-    and alpha (stickiness of Dirichlet distribution).
-    The checkerboard flag is if we want to be smart about calculating it"""
-    lMax = np.sqrt(lSqMax).astype(int)
-    # value of lSq, its degenerecy, and the list of sites that have that distance
-    dsqVals, _, degeneracies, _, siteLists = computeDegeneracy(lMax, checkerboard=checkerboard)
-    kappaList = np.zeros_like(dsqVals,dtype=float)
-    for idx, dSqVal in enumerate(dsqVals):
-        kappa = 0
-        correlated = True if dSqVal == 0 else False
-        for site in siteLists[idx]:
-            kappa += computeLVecExpectation(site, v, alpha,correlated=correlated)
-        kappa /= degeneracies[idx]
-        kappaList[idx] = kappa
-    return dsqVals, kappaList
 
 
 # ------------------------------------------- Everything below here may be based on wrong assumptions
