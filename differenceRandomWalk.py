@@ -294,19 +294,19 @@ def computeKappaTerm(latticeVector, n1s, n2s, probs):
     return kappaTerm
 
 def computeKappaMuProduct(alpha, v, dMax):
-    s = wallTime()
+    # s = wallTime()
     muRatio = (4 * alpha) / (4 * alpha + (1 + v**2)**2)
 
     dSqVals, _, _, _, siteList = computeDegeneracy(dMax, checkerboard=True)
     # print(f'computeDegeneracy={wallTime()-s}')
-    s = wallTime()
+    # s = wallTime()
     kappaMuProductList = np.zeros_like(dSqVals,dtype=float)
     n1s, n2s, probsCorrelated = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
     _,   _,   probsUncorrelated = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
     for i, dSqVal in enumerate(dSqVals):
         for site in siteList[i]:
             if dSqVal == 0:                
-                kappaMuProductList[i] += computeKappaTerm(site, n1s, n2s, probsCorrelated)
+                kappaMuProductList[i] += computeKappaTerm(site, n1s, n2s, probsCorrelated) * 1
             else:
                 kappaMuProductList[i] += computeKappaTerm(site, n1s, n2s, probsUncorrelated) * muRatio
     # print(f'computeLVecExpectation={wallTime()-s}')
@@ -329,7 +329,7 @@ def fitBetaSq(kappaMu, g):
     # The "True" value of the kappaMu sum needs to be increased by a factor of 1 - b, where b is the offset
     trueKappaMuSum = np.sum(kappaMu) - popt[2]*kappaMu[0]
 
-    return g/trueKappaMuSum #, g / np.sum(kappaMu)
+    return g/trueKappaMuSum#, g / np.sum(kappaMu)
 
 def computeBeta(alpha, v, dMax=100):
     _, kappaMuProduct = computeKappaMuProduct(alpha, v, dMax)
