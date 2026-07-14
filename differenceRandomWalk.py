@@ -313,9 +313,26 @@ def computeKappaMuProduct(alpha, v, dMax):
     return np.sqrt(dSqVals), kappaMuProductList
 
 def computeG(alpha, v):
+    # TODO: This is super duper wrong.  Redo the derivation
     numerator = 4 * (4 * alpha  + (v**2 + 1)**2)
     denominator = (4 * alpha + 1) * (v**2 + 1)**2
     return np.log(numerator / denominator)
+
+def computeGNumeric(alpha, v, tiltDirection = np.array([1,0])):
+    n1s, n2s, probsCorrelated = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
+    
+    logFirstTerm = 0
+    for n1, n2, prob in zip(n1s, n2s, probsCorrelated):
+        logFirstTerm += calcXiExpectation(n1, n2, alpha, correlated=True) * ((1+v)/(1-v))**np.dot(tiltDirection, n1 + n2)
+    firstTerm = np.log(logFirstTerm)
+
+    ns = makeDirectionList()
+    logSecondTerm = 0
+    for n in ns:
+        logSecondTerm += (1/4) * ((1+v)/(1-v))**np.dot(tiltDirection, n)
+    secondTerm = -2*np.log(logSecondTerm)
+
+    return firstTerm + secondTerm
 
 def fitBetaSq(kappaMu, g):
     def powerLaw(x, a, alpha, b):
@@ -333,7 +350,7 @@ def fitBetaSq(kappaMu, g):
 
 def computeBeta(alpha, v, dMax=100):
     _, kappaMuProduct = computeKappaMuProduct(alpha, v, dMax)
-    g = computeG(alpha,v)
+    g = computeGNumeric(alpha,v)
     betaSq = fitBetaSq(kappaMuProduct, g)
     return np.sqrt(betaSq)
 
