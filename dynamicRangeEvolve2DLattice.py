@@ -3,7 +3,7 @@ import os
 from time import time as wallTime
 from numba import njit
 import json
-
+from directedPolymer import logSumExp
 
 
 # started 1 Dec 2025 to replace memEfficientEvolve2DLattice and the diffusionND modules
@@ -54,7 +54,8 @@ def logDirichlet(alpha, numElements=4):
     # so logDir = Z_i - logsumexp(set of Z_i)
     Zs = logGamma(alpha,numElements=numElements)
     # Use the LSE operation to normalize them by their sum as logDirichlet = Zs - LSE(Zs)
-    logDirichlet = Zs - sumLogList(Zs)
+    #logDirichlet = Zs - sumLogList(Zs)
+    logDirichlet = Zs - logSumExp(Zs)  #logSumExp is a bit faster
     return logDirichlet
 
 @njit
