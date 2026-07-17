@@ -3,10 +3,7 @@ import os
 from time import time as wallTime
 from numba import njit
 import json
-# import tracemalloc
-from datetime import date
-import sys
-import shutil
+
 
 
 # started 1 Dec 2025 to replace memEfficientEvolve2DLattice and the diffusionND modules
@@ -41,6 +38,24 @@ def moveProbabilityFromSite(logP, i, j, logBiases):
     logP[i, j] = -np.inf
     return  # return tells it when the proecedure is done
 
+@njit
+def logGamma(shape,numElements=4):
+    """  We define the log gamma using log(Gamma(c)) ~ log(Gamma(c + 1)) + log(U)/c
+    This function generates numElements (4) random logGamma variables this way
+    tested and it should reproduce scipy.stats.loggamma
+    """
+    return np.log(np.random.gamma(shape+1,scale=1,size=numElements)) + np.log(np.random.rand(numElements))/shape
+
+@njit
+def logDirichlet(alpha, numElements=4):
+    # Generate len(alphaList) logGamma distributed numbers using numba-implemented logSumExp logGammas
+    # that is, we use Dir(alpha) = Y_i / Sum_i(Y_i) where each Y_i~Gamma(shape=alpha)
+    # so logDir = log(Yi / sum_i(Yi)) = log(Yi) - log(sum_i Yi)
+    # so logDir = Z_i - logsumexp(set of Z_i)
+    Zs = logGamma(alpha,numElements=numElements)
+    # Use the LSE operation to normalize them by their sum as logDirichlet = Zs - LSE(Zs)
+    logDirichlet = Zs - sumLogList(Zs)
+    return logDirichlet
 
 @njit
 def updateLogOccupancy(logP, time,alpha=1):
@@ -60,23 +75,14 @@ def updateLogOccupancy(logP, time,alpha=1):
         start = 1
         end = logP.shape[
                   0] - 1  # the last index is 2L-1 (the absorbing boundary) and setting the end will stop the range 1 before that
-    # pre-generating the (log) biases for our shrinkwrapped, checkerboarded sub-area
-    # logBiasesAll = np.log(
-    #     np.random.dirichlet([1] * 4,
-    #                         size=(((end - start + 1) // 2), ((end - start + 1) // 2))))
     # iterate over current state of the array, only occupied sites
     for i in range(start, end):
         for j in range(start, end):
             # print(i, j, time)
             if (i + j + time) % 2 == 1:  # old checkerboard condition, ie. at t=0 move from origin to first 4 neighbors
-                # print("occupied, logP[i,j]:",logP[i,j])
-                # # SSRW
-                # logBiases = np.log(np.array([1/4]*4))
-                # generate in the loop
-                logBiases = np.log(np.random.dirichlet([alpha] * 4))
-                # if we pre-generate all biases
-                # logBiases = logBiasesAll[
-                #     (i - start) // 2, (j - start) // 2, :]  # pull out the set of 4 logBiases for site i,j
+                # logBiases = np.log(np.array([1/4]*4))  # SSRW
+                # logBiases = np.log(np.random.dirichlet([alpha] * 4))  # OLD IMPLEMENTATIOn
+                logBiases = logDirichlet(alpha)  # allows alpha<<1
                 # update logP arary using precision scheme for each direction
                 moveProbabilityFromSite(logP, i, j, logBiases)
     return logP
@@ -335,17 +341,9 @@ def runSystemCircle(L, velocities, tMax, topDir, occDir, sysID, saveInterval,alp
     finalCumLogProbFileName = os.path.join(topDir, "Final" + f"{sysID}.npy")
     print(f"cumLogProbFileName: {cumLogProbFileName}")
     # occupancy & time files go into the scratch directory
-    # occTopDir = topDir.replace("projects", "scratch")
-    # os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
     logOccFileName = os.path.join(occDir, f"Occupancy{sysID}.npy")
     logOccTimeFileName = logOccFileName.replace("Occupancy", "time")
     print(f"logOccFileName: {logOccFileName}")
-    #       Check status of task_id + offset system
-    #       if task_id + offset is not finished
-    #               If status is corrupted
-    #                       Delete system and scratch files
-    #               run task_id + offset
-    # note: if it fucks up (file doesn't exist, file doesn't read in properly, etc). then let the code fail
     if os.path.exists(finalCumLogProbFileName):  # if cumLogProb file exists and is final
         print("finalCumLogProbFileName exists, evoultion already complete. exiting", flush=True)
         return
@@ -411,23 +409,10 @@ def runSystemLine(L, velocities, tMax, topDir, occDir, sysID, saveInterval,alpha
     finalPointCumLogProbFileName = os.path.join(topDir, "Final" + f"Point{sysID}.npy")
 
     # occupancy & time files go into the scratch directory
-    # # /scratch/jamming/fransces/data/.../L$L/LINE/...
-    # occTopDir = topDir.replace("projects", "scratch")
-    # os.makedirs(occTopDir, exist_ok=True)  # need to generate the occupancy file paths
-    # # /scratch/jamming/fransces/data/.../L$L/LINE/LineOccupancy0.npy
-    # for debugging
-    # occTopDir = topDir
-
     logOccFileName = os.path.join(occDir, f"LineOccupancy{sysID}.npy")
     # /scratch/jamming/fransces/data/.../L$L/LINE/LineTime0.npy
     logOccTimeFileName = logOccFileName.replace("LineOccupancy", "LineTime")
     print(f"logOccFileName: {logOccFileName}", flush=True)
-
-    #       Check status of task_id + offset system
-    #       if task_id + offset is not finished
-    #               If status is corrupted
-    #                       Delete system and scratch files
-    #               run task_id + offset
 
     if os.path.exists(finalCumLogProbFileName) and os.path.exists(finalPointCumLogProbFileName):
         # if cumLogProb file exists and is final, if pointCumLogProb exists and is final
