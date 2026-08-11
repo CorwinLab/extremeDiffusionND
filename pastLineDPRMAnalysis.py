@@ -6,13 +6,13 @@ import differenceRandomWalk as drw
 from histogramPaper import plotLinePointStats as p
 import time
 
-# helper function to find the nearest time
-def find_nearest(array,value):
-    idx = np.searchsorted(array, value, side="left")
-    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
-        return array[idx-1]
-    else:
-        return array[idx]
+# # helper function to find the nearest time
+# def find_nearest(array,value):
+#     idx = np.searchsorted(array, value, side="left")
+#     if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
+#         return array[idx-1]
+#     else:
+#         return array[idx]
 
 def calcAndSaveAllBetas(statsFileName):
     """
@@ -42,12 +42,18 @@ def calcAndSaveAllBetas(statsFileName):
     np.save(saveFile, np.array([betas, variances, rs, ts, vs]))
     return betas, variances, rs, ts, vs
 
-def main():
+
+def collapseTime():
+    alpha0001Path = "/home/fransces/Documents/code/extremeDiffusionND/pastLine/alpha0.001/LineStats.npy"
     alpha003Path = "/home/fransces/Documents/code/extremeDiffusionND/pastLine/alpha003/LineStats.npy"
     alpha01Path = "/home/fransces/Documents/code/extremeDiffusionND/pastLine/alpha01/LineStats.npy"
     alpha1Path = "/home/fransces/Documents/code/extremeDiffusionND/pastLine/alpha1/LineStats.npy"
+    alpha10Path = "/home/fransces/Documents/code/extremeDiffusionND/pastLine/alpha10/LineStats.npy"
 
     tMax = 1000  # im doing a dumb and hardcoding this but whatever
+    data0001 = p.processLinePointStatsNPY(alpha0001Path)
+    variances0001, rs0001, ts0001 = data0001[1,:], data0001[3,:], data0001[4,:]
+    vs0001 = rs0001/ts0001
 
     data003 = p.processLinePointStatsNPY(alpha003Path)
     variances003, rs003, ts003 = data003[1,:], data003[3,:], data003[4,:]
@@ -60,29 +66,40 @@ def main():
     data1 = p.processLinePointStatsNPY(alpha1Path)
     variances1, rs1, ts1 = data1[1,:],data1[3,:],data1[4,:]
     vs1 = rs1/ts1
+
+    data10 = p.processLinePointStatsNPY(alpha10Path)
+    variances10, rs10, ts10 = data10[1,:],data1[3,:],data1[4,:]
+    vs10 = rs10/ts10
     # this should be identical for any set of vs and ts
     # if we want we can set a different tMax to get it at different times
     good = (vs003 <=1 ) & (ts003 == tMax)
     bad = (vs003[good] < 1e-1)  # in theory this can be used to mask out the diffusive regime
+    betas0001 = np.array([drw.computeBeta(0.001, v) for v in vs0001[good]])
     betas003 = np.array([drw.computeBeta(0.03,v) for v in vs003[good]])
     betas01 = np.array([drw.computeBeta(0.1,v) for v in vs01[good]])
-    betas1 = np.array([drw.computeBeta(0.1,v) for v in vs1[good]])
+    betas1 = np.array([drw.computeBeta(1,v) for v in vs1[good]])
+    betas10 = np.array([drw.computeBeta(10, v) for v in vs10[good]])
+
+    scaledVar0001 = variances0001[good] / betas0001**2
     scaledVar003 = variances003[good] / betas003**2
     scaledVar01 = variances01[good] / betas01**2
     scaledVar1 = variances1[good] / betas1**2
+    scaledVar10 = variances10[good] / betas10**2
 
 
     # plotting
     fig, ax = plt.subplots()
-    ax.set_title(f"lnP past a line, tMax={tMax}, v>1e-1 \n scaled to be thru 0 and 1")
+    ax.set_title(f"lnP past a line tMax={tMax} v>1e-1 \n scaled to be thru 0 and 1 by max/min stuff")
+    ax.loglog(betas0001[~bad], ((scaledVar0001-np.min(scaledVar0001))/(np.max(scaledVar0001) - np.min(scaledVar0001)))[~bad], '.', label="alpha=0.001",color='orangered')
     ax.loglog(betas003[~bad], ((scaledVar003-np.min(scaledVar003))/(np.max(scaledVar003) - np.min(scaledVar003)))[~bad], '.', label="alpha=0.03", color='darkblue')
     ax.loglog(betas01[~bad],((scaledVar01-np.min(scaledVar01))/(np.max(scaledVar01) - np.min(scaledVar01)))[~bad], '.', label="alpha=0.1", color='darkgoldenrod')
     ax.loglog(betas1[~bad], ((scaledVar1-np.min(scaledVar1))/(np.max(scaledVar1) - np.min(scaledVar1)))[~bad], '.', label="alpha=1", color='darkgreen')
+    ax.loglog(betas10[~bad], ((scaledVar10-np.min(scaledVar10))/(np.max(scaledVar10) - np.min(scaledVar10)))[~bad], '.', label="alpha=10",color = "mediumvioletred")
     ax.set_xlabel(r"$\beta$")
     ax.set_ylabel(r"$\frac{1}{\beta^2}\mathrm{Var}[\ln{P_{line}}]$")
     ax.set_yscale('linear')
     ax.legend()
-    plt.show()
+    fig.show()
     # #  here's what we'd do if we had the "bad" mask
     # plt.loglog(betas[~bad], variances[~bad] / (betas[~bad]) ** 2, '.', color='darkblue', label=f"alpha=0.03 at t=1000")
     # plt.loglog(betas2[~bad], variances2[~bad] / (betas2[~bad] ** 2), '.', color='darkgoldenrod',
@@ -218,3 +235,40 @@ def compareAlphas(t=1000):
     ax3.legend()
     fig3.show()
     return
+
+def varVsBeta(path):
+    with open(os.path.join(path,"variables.json"),"r") as v:
+        variables = json.load(v)
+    tMax = variables['tMax']
+    alpha = variables['alpha']
+    times = np.unique(np.geomspace(1,tMax,500).astype(int))
+    subTimes = times[10::]
+    print(f"alpha: {alpha} \n times: {subTimes}")
+    data = p.processLinePointStatsNPY(os.path.join(path,"LineStats.npy"))
+    variances, rs, ts = data[1,:], data[3,:], data[4,:]
+    finite = np.isfinite(rs)
+    variances, rs, ts = variances[finite], rs[finite], ts[finite]
+    fig, ax = plt.subplots()
+    ax.set_xlabel(r"$\beta")
+    ax.set_ylabel(r"$\mathrm{Var}[\ln{P_{line}}]$ at t")
+    ax.set_title(f"alpha={alpha}")
+    for t in subTimes:
+        print(f"t: {t}")
+        vs = rs/ts
+        good = (vs < 1) & (ts == t)
+        print(f"# of good datapoints: {np.sum(good)}")
+        variances, rs, vs, ts = variances[good], rs[good], vs[good], ts[good]
+        _, unique = np.unique(rs, return_index = True)
+        variances, rs, vs, ts = variances[unique], rs[unique], vs[unique], ts[unique]
+        print(f"# of unique rs: {len(unique)}")
+        betas = np.array([drw.computeBeta(alpha,v) for v in vs])
+        ax.loglog(betas, variances, '.-', label=f"t={t}")
+        # reset for next loop
+        data = p.processLinePointStatsNPY(os.path.join(path, "LineStats.npy"))
+        variances, rs, ts = data[1, :], data[3, :], data[4, :]
+        finite = np.isfinite(rs)
+        variances, rs, ts = variances[finite], rs[finite], ts[finite]
+	fig.legend()
+	fig.show()
+	return
+
