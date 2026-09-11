@@ -5,12 +5,24 @@ import json
 from scipy.special import logsumexp as LSE
 # from directedPolymer import logSumExp
 
+#TODO: this function works and when doing like
+# testmoment1 = firstFile
+# for array in arrays, testMoment1 = momentLogP(array, testMoment1, 1), it works
+# so somehow the way I implemented it in calcExpectationLogPAndLogExpecationP is screwed up
+# maybe the difference between np.power and logP*logP is part of the issue?
 def momentLogP(newLogP, currentMomentVal, nthMoment):
     # when calculating the moments of logP, since I have logP stored
     # i ccan just do updatedMoment = currentMomentVal + np.power(newLogP,nthMoment)
-    updatedMoment = currentMomentVal + np.power(newLogP, nthMoment)
+    # updatedMoment = currentMomentVal + np.power(newLogP, nthMoment)
+    if nthMoment == 1:
+        updatedMoment = newLogP + currentMomentVal
+    elif nthMoment == 2:
+        updatedMoment = newLogP * newLogP + currentMomentVal
+    else:
+        updatedMoment = np.power(newLogP, nthMoment) + currentMomentVal
     return updatedMoment
 
+# TODO: fix this please. i have no clue what's wrong with this.
 def logMomentP(newLogP, currentLogMomentP, nthMoment):
     # calculating log(moments of P) is more difficult since I've stored logP, not P
     # to update this calculation I need to do
@@ -21,7 +33,11 @@ def logMomentP(newLogP, currentLogMomentP, nthMoment):
     updatedLogMoment = LSE([nthMoment*newLogP, currentLogMomentP],axis=0)
     return updatedLogMoment
 
-def calcExpectationLogPAndLogExpectationP(path, savePath, lookAtNum):
+#TODO: fix this because something is very wrong with this
+# TODO: i don't get it though because i'm doing the exact same thing???
+# TODO: OK i got the means (both logMean and meanLOG) to line up with the calculateStatistics and with NUMPY
+# TODO: but now the variances won't line up
+def calcExpectationLogPAndLogExpectationP(path, savePath, lookAtNum=None):
     """
     procedure. calcs mean[lnP], var[lnP], skew[lnP]. also calculates
     ln[MeanP], ln[VarP], ln[SkewP].
@@ -34,80 +50,72 @@ def calcExpectationLogPAndLogExpectationP(path, savePath, lookAtNum):
     """
     os.makedirs(savePath, exist_ok=True)
     expected_file_num = 50000
-
-    logStatsFileName = "Stats.npy"
-    noLogStatsFileName = "StatsNoLog.npy"
-    finalLogProbsFileName = "FinalProbs.npy"
-
-    print(f"filenames: \n {finalLogProbsFileName} \n {logStatsFileName} \n {noLogStatsFileName}")
-
+    statsLogPFileName = os.path.join(savePath,"statsLogP.npy")  # mean(logP), var(logP), etc...
+    logStatsPFileName = os.path.join(savePath,"logStatsP.npy")  # log(MeanP), log(varP), ...
+    finalLogProbsFileName = os.path.join(savePath,"FinalLogProbs.npy")
+    print(f"filenames: \n {finalLogProbsFileName} \n {logStatsPFileName} \n {statsLogPFileName}")
     # initialize with the 1st file, which are logP values
     firstFile = np.load(os.path.join(path,"Final0.npy"))
     # moments of logP
-    m1, m2, m3, m4 = firstFile,firstFile*firstFile, np.power(firstFile,3), np.power(firstFile,4)
-    # log(moments of P)
-    nlM1, nlM2, nlM3, nlM4 = firstFile,firstFile*firstFile, np.power(firstFile,3), np.power(firstFile,4)
-    # I think if I do LSE([file1, file2],axis=0) it should be ok??
+    momentsOfLogP = np.array([firstFile,firstFile*firstFile, np.power(firstFile,3), np.power(firstFile,4)])
+    # log(moments of P) need to be initialized with nthMoment*logP?
+    logMomentsOfP = np.array([firstFile,2*firstFile, 3*firstFile, 4*firstFile])
     finalLogProbs = np.zeros(shape=(expected_file_num,firstFile.shape[1]))
     if lookAtNum is not None:  # only look at 0-lookAtNum (ie a subset)
         maxID = lookAtNum
     else:
         maxID = expected_file_num
-    num_files = 0
-    n_corrupted = 0
-    for fileID in tqdm(range(1,maxID)):
-        # try to open the file in a try/except. if good, add to the moments
+    num_files = 1
+    for fileID in tqdm(range(1,maxID)):  # already loaded in 0
         try:
             logProbs = np.load(os.path.join(path, f"Final{fileID}.npy"))
             with np.errstate(divide='ignore'):  # we are going to += the shit out of this
-                # moments of logP
-                m1 += logProbs
-                m2 += logProbs * logProbs
-                m3 += np.power(logProbs, 3)
-                m4 += np.power(logProbs, 4)
-                # log(moments of P)
-                # log(Expectation[P^n]) = log(sum_i^N P_i^n / N) = log(logsumexp(n*list of lnPs)) - logN
-                nlM1 = LSE([logProbs, nlM1],axis=0)
-                nlM2 = LSE([2*logProbs, nlM2],axis=0)
-                nlM3 = LSE([3*logProbs, nlM3], axis=0)
-                nlM4 = LSE([4*logProbs, nlM4], axis=0)
+                for n in range(1, 5):  # iterate over the moments
+                    momentsOfLogP[n-1,:,:] = momentLogP(logProbs, momentsOfLogP[n-1,:,:],n)
+                    logMomentsOfP[n-1,:,:] = logMomentP(logProbs, logMomentsOfP[n-1,:,:],n)
             # update the final probability list
             finalLogProbs[num_files, :] = logProbs[-1, :]
-            # now advance the counter
+            # now advance the counter of # of systems
             num_files += 1
         except Exception as e:  # skip file if corrupted, also say its corrupted
             print(f"{fileID} is corrupted or can't be opened!")
-            n_corrupted += 1
             continue
-        # normalize the moments of logP
-        m1 /= num_files
-        m2 /= num_files
-        m3 /= num_files
-        m4 /= num_files
-        # normalize the log(moments of P); this is the -ln(N) step in the
-        # log(Expectation[P^n]) = log(sum_i^N P_i^n / N) =log(logsumexp(n*list of lnPs)) - logN eqn.
-        nlM1 -= np.log(num_files)
-        nlM2 -= np.log(num_files)
-        nlM3 -= np.log(num_files)
-        nlM4 -= np.log(num_files)
-        # turn moments ino mean, var, skew, kurtosis, etc.
-        with np.errstate(invalid='ignore', divide='ignore'):
-            # mean, var, etc. for logP
-            mean = m1
-            variance = m2 - np.square(m1)
-            skew = (m3 - 3 * m1 * variance - np.power(m1, 3)) / (variance ** (3 / 2))
-            kurtosis = (m4 - 4 * m1 * m3 + 6 * (m1 ** 2) * m2 - 3 * np.power(m1,4))/np.square(variance)
-
-            # log(meanP), log(varP), log(skewP), etc
-            logMeanP = nlM1
-            # for var, skew, etc. I need to use logsumexp again to avoid under/over flow
-            # log(Var[P]) = log(E[P^2] - E[P]^2) = LSE(log(E[P^2]), -log[E[P]])^2 = LSE(log(E[P^2]), -2log(E[P]) ) ?
-            logVarP = LSE([nlM2, -2*nlM1],axis=0)
-            # log(SkewP) = log( (nlM3 - 3*logVarP)/(logVarP^(3/2)) )
-            # logSkewP = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance ** (3 / 2))
-
-
-# for past a line & past a point. because i'm STUPID.
+        # normalize the moments of logP and normalize the log(moments of P)
+    momentsOfLogP /= num_files  # we normalize stats(logP) by dividing by N
+    logMomentsOfP -= np.log(num_files)  # to normalzie log(statsP) we need to subtract off log(N)
+    # use moments to calculate the stats
+    with np.errstate(invalid='ignore', divide='ignore'):
+        meanLogP = momentsOfLogP[0,:,:]
+        varLogP = momentsOfLogP[1,:,:] - np.square(meanLogP)
+        skewLogP = (momentsOfLogP[2,:,:] - 3 * meanLogP * varLogP - np.power(meanLogP, 3)) / (varLogP ** (3 / 2))
+        kurtosisLogP = (momentsOfLogP[3,:,:] - 4 * meanLogP * momentsOfLogP[2,:,:] + 6 * (meanLogP ** 2) * momentsOfLogP[1,:,:] - 3 * np.power(meanLogP,4))/np.square(varLogP)
+        # log(meanP), log(varP), log(skewP), etc
+        logMeanP = logMomentsOfP[0,:,:]
+        # for var, skew, etc. I need to use logsumexp again to avoid under/over flow
+        # log(Var[P]) = log(E[P^2] - E[P]^2) = LSE(log(E[P^2]), -log[E[P]])^2 = LSE(log(E[P^2]), -2log(E[P]) ) ?
+        logVarP = LSE([logMomentsOfP[1,:,:], 2*logMeanP],axis=0,b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1)])
+        # log(SkewP) = log( (nlM3 - 3*logVarP)/(logVarP^(3/2)) )
+        # logSkewP = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance ** (3 / 2))
+        # = LSE([log(E[P^3]), -((log3)+(logVarP)+(logmeanP)),-3log(P)],axis=0 ) - 3/2 log(VarP)
+        logSkewP = (LSE([logMomentsOfP[2,:,:],(np.log(3)+logVarP+logMeanP),3*logMeanP],
+                       axis=0,
+                       b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1),np.full_like(logMeanP,-1)])
+                    - (3/2)*logVarP)
+        logKurtosisP = (LSE([logMomentsOfP[3,:,:], (np.log(4)+logMomentsOfP[2,:,:]+logMeanP), (np.log(6)+2*logVarP+2*logMeanP),(np.log(3)+2*logMeanP)],
+                            axis=0,
+                            b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1),np.ones_like(logMeanP),np.ones_like(logMeanP)])
+                        - 2*logVarP)
+    statsLogP = np.array([meanLogP, varLogP, skewLogP, kurtosisLogP])
+    logStatsP = np.array([logMeanP, logVarP, logSkewP, logKurtosisP])
+    nonzeroLogProbs = finalLogProbs[:num_files,:]  # chop off the part of the array we didn't use, if any
+    np.save(statsLogPFileName, statsLogP)  # stats of logP
+    np.save(logStatsPFileName, logStatsP)  # log(stats of P)
+    np.save(finalLogProbsFileName, nonzeroLogProbs)  # final logProbs file
+    print(f"finished! # completed files: {num_files}")
+    return
+#
+# # for past a line & past a point. because i'm STUPID.
+# TODO: NOTE THIS ONE MATCHES WHEN I USE NUMPY
 def calculateStatistics(path, savePath, lookAtNum=None, measurement=None):
     """
     procedure. calculates mean, 2nd moment, variance, 3rd moment, and kurtosis (?) of ln[Prob(meas)]
@@ -123,9 +131,9 @@ def calculateStatistics(path, savePath, lookAtNum=None, measurement=None):
     """
     os.makedirs(savePath, exist_ok=True)
     expected_file_num = 50000  # eventaully i will have 50k systems for histograms
-    with open(f"{path}/variables.json", 'r') as v:
-        variables = json.load(v)
-    tMax = variables['tMax']
+    # with open(f"{path}/variables.json", 'r') as v:
+    #     variables = json.load(v)
+    # tMax = variables['tMax']
     # times = np.unique(np.geomspace(1,tMax,500).astype(int))
     fileName = "Stats.npy"
     noLogFileName = "StatsNoLog.npy"
