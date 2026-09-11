@@ -5,11 +5,6 @@ import json
 from scipy.special import logsumexp as LSE
 # from directedPolymer import logSumExp
 
-#TODO: this function works and when doing like
-# testmoment1 = firstFile
-# for array in arrays, testMoment1 = momentLogP(array, testMoment1, 1), it works
-# so somehow the way I implemented it in calcExpectationLogPAndLogExpecationP is screwed up
-# maybe the difference between np.power and logP*logP is part of the issue?
 def momentLogP(newLogP, currentMomentVal, nthMoment):
     # when calculating the moments of logP, since I have logP stored
     # i ccan just do updatedMoment = currentMomentVal + np.power(newLogP,nthMoment)
@@ -22,7 +17,6 @@ def momentLogP(newLogP, currentMomentVal, nthMoment):
         updatedMoment = np.power(newLogP, nthMoment) + currentMomentVal
     return updatedMoment
 
-# TODO: fix this please. i have no clue what's wrong with this.
 def logMomentP(newLogP, currentLogMomentP, nthMoment):
     # calculating log(moments of P) is more difficult since I've stored logP, not P
     # to update this calculation I need to do
@@ -33,10 +27,46 @@ def logMomentP(newLogP, currentLogMomentP, nthMoment):
     updatedLogMoment = LSE([nthMoment*newLogP, currentLogMomentP],axis=0)
     return updatedLogMoment
 
-#TODO: fix this because something is very wrong with this
-# TODO: i don't get it though because i'm doing the exact same thing???
-# TODO: OK i got the means (both logMean and meanLOG) to line up with the calculateStatistics and with NUMPY
-# TODO: but now the variances won't line up
+def returnStatsOfLogP(moment1, moment2, moment3, moment4):
+    """
+    helper function to return mean(logP), var(logP), skew(logP), and kurtosis(logP) using the moments,
+    computed the traditional way without LSE
+    Takes in the normalized moments
+    """
+    with np.errstate(divide='ignore',invalid='ignore'):
+        mean = moment1
+        variance = moment2 - moment1*moment1
+        skew = (moment3- 3 * mean * variance - np.power(mean, 3)) / (variance ** (3 / 2))
+        kurtosis = (moment4 - 4 * mean * moment3 + 6 * (mean ** 2) * moment2 - 3 * np.power(mean,4))/np.square(variance)
+    return np.array([mean, variance, skew, kurtosis])
+
+def returnLogStatsOfP(logMoment1, logMoment2, logMoment3, logMoment4):
+    """
+    helper function to return log(meanP), log(varP), log(skewP), and log(kurtosisP)
+    computed using LogSumExp, takes in the log(moments of P) as parameters
+    """
+    with np.errstate(divide='ignore',invalid='ignore'):
+        logMeanP = logMoment1
+        # for var, skew, etc. I need to use logsumexp again to avoid under/over flow
+        # log(Var[P]) = log(E[P^2] - E[P]^2) = LSE(log(E[P^2]), -log[E[P]])^2 = LSE(log(E[P^2]), -2log(E[P]) ) ?
+        logVarP = LSE([logMoment2, 2 * logMeanP], axis=0,
+                      b=[np.ones_like(logMeanP), np.full_like(logMeanP, -1)])
+        # log(SkewP) = log( (nlM3 - 3*logVarP)/(logVarP^(3/2)) )
+        # logSkewP = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance ** (3 / 2))
+        # = LSE([log(E[P^3]), -((log3)+(logVarP)+(logmeanP)),-3log(P)],axis=0 ) - 3/2 log(VarP)
+        logSkewP = (LSE([logMoment3, (np.log(3) + logVarP + logMeanP), 3 * logMeanP],
+                        axis=0,
+                        b=[np.ones_like(logMeanP), np.full_like(logMeanP, -1), np.full_like(logMeanP, -1)])
+                    - (3 / 2) * logVarP)
+        logKurtosisP = (LSE([logMoment4, (np.log(4) + logMoment4 + logMeanP),
+                             (np.log(6) + 2 * logVarP + 2 * logMeanP), (np.log(3) + 2 * logMeanP)],
+                            axis=0,
+                            b=[np.ones_like(logMeanP), np.full_like(logMeanP, -1), np.ones_like(logMeanP),
+                               np.ones_like(logMeanP)])
+                        - 2 * logVarP)
+        return np.array([logMeanP, logVarP, logSkewP, logKurtosisP])
+
+
 def calcExpectationLogPAndLogExpectationP(path, savePath, lookAtNum=None):
     """
     procedure. calcs mean[lnP], var[lnP], skew[lnP]. also calculates
@@ -84,38 +114,16 @@ def calcExpectationLogPAndLogExpectationP(path, savePath, lookAtNum=None):
     momentsOfLogP /= num_files  # we normalize stats(logP) by dividing by N
     logMomentsOfP -= np.log(num_files)  # to normalzie log(statsP) we need to subtract off log(N)
     # use moments to calculate the stats
-    with np.errstate(invalid='ignore', divide='ignore'):
-        meanLogP = momentsOfLogP[0,:,:]
-        varLogP = momentsOfLogP[1,:,:] - np.square(meanLogP)
-        skewLogP = (momentsOfLogP[2,:,:] - 3 * meanLogP * varLogP - np.power(meanLogP, 3)) / (varLogP ** (3 / 2))
-        kurtosisLogP = (momentsOfLogP[3,:,:] - 4 * meanLogP * momentsOfLogP[2,:,:] + 6 * (meanLogP ** 2) * momentsOfLogP[1,:,:] - 3 * np.power(meanLogP,4))/np.square(varLogP)
-        # log(meanP), log(varP), log(skewP), etc
-        logMeanP = logMomentsOfP[0,:,:]
-        # for var, skew, etc. I need to use logsumexp again to avoid under/over flow
-        # log(Var[P]) = log(E[P^2] - E[P]^2) = LSE(log(E[P^2]), -log[E[P]])^2 = LSE(log(E[P^2]), -2log(E[P]) ) ?
-        logVarP = LSE([logMomentsOfP[1,:,:], 2*logMeanP],axis=0,b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1)])
-        # log(SkewP) = log( (nlM3 - 3*logVarP)/(logVarP^(3/2)) )
-        # logSkewP = (moment3 - 3 * moment1 * variance - np.power(moment1, 3)) / (variance ** (3 / 2))
-        # = LSE([log(E[P^3]), -((log3)+(logVarP)+(logmeanP)),-3log(P)],axis=0 ) - 3/2 log(VarP)
-        logSkewP = (LSE([logMomentsOfP[2,:,:],(np.log(3)+logVarP+logMeanP),3*logMeanP],
-                       axis=0,
-                       b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1),np.full_like(logMeanP,-1)])
-                    - (3/2)*logVarP)
-        logKurtosisP = (LSE([logMomentsOfP[3,:,:], (np.log(4)+logMomentsOfP[2,:,:]+logMeanP), (np.log(6)+2*logVarP+2*logMeanP),(np.log(3)+2*logMeanP)],
-                            axis=0,
-                            b=[np.ones_like(logMeanP),np.full_like(logMeanP,-1),np.ones_like(logMeanP),np.ones_like(logMeanP)])
-                        - 2*logVarP)
-    statsLogP = np.array([meanLogP, varLogP, skewLogP, kurtosisLogP])
-    logStatsP = np.array([logMeanP, logVarP, logSkewP, logKurtosisP])
+    statsLogP = returnStatsOfLogP(momentsOfLogP[0,:,:],momentsOfLogP[1,:,:],momentsOfLogP[2,:,:],momentsOfLogP[3,:,:])
+    logStatsP = returnLogStatsOfP(logMomentsOfP[0,:,:],logMomentsOfP[1,:,:],logMomentsOfP[2,:,:],logMomentsOfP[3,:,:])
     nonzeroLogProbs = finalLogProbs[:num_files,:]  # chop off the part of the array we didn't use, if any
     np.save(statsLogPFileName, statsLogP)  # stats of logP
     np.save(logStatsPFileName, logStatsP)  # log(stats of P)
     np.save(finalLogProbsFileName, nonzeroLogProbs)  # final logProbs file
     print(f"finished! # completed files: {num_files}")
     return
-#
+
 # # for past a line & past a point. because i'm STUPID.
-# TODO: NOTE THIS ONE MATCHES WHEN I USE NUMPY
 def calculateStatistics(path, savePath, lookAtNum=None, measurement=None):
     """
     procedure. calculates mean, 2nd moment, variance, 3rd moment, and kurtosis (?) of ln[Prob(meas)]
