@@ -350,7 +350,12 @@ def fitBetaSq(kappaMu, g):
 
 def computeBeta(alpha, v, dMax=100):
     _, kappaMuProduct = computeKappaMuProduct(alpha, v, dMax)
-    g = computeGNumeric(alpha,v)
+    if alpha == 0:  # if alpha = 0 we need to use the analytic expression for g(2arctanh(v))
+        def gAlpha0(v):
+            return np.log((1+v**2)**2)
+        g = gAlpha0(v)
+    else:
+        g = computeGNumeric(alpha,v)
     betaSq = fitBetaSq(kappaMuProduct, g)
     return np.sqrt(betaSq)
 
