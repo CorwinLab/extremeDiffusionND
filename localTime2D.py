@@ -1,5 +1,5 @@
 import numpy as np
-
+from differenceRandomWalk import twoWalkerTransitionProbabilities, makeDirectionList
 
 def gAnalytic(l, alpha):
     """ returns g(lambda)"""
@@ -10,7 +10,7 @@ def gAnalytic(l, alpha):
     return func
 
 
-def localTimeSSRW(v=0.08, alpha=1, tMax=1000, d=2):
+def localTimeSSRW(v=0.5, alpha=1, tMax=1000, d=2):
     # order: xx, x-x, xy, x-y, -xx, -x-x, -xy, -x-y, yx,y-x,yy,y-y,-yx,-y-x,-yy,-y-y
 
     # (2d*2d, 2 (# walkers), d)
@@ -53,7 +53,7 @@ def localTimeSSRW(v=0.08, alpha=1, tMax=1000, d=2):
     return paths, eqn16, localTime
 
 
-def manyIterationsSSRW(n, v=0.08, alpha=1, tMax=1000, d=2):
+def manyIterationsSSRW(n, v=0.5, alpha=1, tMax=1000, d=2):
     """ return the avg. of eqn 16 wrt jacob's shitty tilted measure"""
     localTimes = []
     for i in range(n):
@@ -96,15 +96,15 @@ def correlated2PointMotion(v, alpha):
     return terms / normalize
 
 
-def get2PointVectors(probs):
+def get2PointVectors(probs, options):
     """ using probs from correlated2PointMotion, return an option of moves for 2 walks to move"""
     # (2d*2d, 2 (# walkers), d)
     # np.array([[[walk1x,walk1y],[walk2x,walk2y]],,,,,,,,,,,,,,,,])
     # order goes walk1 xhat (walk 2s), walk1 -xhat (walk 2s), walk1 yhat (walk2s), walk1 -yhat (walk2s)
-    options = np.array([[[+1, 0], [+1, 0]], [[+1, 0], [-1, 0]], [[+1, 0], [0, 1]], [[+1, 0], [0, -1]],
-                        [[-1, 0], [1, 0]], [[-1, 0], [-1, 0]], [[-1, 0], [0, 1]], [[-1, 0], [0, -1]],
-                        [[0, +1], [1, 0]], [[0, +1], [-1, 0]], [[0, +1], [0, 1]], [[0, +1], [0, -1]],
-                        [[0, -1], [1, 0]], [[0, -1], [-1, 0]], [[0, -1], [0, 1]], [[0, -1], [0, -1]]])
+    # options = np.array([[[+1, 0], [+1, 0]], [[+1, 0], [-1, 0]], [[+1, 0], [0, 1]], [[+1, 0], [0, -1]],
+    #                     [[-1, 0], [1, 0]], [[-1, 0], [-1, 0]], [[-1, 0], [0, 1]], [[-1, 0], [0, -1]],
+    #                     [[0, +1], [1, 0]], [[0, +1], [-1, 0]], [[0, +1], [0, 1]], [[0, +1], [0, -1]],
+    #                     [[0, -1], [1, 0]], [[0, -1], [-1, 0]], [[0, -1], [0, 1]], [[0, -1], [0, -1]]])
     move = options[np.random.choice(np.arange(16), p=probs)]
     return move
 
@@ -125,17 +125,21 @@ def version2(v, alpha, tMax, d=2):
     # initialize at t=0 with walks at 0,0, eqn 16 evaluated at t=0 and r1[0] = r2[0] = vec(0)
     walks = np.zeros((tMax, d, 2))  # time by dimension by # walks
     probs = correlated2PointMotion(v, alpha)
+    options = np.array([[[+1, 0], [+1, 0]], [[+1, 0], [-1, 0]], [[+1, 0], [0, 1]], [[+1, 0], [0, -1]],
+                        [[-1, 0], [1, 0]], [[-1, 0], [-1, 0]], [[-1, 0], [0, 1]], [[-1, 0], [0, -1]],
+                        [[0, +1], [1, 0]], [[0, +1], [-1, 0]], [[0, +1], [0, 1]], [[0, +1], [0, -1]],
+                        [[0, -1], [1, 0]], [[0, -1], [-1, 0]], [[0, -1], [0, 1]], [[0, -1], [0, -1]]])
 
     eqn15 = np.zeros(tMax)
     eqn15[0] = (np.exp(gAnalytic(np.arctanh(2*v),alpha)*0) *
                 (phi(walks[0,0,0],walks[0,1,0],v,0)*phi(walks[0,0,1],walks[0,1,1],v,0)))
     for t in range(1, tMax):
-        initialMove = get2PointVectors(probs)
+        initialMove = get2PointVectors(probs,options)
         moveWalk1 = initialMove[0]
         if (walks[t - 1, :, 0] == walks[t - 1, :, 1]).all():
             moveWalk2 = initialMove[1]
         else:
-            newMove = get2PointVectors(probs)
+            newMove = get2PointVectors(probs,options)
             moveWalk2 = newMove[1]
         walks[t, :, 0] = walks[t - 1, :, 0] + moveWalk1
         walks[t, :, 1] = walks[t - 1, :, 1] + moveWalk2
@@ -152,15 +156,50 @@ def version2(v, alpha, tMax, d=2):
     return np.array(walks), np.array(localTime), np.array(eqn15)
 
 
-def manyVersion2(n, tMax, v=0.08, alpha=1, d=2):
+def tiltedLocalTimes(tMax, v, alpha, d=2):
+    localTime = np.full(tMax,np.nan)
+    localTime[0] = 1  # at t=0, walkers start together so at t=1, local time val  = 1
+    walks = np.zeros((tMax, d, 2))  # time by dimension by walk#
+    # the tilted measure probabilities aren't dependent on time or location
+    d1, d2, correlatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
+    _, _, uncorrelatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
+    options = np.stack((d1, d2),axis=1)
+    #  print('size of options', np.shape(options))
+    for t in range(1, tMax):
+        if (walks[t - 1, :, 0] == walks[t-1, :, 1]).all():
+            # print(f"t={t}, at same spot!")
+            newMove = get2PointVectors(correlatedProbs, options)
+            # print("new move: ", newMove)
+        else:
+            newMove = get2PointVectors(uncorrelatedProbs, options)
+        walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0]  # update walk 1
+        walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1]  # update walk 2
+        # now that the move has happened, check if we need to update local time
+        if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
+            # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
+            localTime[t] = localTime[t-1] + 1
+        else:  # if they are at different sites, the local time does not change value
+            localTime[t] = localTime[t-1]
+    return np.array(walks), localTime
+
+def manyTiltedLocalTimes(n, tMax, v, alpha, d=2):
+    localTimes = []
+    for i in range(n):
+        _, localTime = tiltedLocalTimes(tMax=tMax, v=v, alpha=alpha, d=d)
+        localTimes.append(localTime)
+    return np.array(localTimes)
+
+
+def manyVersion2(n, tMax, v=0.5, alpha=1, d=2):
     """ return the avg. of eqn 16 wrt jacob's shitty tilted measure"""
     localTimes = []
-    eqn15s = []
+
+    # eqn15s = []
     for i in range(n):
         _, localTime, eqn15 = version2(v=v, alpha=alpha, tMax=tMax, d=d)
         localTimes.append(localTime)
-        eqn15s.append(eqn15)
-    return np.array(localTimes), np.array(eqn15s)
+        # eqn15s.append(eqn15)
+    return np.array(localTimes)# , np.array(eqn15s)
 
 # # TO DO: FIX THIS BECAUSE THE STRUCture ISNt RIgHt
 # def iterateOverVs(n, tMax, alpha=1, d=2):
@@ -173,51 +212,51 @@ def manyVersion2(n, tMax, v=0.08, alpha=1, d=2):
 #         localTimes[:,idx] = lT
 #         eqn15s[:,idx] = eqn15
 #     return localTimes, eqn15s, vs
-
-
-def rVec(xMag,yMag):
-    """ helper function to compute kappa(r) """
-    xhat = np.array([1,0])
-    yhat = np.array([0,1])
-    return xMag*xhat + yMag*yhat
-
-
-def computeTermInsideKappa(rVec, n1, n2, v):
-    """ helper function to compute kappa(r)"""
-    xhat = np.array([1,0])
-    exponentialTerm = np.exp(2*np.arctanh(v)*np.dot(xhat, n1+n2))
-    logTerm = np.log((1 + np.linalg.norm(rVec+n1+n2))/(1+np.linalg.norm(rVec)))
-    return exponentialTerm*logTerm
-
-
-def kappa(r, v):
-    """compute kappa(r) for a given r and a given v"""
-    kappa = 0
-    nhats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
-    for n1 in nhats:
-        for n2 in nhats:
-            kappa += computeTermInsideKappa(r, n1, n2, v)
-    return (((1-v**2)**2)/16)*kappa
-
-
-def computeAllKappa(v, size=100):
-    """ compute kappa(r) over a range of r vectors (centered around (0,0),
-    and out to size size)
-    for a given v"""
-    x, y = np.arange(-size,size+1), np.arange(-size,size+1)
-    xx, yy = np.meshgrid(x, y)
-    r = np.array([xx.flatten(),yy.flatten()]).T
-    return np.array([kappa(rvalue,v) for rvalue in r]).reshape(2*size+1,2*size+1)
-
-def findKappaLimit(v, sizes=None):
-    """ for a give v find the limit of the sum of kappas
-    as the range of all space gets large"""
-    if sizes is None:
-        sizes = [100, 250, 500, 1000, 1500, 2000, 5000]
-    kappaSums = []
-    for size in sizes:
-        print(f'size: {size}')
-        kappaSum = np.sum(computeAllKappa(v, size))
-        kappaSums.append(kappaSum)
-    return np.array((sizes, kappaSums))
-
+#
+#
+# def rVec(xMag,yMag):
+#     """ helper function to compute kappa(r) """
+#     xhat = np.array([1,0])
+#     yhat = np.array([0,1])
+#     return xMag*xhat + yMag*yhat
+#
+#
+# def computeTermInsideKappa(rVec, n1, n2, v):
+#     """ helper function to compute kappa(r)"""
+#     xhat = np.array([1,0])
+#     exponentialTerm = np.exp(2*np.arctanh(v)*np.dot(xhat, n1+n2))
+#     logTerm = np.log((1 + np.linalg.norm(rVec+n1+n2))/(1+np.linalg.norm(rVec)))
+#     return exponentialTerm*logTerm
+#
+#
+# def kappa(r, v):
+#     """compute kappa(r) for a given r and a given v"""
+#     kappa = 0
+#     nhats = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
+#     for n1 in nhats:
+#         for n2 in nhats:
+#             kappa += computeTermInsideKappa(r, n1, n2, v)
+#     return (((1-v**2)**2)/16)*kappa
+#
+#
+# def computeAllKappa(v, size=100):
+#     """ compute kappa(r) over a range of r vectors (centered around (0,0),
+#     and out to size size)
+#     for a given v"""
+#     x, y = np.arange(-size,size+1), np.arange(-size,size+1)
+#     xx, yy = np.meshgrid(x, y)
+#     r = np.array([xx.flatten(),yy.flatten()]).T
+#     return np.array([kappa(rvalue,v) for rvalue in r]).reshape(2*size+1,2*size+1)
+#
+# def findKappaLimit(v, sizes=None):
+#     """ for a give v find the limit of the sum of kappas
+#     as the range of all space gets large"""
+#     if sizes is None:
+#         sizes = [100, 250, 500, 1000, 1500, 2000, 5000]
+#     kappaSums = []
+#     for size in sizes:
+#         print(f'size: {size}')
+#         kappaSum = np.sum(computeAllKappa(v, size))
+#         kappaSums.append(kappaSum)
+#     return np.array((sizes, kappaSums))
+#

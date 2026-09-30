@@ -460,7 +460,8 @@ def collapseVGBeta(pathList,savePath,tMax=1000):
     tsMean, tsVar, tsRs, tsVs = tsMean[tsGood], tsVar[tsGood], tsRs[tsGood], tsVs[tsGood]
     _, unique = np.unique(tsRs, return_index=True)
     tsMean, tsVar, tsRs, tsVs = tsMean[unique], tsVar[unique], tsRs[unique], tsVs[unique]
-    tsGs = np.array([gAlpha0(v) for v in tsVs])
+    #tsGs = np.array([gAlpha0(v) for v in tsVs])
+    tsGs = np.array([drw.computeBeta(0,v) for v in tsVs])
     patchObjects.append(mpatches.Patch(color='k',label="0"))
     labels.append(f"{0}")
     ax[0].loglog(tsVs, -np.log(tsVar),'.-',lw=1,ms=2, color='k')
