@@ -7,6 +7,7 @@ from time import time as wallTime
 import json
 from numba import njit
 
+
 # TODO: DEBUG THIS
 @njit
 def ltSSRWNew(tMax, d=2):
@@ -36,6 +37,7 @@ def ltSSRWNew(tMax, d=2):
         else:  # if they are at different sites, the local time does not change value
             localTime[t] = localTime[t - 1]
     return np.array(walks), localTime
+
 
 @njit
 def manySSRW(n, tMax, d=2):
@@ -133,7 +135,7 @@ def manySSRW(n, tMax, d=2):
 #     normalize = np.sum(terms)
 #     return terms / normalize
 
-
+@njit
 def get2PointVectors(probs, options):
     """ using probs from correlated2PointMotion, return an option of moves for 2 walks to move"""
     # (2d*2d, 2 (# walkers), d)
@@ -143,19 +145,25 @@ def get2PointVectors(probs, options):
     #                     [[-1, 0], [1, 0]], [[-1, 0], [-1, 0]], [[-1, 0], [0, 1]], [[-1, 0], [0, -1]],
     #                     [[0, +1], [1, 0]], [[0, +1], [-1, 0]], [[0, +1], [0, 1]], [[0, +1], [0, -1]],
     #                     [[0, -1], [1, 0]], [[0, -1], [-1, 0]], [[0, -1], [0, 1]], [[0, -1], [0, -1]]])
-    move = options[np.random.choice(np.arange(16), p=probs)]
+    # TODO: numba doesn't support the p option of np.random.choice
+    # move = options[np.random.choice(np.arange(16), p=probs)]
+    move = options(rand_choice_nb(np.arange(16),probs))
     return move
 
+# because numba hates np.random.choice with the p argument
+# pulled from https://github.com/numba/numba/issues/2539#issuecomment-507306369
 @njit
-def newTiltedLocalTime(tMax, v, alpha, d=2):
-    localTime = np.full(tMax, np.nan)
-    localTime[0] = 1  # at t=0, walkers start together so at t=1, local time val  = 1
-    walks = np.zeros((tMax, d, 2))  # time by dimension by walk#
-    # the tilted measure probabilities aren't dependent on time or location
-    d1, d2, correlatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
-    _, _, uncorrelatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
-    options = np.stack((d1, d2), axis=1)
-    #  print('size of options', np.shape(options))
+def rand_choice_nb(arr, prob):
+    """
+    :param arr: A 1D numpy array of values to sample from.
+    :param prob: A 1D numpy array of probabilities for the given samples.
+    :return: A random sample from the given array with a given probability.
+    """
+    return arr[np.searchsorted(np.cumsum(prob), np.random.random(), side="right")]
+
+
+@njit
+def evolveLocalTime(tMax, walks, localTime, correlatedProbs, uncorrelatedProbs, options):
     for t in range(1, tMax):
         if (walks[t - 1, :, 0] == walks[t - 1, :, 1]).all():
             # print(f"t={t}, at same spot!")
@@ -171,17 +179,67 @@ def newTiltedLocalTime(tMax, v, alpha, d=2):
             localTime[t] = localTime[t - 1] + 1
         else:  # if they are at different sites, the local time does not change value
             localTime[t] = localTime[t - 1]
-    return np.array(walks), localTime
+    return walks, localTime
+
+def getTransitionProbsOptions(alpha, v):
+    d1, d2, correlatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
+    _, _, uncorrelatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
+    options = np.stack((d1, d2), axis=1)
+    return correlatedProbs, uncorrelatedProbs, options
+
+
+def newTiltedLocalTime(tMax, v, alpha, d=2):
+    localTime = np.full(tMax, np.nan)
+    localTime[0] = 1  # at t=0, walkers start together so at t=1, local time val  = 1
+    walks = np.zeros((tMax, d, 2))  # time by dimension by walk#
+    # the tilted measure probabilities aren't dependent on time or location
+    correlatedProbs, uncorrelatedProbs, options = getTransitionProbsOptions(alpha, v)
+    # d1, d2, correlatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=True)
+    # _, _, uncorrelatedProbs = twoWalkerTransitionProbabilities(alpha, v, correlated=False)
+    # options = np.stack((d1, d2), axis=1)
+    #  print('size of options', np.shape(options))
+    # TODO: put this part in the function
+    walks, localTime = evolveLocalTime(tMax, walks, localTime, correlatedProbs, uncorrelatedProbs, options)
+    # OLD WAY
+    # for t in range(1, tMax):
+    #     if (walks[t - 1, :, 0] == walks[t - 1, :, 1]).all():
+    #         # print(f"t={t}, at same spot!")
+    #         newMove = get2PointVectors(correlatedProbs, options)
+    #         # print("new move: ", newMove)
+    #     else:
+    #         newMove = get2PointVectors(uncorrelatedProbs, options)
+    #     walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0]  # update walk 1
+    #     walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1]  # update walk 2
+    #     # now that the move has happened, check if we need to update local time
+    #     if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
+    #         # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
+    #         localTime[t] = localTime[t - 1] + 1
+    #     else:  # if they are at different sites, the local time does not change value
+    #         localTime[t] = localTime[t - 1]
+    #return np.array(walks), localTime
+    return localTime
+
 
 # TODO: think about if this is possible with the current way I build up local times...
 # TODO: in the meantime.. numbify this thing?
-@njit
-def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
+
+def getLocalTimes(n, tMax, v, alpha, d=2):
     localTimes = []
     for i in range(n):
-        _, localTime = newTiltedLocalTime(tMax=tMax, v=v, alpha=alpha, d=d)
+        # _, localTime = newTiltedLocalTime(tMax=tMax, v=v, alpha=alpha, d=d)
+        localTime = newTiltedLocalTime(tMax=tMax, v=v, alpha=alpha, d=d)
         localTimes.append(localTime)
-    meanLT = np.mean(np.array(localTimes), axis=0)
+    return np.array(localTimes)
+
+
+def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
+    # localTimes = []
+    # for i in range(n):
+    #     _, localTime = newTiltedLocalTime(tMax=tMax, v=v, alpha=alpha, d=d)
+    #     localTimes.append(localTime)
+    # meanLT = np.mean(np.array(localTimes), axis=0)
+    localTimes = getLocalTimes(n=n, tMax=tMax, v=v, alpha=alpha, d=d)
+    meanLT = np.mean(localTimes, axis=0)
     # TODO:  need to include the sum(kappa mu product) in the logmeanExp thing...
     _, KMProd = computeKappaMuProduct(alpha, v, dMax=100)
     logMeanExpLT = LSE(np.array(localTimes), axis=0) - np.log(n)
@@ -189,10 +247,11 @@ def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
     return meanLT, logMeanExpLT, logMeanExpLTScaled
 
 
-def runManyPairs(n, tMax, v, alphaList=np.array([31,10,1,0.1,0.01,0.001]), savePath="/home/fransces/Documents/data/localTimes"):
+def runManyPairs(n, tMax, v, alphaList=np.array([31, 10, 1, 0.1, 0.01, 0.001]),
+                 savePath="/home/fransces/Documents/data/localTimes"):
     """ goal of this function is to see how long it takes to run n pairs
     for different alphas"""
-    topDir = os.path.join(savePath,f"nSys{n}")
+    topDir = os.path.join(savePath, f"nSys{n}")
     os.makedirs(topDir, exist_ok=True)
     print(f"savepath: {topDir} \n n={n}")
     for alpha in alphaList:
@@ -203,8 +262,8 @@ def runManyPairs(n, tMax, v, alphaList=np.array([31,10,1,0.1,0.01,0.001]), saveP
         print(f"time: {runTime}")
         fileName = os.path.join(topDir, f"localTimesAlpha{alpha}.npz")
         print(f"fileName: {fileName}")
-        np.savez_compressed(fileName,data=np.array([mLT, LMELT, LMELTS]),runTime=runTime,
-                alpha=alpha, v=v, tMax=tMax, n=n)
+        np.savez_compressed(fileName, data=np.array([mLT, LMELT, LMELTS]), runTime=runTime,
+                            alpha=alpha, v=v, tMax=tMax, n=n)
     return
 
 
@@ -222,8 +281,8 @@ def runManyPairs(n, tMax, v, alphaList=np.array([31,10,1,0.1,0.01,0.001]), saveP
 
 
 def saveAndPlotLocalTimes(nsys, tMax, alphaList=np.array([31, 10, 1, 0.1, 0.01, 0.001]),
-                   v=0.8, d=2, dMax=100,
-                   savePath='/home/fransces/Documents/Figures'):
+                          v=0.8, d=2, dMax=100,
+                          savePath='/home/fransces/Documents/Figures'):
     fig, ax = plt.subplots()
     fig2, ax2 = plt.subplots()
     ax.set_xlabel('t')
@@ -236,11 +295,11 @@ def saveAndPlotLocalTimes(nsys, tMax, alphaList=np.array([31, 10, 1, 0.1, 0.01, 
         # TODO: replace the below function with the new pairwise one
         mLT, LMELT, LMELTS = manyNewTiltedLocalTimes(nsys, tMax, v, alpha, d=d)
         _, KMProd = computeKappaMuProduct(alpha, v, dMax=dMax)
-        ax.loglog(mLT*np.sum(KMProd),label=f"alpha={alpha}")
-        ax2.plot(LMELTS,label=f"alpha={alpha}")
+        ax.loglog(mLT * np.sum(KMProd), label=f"alpha={alpha}")
+        ax2.plot(LMELTS, label=f"alpha={alpha}")
     # TODO: insert SSRW line here
     fig.legend()
     fig2.legend()
-    fig.savefig(os.path.join(savePath,"meanLTScaledVsT.png"))
-    fig2.savefig(os.path.join(savePath,"logMeanExpLTScaledVsT.png"))
+    fig.savefig(os.path.join(savePath, "meanLTScaledVsT.png"))
+    fig2.savefig(os.path.join(savePath, "logMeanExpLTScaledVsT.png"))
     return
