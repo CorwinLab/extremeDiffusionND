@@ -13,7 +13,7 @@ import glob
 def ltSSRWNew(tMax, d=2):
     localTime = np.full(tMax, np.nan)
     localTime[0] = 1
-    walks = np.zeros((tMax, d, 2))
+    walks = np.zeros((tMax, d, 2))  # t by (x or y) by walk
     n1 = makeDirectionList(d)
     n2 = makeDirectionList(d)
     d1 = []
@@ -25,19 +25,27 @@ def ltSSRWNew(tMax, d=2):
     d1 = np.array(d1)
     d2 = np.array(d2)
     options = np.stack((d1, d2), axis=1)
+    #indices = []
     probs = [1 / 16] * 16  # equal probs
+    # print("new implementation probs: ",probs)
     for t in range(1, tMax):
         newMove = get2PointVectors(probs, options)
+        # print("new move: ",newMove)
+        #indices.append(index)
+        # walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0]  # update walk 1
+        # walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1]  # update walk 2
         # walks[t-1, 0,:] updates walk 1 for x and y; walks[t-1, 1,:] updates walk 2 for x and y
-        walks[t, :, 0] = walks[t - 1, 0, :] + newMove[0,:]  # update walk 1
-        walks[t, :, 1] = walks[t - 1, 1, : ] + newMove[1,:]  # update walk 2
+        # TODO:  no this is wrong!! because i want to add n1hat to walk1 and n2hat to walk2
+        # TODO: ok i think i fixed it but now I have to check it against the old implementation again
+        walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0,:]  # newmove[0,:] is n1hat  # so we add walk1 + n1hat
+        walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1,:]   #newMove[1,:] is n2hat  # do walk2 + n2hat
         # now that the move has happened, check if we need to update local time
         if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
             # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
             localTime[t] = localTime[t - 1] + 1
         else:  # if they are at different sites, the local time does not change value
             localTime[t] = localTime[t - 1]
-    return np.array(walks), localTime
+    return np.array(walks), localTime  #, indices
 
 
 def manySSRW(n, tMax, d=2):
@@ -165,8 +173,10 @@ def newTiltedLocalTime(tMax, v, alpha, d=2):
             # print("new move: ", newMove)
         else:
             newMove = get2PointVectors(uncorrelatedProbs, options)
-        walks[t, :, 0] = walks[t - 1, 0, : ] + newMove[0, :]  # update walk 1
-        walks[t, :, 1] = walks[t - 1, 1, : ] + newMove[1, : ]  # update walk 2
+        # recall walks is t by d by #walks
+        # walks[t-1, 0,:] updates walk 1 for x and y; walks[t-1, 1,:] updates walk 2 for x and y
+        walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0, :]  # update walk 1
+        walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1, :]  # update walk 2
         # now that the move has happened, check if we need to update local time
         if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
             # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
@@ -175,9 +185,6 @@ def newTiltedLocalTime(tMax, v, alpha, d=2):
             localTime[t] = localTime[t - 1]
     return np.array(walks), localTime
 
-
-# TODO: think about if this is possible with the current way I build up local times...
-# TODO: in the meantime.. numbify this thing?
 
 def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
     localTimes = []
@@ -188,7 +195,7 @@ def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
     # TODO:  need to include the sum(kappa mu product) in the logmeanExp thing...
     _, KMProd = computeKappaMuProduct(alpha, v, dMax=100)
     logMeanExpLT = LSE(np.array(localTimes), axis=0) - np.log(n)
-    logMeanExpLTScaled = LSE(np.array(localTimes) * np.sum(KMProd), axis=0) - np.log(n)
+    logMeanExpLTScaled = LSE(np.array(localTimes) * np.sum(KMProd/np.sqrt(2)), axis=0) - np.log(n)
     return meanLT, logMeanExpLT, logMeanExpLTScaled, KMProd
 
 
@@ -250,13 +257,13 @@ def runManyPairs(n, tMax, v, alphaList=np.array([10000, 31, 10, 1, 0.1, 0.01, 0.
 #     return
 
 
-def main(topDir="/home/fransces/Documents/data/localTimes/nSys50000/"):
+def main(topDir="/home/fransces/Documents/data/localTimes/nSys10000/"):
     plt.rcParams.update(
         {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
     files = glob.glob(os.path.join(topDir, "*.npz"))
     fig, ax = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
     ax.set_xlabel(r"$t/\left(\frac{1}{\alpha}+1\right)$")
-    ax.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilt}}\right]\sum{\kappa\mu}$")
+    ax.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilt}}\right]\sum{\frac{1}{\sqrt{2}}\kappa\mu}$")
 
     fig2, ax2, = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
     ax2.set_xlabel(r"$t  $")
@@ -264,12 +271,12 @@ def main(topDir="/home/fransces/Documents/data/localTimes/nSys50000/"):
 
     fig3, ax3 = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
     ax3.set_xlabel(r"$t / \left(\frac{1}{\alpha}+1\right)$")
-    ax3.set_ylabel(r"$\log{\left(\mathbb{E}\left[e^{\mathrm{lt}_{\mathrm{tilt}}\sum{\kappa\mu}}\right]\right))}$")
+    ax3.set_ylabel(r"$\log{\left(\mathbb{E}\left[e^{\mathrm{lt}_{\mathrm{tilt}}\sum{\frac{1}{\sqrt{2}}\kappa\mu}}\right]\right))}$")
 
     fig4, ax4 = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
     ax4.set_xlabel(r"$t  $")
-    ax4.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilted}}\right]\sum{\kappa\mu}$")
-    ts = np.arange(10000)
+    ax4.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilted}}\right]\sum{\frac{1}{\sqrt{2}}\kappa\mu}$")
+    ts = np.arange(1000)
     for file in files:
         temp = np.load(file)
         v = temp['v']
@@ -278,17 +285,18 @@ def main(topDir="/home/fransces/Documents/data/localTimes/nSys50000/"):
             mLT, LMELT, LMELTS = temp['data'][0, :], temp['data'][1, :], temp['data'][2, :]
             _, KMProd = computeKappaMuProduct(alpha, v, dMax=100)
             tPrefactor = (1/alpha) + 1
-            ax.loglog(ts / tPrefactor , mLT * np.sum(KMProd), label=fr"$\alpha={alpha}$")
+            ax.loglog(ts / tPrefactor , mLT * np.sum(KMProd/np.sqrt(2)), label=fr"$\alpha={alpha}$")
             ax2.loglog(ts, LMELT, label=fr"$\alpha={alpha}$")
             ax3.loglog(ts / tPrefactor, LMELTS, label=fr"$\alpha={alpha}$")
-            ax4.loglog(ts, mLT * np.sum(KMProd), label=fr"$\alpha={alpha}$")
-        else:
+            ax4.loglog(ts, mLT * np.sum(KMProd/np.sqrt(2)), label=fr"$\alpha={alpha}$")
+        else:  # SSRW
             mLT, LMELT, LMELTS = temp['data'][0, :], temp['data'][1, :], temp['data'][1, :]
             print(f"filename: {file}")
-            ax.loglog(ts, mLT, color='k',label='SSRW')  # prefactor is (1/inf) + 1 = 1 so ts/prefactor = ts
-            ax2.loglog(ts, LMELT, color='k', label="SSRW")
-            ax3.loglog(ts, LMELTS, color = 'k', label="SSRW")
-            ax4.loglog(ts, mLT, color='k', label="SSRW")
+            tPrefactor = (1/np.inf) + 1
+            ax.loglog(ts/tPrefactor, mLT, color='k',label='SSRW fixed')  # prefactor is (1/inf) + 1 = 1 so ts/prefactor = ts
+            ax2.loglog(ts, LMELT, color='k', label="SSRW fixed")
+            ax3.loglog(ts / tPrefactor, LMELTS, color = 'k', label="SSRW fixed")
+            ax4.loglog(ts, mLT, color='k', label="SSRW fixed")
     nSys = temp['n']
     tMax = temp['tMax']
     # legends and titles etc
@@ -300,9 +308,9 @@ def main(topDir="/home/fransces/Documents/data/localTimes/nSys50000/"):
     ax2.set_title(f"n={nSys}, v={v}, tMax={tMax}")
     ax3.set_title(f"n={nSys}, v={v}, tMax={tMax}")
     ax4.set_title(f"n={nSys},v={v},tMax={tMax}")
-    fig.savefig(os.path.join(topDir, "scaledMeanLTWithTimeScalingFixed.png"),)
+    fig.savefig(os.path.join(topDir, "scaledMeanLTWithTimeScalingFixedWithSqrt2.png"),)
     fig2.savefig(os.path.join(topDir, "logMeanExpLTFixed.png"))
-    fig3.savefig(os.path.join(topDir, "scaledLogMeanExpLTWithTimeScaledFixed.png"))
-    fig4.savefig(os.path.join(topDir,"scaledMeanLTFixed.png"))
+    fig3.savefig(os.path.join(topDir, "scaledLogMeanExpLTWithTimeScaledFixedWithSqrt2.png"))
+    fig4.savefig(os.path.join(topDir,"scaledMeanLTFixedWithSqrt2.png"))
     plt.close('all')
     return
