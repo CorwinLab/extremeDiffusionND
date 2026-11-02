@@ -6,9 +6,10 @@ import os
 from time import time as wallTime
 import json
 from numba import njit
+import glob
+
 
 # TODO: DEBUG THIS
-@njit
 def ltSSRWNew(tMax, d=2):
     localTime = np.full(tMax, np.nan)
     localTime[0] = 1
@@ -27,8 +28,9 @@ def ltSSRWNew(tMax, d=2):
     probs = [1 / 16] * 16  # equal probs
     for t in range(1, tMax):
         newMove = get2PointVectors(probs, options)
-        walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0]  # update walk 1
-        walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1]  # update walk 2
+        # walks[t-1, 0,:] updates walk 1 for x and y; walks[t-1, 1,:] updates walk 2 for x and y
+        walks[t, :, 0] = walks[t - 1, 0, :] + newMove[0,:]  # update walk 1
+        walks[t, :, 1] = walks[t - 1, 1, : ] + newMove[1,:]  # update walk 2
         # now that the move has happened, check if we need to update local time
         if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
             # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
@@ -37,7 +39,7 @@ def ltSSRWNew(tMax, d=2):
             localTime[t] = localTime[t - 1]
     return np.array(walks), localTime
 
-@njit
+
 def manySSRW(n, tMax, d=2):
     localTimes = []
     for i in range(n):
@@ -146,7 +148,7 @@ def get2PointVectors(probs, options):
     move = options[np.random.choice(np.arange(16), p=probs)]
     return move
 
-@njit
+
 def newTiltedLocalTime(tMax, v, alpha, d=2):
     localTime = np.full(tMax, np.nan)
     localTime[0] = 1  # at t=0, walkers start together so at t=1, local time val  = 1
@@ -163,8 +165,8 @@ def newTiltedLocalTime(tMax, v, alpha, d=2):
             # print("new move: ", newMove)
         else:
             newMove = get2PointVectors(uncorrelatedProbs, options)
-        walks[t, :, 0] = walks[t - 1, :, 0] + newMove[0]  # update walk 1
-        walks[t, :, 1] = walks[t - 1, :, 1] + newMove[1]  # update walk 2
+        walks[t, :, 0] = walks[t - 1, 0, : ] + newMove[0, :]  # update walk 1
+        walks[t, :, 1] = walks[t - 1, 1, : ] + newMove[1, : ]  # update walk 2
         # now that the move has happened, check if we need to update local time
         if (walks[t, :, 0] == walks[t, :, 1]).all():  # if they are at the same site, add 1 to the local time
             # print(f"updating local time: localTime[t] = {localTime[t-1]} + 1")
@@ -173,9 +175,10 @@ def newTiltedLocalTime(tMax, v, alpha, d=2):
             localTime[t] = localTime[t - 1]
     return np.array(walks), localTime
 
+
 # TODO: think about if this is possible with the current way I build up local times...
 # TODO: in the meantime.. numbify this thing?
-@njit
+
 def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
     localTimes = []
     for i in range(n):
@@ -186,25 +189,26 @@ def manyNewTiltedLocalTimes(n, tMax, v, alpha, d=2):
     _, KMProd = computeKappaMuProduct(alpha, v, dMax=100)
     logMeanExpLT = LSE(np.array(localTimes), axis=0) - np.log(n)
     logMeanExpLTScaled = LSE(np.array(localTimes) * np.sum(KMProd), axis=0) - np.log(n)
-    return meanLT, logMeanExpLT, logMeanExpLTScaled
+    return meanLT, logMeanExpLT, logMeanExpLTScaled, KMProd
 
 
-def runManyPairs(n, tMax, v, alphaList=np.array([31,10,1,0.1,0.01,0.001]), savePath="/home/fransces/Documents/data/localTimes"):
+def runManyPairs(n, tMax, v, alphaList=np.array([10000, 31, 10, 1, 0.1, 0.01, 0.001]),
+                 savePath="/home/fransces/Documents/data/localTimes"):
     """ goal of this function is to see how long it takes to run n pairs
     for different alphas"""
-    topDir = os.path.join(savePath,f"nSys{n}")
+    topDir = os.path.join(savePath, f"nSys{n}")
     os.makedirs(topDir, exist_ok=True)
     print(f"savepath: {topDir} \n n={n}")
     for alpha in alphaList:
         print(f"alpha: {alpha}")
         start = wallTime()
-        mLT, LMELT, LMELTS = manyNewTiltedLocalTimes(n, tMax, v, alpha)
+        mLT, LMELT, LMELTS, KMProd = manyNewTiltedLocalTimes(n, tMax, v, alpha)
         runTime = wallTime() - start
         print(f"time: {runTime}")
         fileName = os.path.join(topDir, f"localTimesAlpha{alpha}.npz")
         print(f"fileName: {fileName}")
-        np.savez_compressed(fileName,data=np.array([mLT, LMELT, LMELTS]),runTime=runTime,
-                alpha=alpha, v=v, tMax=tMax, n=n)
+        np.savez_compressed(fileName, data=np.array([mLT, LMELT, LMELTS]), KMProd=KMProd, runTime=runTime,
+                            alpha=alpha, v=v, tMax=tMax, n=n)
     return
 
 
@@ -221,26 +225,84 @@ def runManyPairs(n, tMax, v, alphaList=np.array([31,10,1,0.1,0.01,0.001]), saveP
 #
 
 
-def saveAndPlotLocalTimes(nsys, tMax, alphaList=np.array([31, 10, 1, 0.1, 0.01, 0.001]),
-                   v=0.8, d=2, dMax=100,
-                   savePath='/home/fransces/Documents/Figures'):
-    fig, ax = plt.subplots()
-    fig2, ax2 = plt.subplots()
-    ax.set_xlabel('t')
-    ax.set_ylabel('mean tilted local time * sum(kappa*mu)')
-    ax.set_title(f"nsys={nsys}, v={v}")
-    ax2.set_xlabel('t')
-    ax2.set_ylabel("log[Mean[e^(tilted local time * sum(kappa*mu))]]")
-    ax2.set_title(f"nsys={nsys}, v={v}")
-    for alpha in alphaList:
-        # TODO: replace the below function with the new pairwise one
-        mLT, LMELT, LMELTS = manyNewTiltedLocalTimes(nsys, tMax, v, alpha, d=d)
-        _, KMProd = computeKappaMuProduct(alpha, v, dMax=dMax)
-        ax.loglog(mLT*np.sum(KMProd),label=f"alpha={alpha}")
-        ax2.plot(LMELTS,label=f"alpha={alpha}")
-    # TODO: insert SSRW line here
-    fig.legend()
-    fig2.legend()
-    fig.savefig(os.path.join(savePath,"meanLTScaledVsT.png"))
-    fig2.savefig(os.path.join(savePath,"logMeanExpLTScaledVsT.png"))
+# def saveAndPlotLocalTimes(nsys, tMax, alphaList=np.array([31, 10, 1, 0.1, 0.01, 0.001]),
+#                    v=0.8, d=2, dMax=100,
+#                    savePath='/home/fransces/Documents/Figures'):
+#     fig, ax = plt.subplots()
+#     fig2, ax2 = plt.subplots()
+#     ax.set_xlabel('t')
+#     ax.set_ylabel('mean tilted local time * sum(kappa*mu)')
+#     ax.set_title(f"nsys={nsys}, v={v}")
+#     ax2.set_xlabel('t')
+#     ax2.set_ylabel("log[Mean[e^(tilted local time * sum(kappa*mu))]]")
+#     ax2.set_title(f"nsys={nsys}, v={v}")
+#     for alpha in alphaList:
+#         # TODO: replace the below function with the new pairwise one
+#         mLT, LMELT, LMELTS = manyNewTiltedLocalTimes(nsys, tMax, v, alpha, d=d)
+#         _, KMProd = computeKappaMuProduct(alpha, v, dMax=dMax)
+#         ax.loglog(mLT*np.sum(KMProd),label=f"alpha={alpha}")
+#         ax2.plot(LMELTS,label=f"alpha={alpha}")
+#     # TODO: insert SSRW line here
+#     fig.legend()
+#     fig2.legend()
+#     fig.savefig(os.path.join(savePath,"meanLTScaledVsT.png"))
+#     fig2.savefig(os.path.join(savePath,"logMeanExpLTScaledVsT.png"))
+#     return
+
+
+def main(topDir="/home/fransces/Documents/data/localTimes/nSys50000/"):
+    plt.rcParams.update(
+        {'font.size': 15, 'text.usetex': True, 'text.latex.preamble': r'\usepackage{amsfonts, amsmath, bm}'})
+    files = glob.glob(os.path.join(topDir, "*.npz"))
+    fig, ax = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
+    ax.set_xlabel(r"$t/\left(\frac{1}{\alpha}+1\right)$")
+    ax.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilt}}\right]\sum{\kappa\mu}$")
+
+    fig2, ax2, = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
+    ax2.set_xlabel(r"$t  $")
+    ax2.set_ylabel(r"$\log{\left(\mathbb{E}\left[e^{\mathrm{lt}_{\mathrm{tilt}}}\right]\right)}$")
+
+    fig3, ax3 = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
+    ax3.set_xlabel(r"$t / \left(\frac{1}{\alpha}+1\right)$")
+    ax3.set_ylabel(r"$\log{\left(\mathbb{E}\left[e^{\mathrm{lt}_{\mathrm{tilt}}\sum{\kappa\mu}}\right]\right))}$")
+
+    fig4, ax4 = plt.subplots(figsize=(5,5),dpi=300, constrained_layout=True)
+    ax4.set_xlabel(r"$t  $")
+    ax4.set_ylabel(r"$\mathbb{E}\left[\mathrm{lt}_{\mathrm{tilted}}\right]\sum{\kappa\mu}$")
+    ts = np.arange(10000)
+    for file in files:
+        temp = np.load(file)
+        v = temp['v']
+        alpha = temp['alpha']
+        if np.isfinite(alpha):  # if we do NOT have the SSRW:
+            mLT, LMELT, LMELTS = temp['data'][0, :], temp['data'][1, :], temp['data'][2, :]
+            _, KMProd = computeKappaMuProduct(alpha, v, dMax=100)
+            tPrefactor = (1/alpha) + 1
+            ax.loglog(ts / tPrefactor , mLT * np.sum(KMProd), label=fr"$\alpha={alpha}$")
+            ax2.loglog(ts, LMELT, label=fr"$\alpha={alpha}$")
+            ax3.loglog(ts / tPrefactor, LMELTS, label=fr"$\alpha={alpha}$")
+            ax4.loglog(ts, mLT * np.sum(KMProd), label=fr"$\alpha={alpha}$")
+        else:
+            mLT, LMELT, LMELTS = temp['data'][0, :], temp['data'][1, :], temp['data'][1, :]
+            print(f"filename: {file}")
+            ax.loglog(ts, mLT, color='k',label='SSRW')  # prefactor is (1/inf) + 1 = 1 so ts/prefactor = ts
+            ax2.loglog(ts, LMELT, color='k', label="SSRW")
+            ax3.loglog(ts, LMELTS, color = 'k', label="SSRW")
+            ax4.loglog(ts, mLT, color='k', label="SSRW")
+    nSys = temp['n']
+    tMax = temp['tMax']
+    # legends and titles etc
+    ax.legend(loc='lower right',fontsize='x-small')
+    ax2.legend(loc='upper left',fontsize='x-small')
+    ax3.legend(loc='upper left',fontsize='x-small')
+    ax4.legend(loc='lower right',fontsize='x-small')
+    ax.set_title(f"n={nSys}, v={v}, tMax={tMax}")
+    ax2.set_title(f"n={nSys}, v={v}, tMax={tMax}")
+    ax3.set_title(f"n={nSys}, v={v}, tMax={tMax}")
+    ax4.set_title(f"n={nSys},v={v},tMax={tMax}")
+    fig.savefig(os.path.join(topDir, "scaledMeanLTWithTimeScalingFixed.png"),)
+    fig2.savefig(os.path.join(topDir, "logMeanExpLTFixed.png"))
+    fig3.savefig(os.path.join(topDir, "scaledLogMeanExpLTWithTimeScaledFixed.png"))
+    fig4.savefig(os.path.join(topDir,"scaledMeanLTFixed.png"))
+    plt.close('all')
     return
